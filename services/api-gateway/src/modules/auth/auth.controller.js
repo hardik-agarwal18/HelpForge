@@ -5,7 +5,13 @@ export const register = async (req, res, next) => {
   try {
     const { email, password, name } = req.body;
 
-    const { user, token } = await registerUser({ email, password, name });
+    const result = await registerUser({ email, password, name });
+
+    if (!result || !result.user || !result.token) {
+      throw new ApiError(500, "Failed to register user");
+    }
+
+    const { user, token } = result;
 
     return res.status(201).json({
       success: true,
@@ -29,7 +35,13 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const { user, token } = await loginUser(email, password);
+    const result = await loginUser(email, password);
+
+    if (!result || !result.user || !result.token) {
+      throw new ApiError(500, "Failed to login user");
+    }
+
+    const { user, token } = result;
 
     return res.status(200).json({
       success: true,

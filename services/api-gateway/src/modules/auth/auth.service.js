@@ -13,6 +13,9 @@ export const registerUser = async (userData) => {
 
   //Hash password
   const hashedPassword = await bcrypt.hash(userData.password, 10);
+  if (!hashedPassword) {
+    throw new ApiError(500, "Failed to hash password");
+  }
 
   //Create new user
   const newUser = await createUser({
@@ -20,12 +23,20 @@ export const registerUser = async (userData) => {
     password: hashedPassword,
   });
 
+  if (!newUser || !newUser.id) {
+    throw new ApiError(500, "Failed to create user");
+  }
+
   //Generate JWT token
   const token = jwt.sign(
     { userId: newUser.id, email: newUser.email },
     config.jwtSecret,
     { expiresIn: "7d" },
   );
+
+  if (!token) {
+    throw new ApiError(500, "Failed to generate authentication token");
+  }
 
   return { user: newUser, token };
 };
@@ -35,6 +46,10 @@ export const loginUser = async (email, password) => {
   const user = await findUserByEmail(email);
   if (!user) {
     throw new ApiError(404, "User not found");
+  }
+
+  if (!user.password) {
+    throw new ApiError(500, "User password data is corrupted");
   }
 
   //Check if password is correct
@@ -49,6 +64,10 @@ export const loginUser = async (email, password) => {
     config.jwtSecret,
     { expiresIn: "7d" },
   );
+
+  if (!token) {
+    throw new ApiError(500, "Failed to generate authentication token");
+  }
 
   return { user, token };
 };
