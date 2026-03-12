@@ -20,7 +20,9 @@ export const getTestPrisma = () => {
 export const cleanDatabase = async () => {
   const prisma = getTestPrisma();
 
-  // Delete all records from all tables
+  // Delete all records from all tables in reverse order of dependencies
+  await prisma.membership.deleteMany({});
+  await prisma.organization.deleteMany({});
   await prisma.user.deleteMany({});
 };
 
