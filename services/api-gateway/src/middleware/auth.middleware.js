@@ -4,7 +4,18 @@ import { findUserById } from "../modules/auth/auth.repo.js";
 
 export const authenticate = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace("Bearer ", "");
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      throw new ApiError(401, "Authentication token is required");
+    }
+
+    // Check if it starts with "Bearer "
+    if (!authHeader.startsWith("Bearer ")) {
+      throw new ApiError(401, "Invalid authorization header format");
+    }
+
+    const token = authHeader.replace("Bearer ", "");
 
     if (!token) {
       throw new ApiError(401, "Authentication token is required");
