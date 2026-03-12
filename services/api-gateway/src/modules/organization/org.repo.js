@@ -17,12 +17,6 @@ export const createOrganization = async (name, userId) => {
   });
 };
 
-export const getOrganizationById = async (id) => {
-  return await prisma.organization.findUnique({
-    where: { id },
-  });
-};
-
 export const getOrganizationsByUserId = async (userId) => {
   return await prisma.organization.findMany({
     where: {

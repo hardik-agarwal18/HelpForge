@@ -30,3 +30,14 @@ export const getOrganizationsByUserIdController = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getOrganizationByIdController = async (req, res, next) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      data: { organization: req.organization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
