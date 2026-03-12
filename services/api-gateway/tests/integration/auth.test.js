@@ -183,7 +183,7 @@ describe("Auth API Integration Tests", () => {
     });
   });
 
-  describe("GET /api/auth/profile", () => {
+  describe("GET /api/auth/me", () => {
     let testUser;
     let authToken;
 
@@ -205,7 +205,7 @@ describe("Auth API Integration Tests", () => {
 
     it("should get user profile with valid token", async () => {
       const response = await request(app)
-        .get("/api/auth/profile")
+        .get("/api/auth/me")
         .set("Authorization", `Bearer ${authToken}`)
         .expect(200);
 
@@ -217,14 +217,14 @@ describe("Auth API Integration Tests", () => {
     });
 
     it("should return 401 without token", async () => {
-      const response = await request(app).get("/api/auth/profile").expect(401);
+      const response = await request(app).get("/api/auth/me").expect(401);
 
       expect(response.body.success).toBe(false);
     });
 
     it("should return 401 with invalid token", async () => {
       const response = await request(app)
-        .get("/api/auth/profile")
+        .get("/api/auth/me")
         .set("Authorization", "Bearer invalidtoken123")
         .expect(401);
 
@@ -233,7 +233,7 @@ describe("Auth API Integration Tests", () => {
 
     it("should return 401 with malformed Authorization header", async () => {
       const response = await request(app)
-        .get("/api/auth/profile")
+        .get("/api/auth/me")
         .set("Authorization", authToken) // Missing "Bearer" prefix
         .expect(401);
 
