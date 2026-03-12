@@ -13,10 +13,37 @@ model User {
   password  String
   name      String?
   createdAt DateTime @default(now())
+
+  memberships Membership[]
 }
 
 model Organization {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
+
+  memberships Membership[]
+}
+
+model Membership {
+  id String @id @default(uuid())
+
+  userId         String
+  organizationId String
+
+  role Role @default(MEMBER)
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, organizationId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  AGENT
+  MEMBER
 }
