@@ -14,3 +14,9 @@ model User {
   name      String?
   createdAt DateTime @default(now())
 }
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+}
