@@ -282,3 +282,27 @@ export const getTicketAttachments = async (ticketId) => {
     },
   });
 };
+
+export const getTicketAttachmentById = async (attachmentId) => {
+  return await prisma.ticketAttachment.findUnique({
+    where: {
+      id: attachmentId,
+    },
+    include: {
+      uploader: true,
+      ticket: true,
+    },
+  });
+};
+
+export const deleteTicketAttachment = async (attachmentId) => {
+  return await prisma.ticketAttachment.delete({
+    where: {
+      id: attachmentId,
+    },
+    include: {
+      uploader: true,
+      ticket: true,
+    },
+  });
+};

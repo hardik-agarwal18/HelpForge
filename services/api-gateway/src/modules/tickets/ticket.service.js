@@ -5,7 +5,9 @@ import {
   createTicketActivityLog,
   createTicketComment,
   createTicket,
+  deleteTicketAttachment,
   deleteTicketComment,
+  getTicketAttachmentById,
   getTicketById,
   getTicketCommentById,
   getTicketComments,
@@ -93,6 +95,9 @@ const canCreateInternalComment = (role) =>
   getTicketRolePolicy(role).canCreateInternalComment;
 
 const canDeleteAnyTicketComment = (role) =>
+  getTicketRolePolicy(role).canDeleteAnyComment;
+
+const canDeleteAnyTicketAttachment = (role) =>
   getTicketRolePolicy(role).canDeleteAnyComment;
 
 const normalizeTicketFields = (ticketData) => ({
@@ -561,4 +566,58 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
   const attachments = await getTicketAttachments(ticketId);
 
   return attachments || [];
+};
+
+export const deleteTicketAttachmentService = async (
+  ticketId,
+  attachmentId,
+  userId,
+) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const attachment = await getTicketAttachmentById(attachmentId);
+
+  if (!attachment || !attachment.id || attachment.ticketId !== ticketId) {
+    throw new ApiError(404, "Attachment not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to delete attachments on this ticket",
+    );
+  }
+
+  if (
+    !canDeleteAnyTicketAttachment(membership.role) &&
+    (!canMemberViewTicket(ticket, userId) || attachment.uploadedBy !== userId)
+  ) {
+    throw new ApiError(
+      403,
+      "You do not have permission to delete this attachment",
+    );
+  }
+
+  const deletedAttachment = await deleteTicketAttachment(attachmentId);
+
+  if (!deletedAttachment || !deletedAttachment.id) {
+    throw new ApiError(500, "Failed to delete ticket attachment");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "ATTACHMENT_DELETED",
+    oldValue: deletedAttachment.fileUrl,
+  });
+
+  return deletedAttachment;
 };

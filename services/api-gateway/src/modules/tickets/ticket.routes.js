@@ -6,6 +6,7 @@ import {
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
+  deleteTicketAttachmentController,
   deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
@@ -46,6 +47,11 @@ router.delete(
   "/:ticketId/comments/:commentId",
   authenticate,
   deleteTicketCommentController,
+);
+router.delete(
+  "/:ticketId/attachments/:id",
+  authenticate,
+  deleteTicketAttachmentController,
 );
 router.get("/:ticketId/attachments", authenticate, getTicketAttachmentsController);
 router.post(

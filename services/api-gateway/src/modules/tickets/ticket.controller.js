@@ -4,6 +4,7 @@ import {
   createTicketCommentService,
   createTicketService,
   deleteTicketCommentService,
+  deleteTicketAttachmentService,
   getTicketByIdService,
   getTicketAttachmentsService,
   getTicketCommentsService,
@@ -179,6 +180,23 @@ export const getTicketAttachmentsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { attachments },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteTicketAttachmentController = async (req, res, next) => {
+  try {
+    const attachment = await deleteTicketAttachmentService(
+      req.params.ticketId,
+      req.params.id,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { attachment },
     });
   } catch (error) {
     next(error);
