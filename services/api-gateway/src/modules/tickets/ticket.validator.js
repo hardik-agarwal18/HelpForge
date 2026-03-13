@@ -82,3 +82,8 @@ export const getTagsSchema = z.object({
 export const addTicketTagSchema = z.object({
   tagId: z.string().min(1, "Tag ID is required"),
 });
+
+export const updateAgentAvailabilitySchema = z.object({
+  organizationId: z.string().min(1, "Organization ID is required"),
+  isAvailable: z.boolean(),
+});

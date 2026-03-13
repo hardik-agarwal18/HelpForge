@@ -25,6 +25,7 @@ import {
   getTickets,
   getAgentTickets,
   getTags,
+  updateAgentAvailability,
   updateTicketStatus,
   updateTicket,
 } from "./ticket.repo.js";
@@ -445,6 +446,37 @@ export const getMyAgentStatsService = async (query, userId) => {
     byStatus,
     byPriority,
   };
+};
+
+export const updateMyAgentAvailabilityService = async (
+  organizationId,
+  isAvailable,
+  userId,
+) => {
+  const membership = await getTicketOrganizationMembership(organizationId, userId);
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to update agent availability for this organization",
+    );
+  }
+
+  if (membership.role !== "AGENT") {
+    throw new ApiError(403, "Only agents can update their availability");
+  }
+
+  const updatedMembership = await updateAgentAvailability(
+    organizationId,
+    userId,
+    isAvailable,
+  );
+
+  if (!updatedMembership || !updatedMembership.id) {
+    throw new ApiError(500, "Failed to update agent availability");
+  }
+
+  return updatedMembership;
 };
 
 export const getTicketByIdService = async (ticketId, userId) => {

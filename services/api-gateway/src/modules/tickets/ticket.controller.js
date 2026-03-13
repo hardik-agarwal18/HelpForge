@@ -16,6 +16,7 @@ import {
   getTagsService,
   getMyAgentStatsService,
   getMyAgentTicketsService,
+  updateMyAgentAvailabilityService,
   updateTicketStatusService,
   updateTicketService,
 } from "./ticket.service.js";
@@ -92,6 +93,23 @@ export const getMyAgentStatsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { stats },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateMyAgentAvailabilityController = async (req, res, next) => {
+  try {
+    const membership = await updateMyAgentAvailabilityService(
+      req.body.organizationId,
+      req.body.isAvailable,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { membership },
     });
   } catch (error) {
     next(error);

@@ -19,6 +19,24 @@ export const getTicketMembershipsByUserId = async (userId) => {
   });
 };
 
+export const updateAgentAvailability = async (
+  organizationId,
+  userId,
+  isAvailable,
+) => {
+  return await prisma.membership.update({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+    data: {
+      isAvailable,
+    },
+  });
+};
+
 export const getOrganizationAgentsWithLoad = async (
   organizationId,
   activeStatuses,
@@ -27,6 +45,7 @@ export const getOrganizationAgentsWithLoad = async (
     where: {
       organizationId,
       role: "AGENT",
+      isAvailable: true,
     },
     include: {
       user: {
