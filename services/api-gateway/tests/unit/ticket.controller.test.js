@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicketService = jest.fn();
+const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
@@ -9,6 +10,7 @@ const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   createTicketCommentService: mockCreateTicketCommentService,
+  createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
@@ -17,6 +19,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
 }));
 
 const {
+  createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
   getTicketByIdController,
@@ -209,6 +212,49 @@ describe("Ticket Controller", () => {
     mockGetTicketCommentsService.mockRejectedValue(error);
 
     await getTicketCommentsController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should create an attachment and return 201", async () => {
+    const attachment = { id: "attachment-1" };
+    req.params = { ticketId: "ticket-1" };
+    req.body = {
+      fileUrl: "https://example.com/file.pdf",
+      fileType: "application/pdf",
+      fileSize: 1024,
+    };
+    mockCreateTicketAttachmentService.mockResolvedValue(attachment);
+
+    await createTicketAttachmentController(req, res, next);
+
+    expect(mockCreateTicketAttachmentService).toHaveBeenCalledWith(
+      "ticket-1",
+      {
+        fileUrl: "https://example.com/file.pdf",
+        fileType: "application/pdf",
+        fileSize: 1024,
+      },
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { attachment },
+    });
+  });
+
+  it("should call next if create attachment service throws", async () => {
+    const error = new Error("Attachment failed");
+    req.params = { ticketId: "ticket-1" };
+    req.body = {
+      fileUrl: "https://example.com/file.pdf",
+      fileType: "application/pdf",
+      fileSize: 1024,
+    };
+    mockCreateTicketAttachmentService.mockRejectedValue(error);
+
+    await createTicketAttachmentController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

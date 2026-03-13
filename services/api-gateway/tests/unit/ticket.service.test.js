@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicket = jest.fn();
+const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
 const mockGetTicketById = jest.fn();
@@ -11,6 +12,7 @@ const mockUpdateTicket = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketActivityLog: mockCreateTicketActivityLog,
+  createTicketAttachment: mockCreateTicketAttachment,
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
   getTicketById: mockGetTicketById,
@@ -21,6 +23,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
 }));
 
 const {
+  createTicketAttachmentService,
   createTicketCommentService,
   createTicketService,
   getTicketByIdService,
@@ -574,6 +577,102 @@ describe("Ticket Service", () => {
       await expect(getTicketCommentsService("ticket-1", "user-1")).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view comments on this ticket",
+      });
+    });
+  });
+
+  describe("createTicketAttachmentService", () => {
+    it("should allow elevated roles to add attachments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockCreateTicketAttachment.mockResolvedValue({
+        id: "attachment-1",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await createTicketAttachmentService(
+        "ticket-1",
+        {
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        },
+        "user-1",
+      );
+
+      expect(mockCreateTicketAttachment).toHaveBeenCalledWith("ticket-1", {
+        uploadedBy: "user-1",
+        fileUrl: "https://example.com/file.pdf",
+        fileType: "application/pdf",
+        fileSize: 1024,
+      });
+      expect(result).toEqual({
+        id: "attachment-1",
+        fileUrl: "https://example.com/file.pdf",
+      });
+    });
+
+    it("should allow members to add attachments to their own tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicketAttachment.mockResolvedValue({
+        id: "attachment-1",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      await createTicketAttachmentService(
+        "ticket-1",
+        {
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        },
+        "user-1",
+      );
+
+      expect(mockCreateTicketAttachment).toHaveBeenCalled();
+    });
+
+    it("should reject unrelated members from adding attachments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        createTicketAttachmentService(
+          "ticket-1",
+          {
+            fileUrl: "https://example.com/file.pdf",
+            fileType: "application/pdf",
+            fileSize: 1024,
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to add attachments to this ticket",
       });
     });
   });

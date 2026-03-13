@@ -712,4 +712,113 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.message).toBe("Ticket not found");
     });
   });
+
+  describe("POST /api/tickets/:ticketId/attachments", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Attachment ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to add attachments", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/attachments`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.attachment.fileUrl).toBe(
+        "https://example.com/file.pdf",
+      );
+    });
+
+    it("should allow members to add attachments to their own tickets", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/attachments`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+    });
+
+    it("should reject invalid attachment payloads", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/attachments`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          fileUrl: "not-a-url",
+          fileType: "",
+          fileSize: -1,
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Validation error");
+    });
+
+    it("should reject unrelated members from adding attachments", async () => {
+      const unrelatedMember = await createTestUser({
+        email: `member4_${Date.now()}@example.com`,
+        name: "Fourth Member",
+      });
+      const unrelatedMemberToken = signToken(unrelatedMember);
+      await prisma.membership.create({
+        data: {
+          userId: unrelatedMember.id,
+          organizationId: organization.id,
+          role: "MEMBER",
+        },
+      });
+
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/attachments`)
+        .set("Authorization", `Bearer ${unrelatedMemberToken}`)
+        .send({
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to add attachments to this ticket",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .post("/api/tickets/non-existent-ticket-id/attachments")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({
+          fileUrl: "https://example.com/file.pdf",
+          fileType: "application/pdf",
+          fileSize: 1024,
+        })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
 });

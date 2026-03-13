@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
   updateTicketSchema,
@@ -74,6 +75,28 @@ describe("Ticket Validator", () => {
     it("should reject missing message", () => {
       const result = createTicketCommentSchema.safeParse({
         isInternal: true,
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("createTicketAttachmentSchema", () => {
+    it("should validate a valid attachment payload", () => {
+      const result = createTicketAttachmentSchema.safeParse({
+        fileUrl: "https://example.com/file.pdf",
+        fileType: "application/pdf",
+        fileSize: 1024,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject invalid attachment payload", () => {
+      const result = createTicketAttachmentSchema.safeParse({
+        fileUrl: "not-a-url",
+        fileType: "",
+        fileSize: -1,
       });
 
       expect(result.success).toBe(false);
