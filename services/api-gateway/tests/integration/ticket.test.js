@@ -713,6 +713,150 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("DELETE /api/tickets/:ticketId/comments/:commentId", () => {
+    let ticket;
+    let ownMemberComment;
+    let agentComment;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Comment deletion ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+        },
+      });
+
+      ownMemberComment = await prisma.ticketComment.create({
+        data: {
+          ticketId: ticket.id,
+          authorId: user4.id,
+          message: "Member comment",
+        },
+      });
+
+      agentComment = await prisma.ticketComment.create({
+        data: {
+          ticketId: ticket.id,
+          authorId: user2.id,
+          message: "Agent comment",
+          isInternal: true,
+        },
+      });
+    });
+
+    it("should allow elevated roles to delete any comment", async () => {
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/comments/${ownMemberComment.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comment.id).toBe(ownMemberComment.id);
+
+      const deletedComment = await prisma.ticketComment.findUnique({
+        where: { id: ownMemberComment.id },
+      });
+      expect(deletedComment).toBeNull();
+    });
+
+    it("should allow members to delete their own comments on accessible tickets", async () => {
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/comments/${ownMemberComment.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comment.id).toBe(ownMemberComment.id);
+    });
+
+    it("should reject members deleting other users' comments", async () => {
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/comments/${agentComment.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to delete this comment",
+      );
+    });
+
+    it("should reject unrelated members from deleting comments", async () => {
+      const unrelatedMember = await createTestUser({
+        email: `member5_${Date.now()}@example.com`,
+        name: "Fifth Member",
+      });
+      const unrelatedMemberToken = signToken(unrelatedMember);
+      await prisma.membership.create({
+        data: {
+          userId: unrelatedMember.id,
+          organizationId: organization.id,
+          role: "MEMBER",
+        },
+      });
+      const unrelatedComment = await prisma.ticketComment.create({
+        data: {
+          ticketId: ticket.id,
+          authorId: unrelatedMember.id,
+          message: "Own but unrelated",
+        },
+      });
+
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/comments/${unrelatedComment.id}`)
+        .set("Authorization", `Bearer ${unrelatedMemberToken}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to delete this comment",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .delete(`/api/tickets/non-existent-ticket-id/comments/${ownMemberComment.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+
+    it("should return 404 when comment does not exist for the ticket", async () => {
+      const otherTicket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Other ticket",
+          priority: "LOW",
+          status: "OPEN",
+          source: "EMAIL",
+          createdById: user1.id,
+        },
+      });
+      const otherComment = await prisma.ticketComment.create({
+        data: {
+          ticketId: otherTicket.id,
+          authorId: user1.id,
+          message: "Different ticket comment",
+        },
+      });
+
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/comments/${otherComment.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Comment not found");
+    });
+  });
+
   describe("POST /api/tickets/:ticketId/attachments", () => {
     let ticket;
 

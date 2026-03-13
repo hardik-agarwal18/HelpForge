@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
+const mockDeleteTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
@@ -13,6 +14,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   createTicketCommentService: mockCreateTicketCommentService,
   createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
+  deleteTicketCommentService: mockDeleteTicketCommentService,
   getTicketAttachmentsService: mockGetTicketAttachmentsService,
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
@@ -24,6 +26,7 @@ const {
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
+  deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
   getTicketCommentsController,
@@ -215,6 +218,35 @@ describe("Ticket Controller", () => {
     mockGetTicketCommentsService.mockRejectedValue(error);
 
     await getTicketCommentsController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should delete a comment and return 200", async () => {
+    const comment = { id: "comment-1", message: "Removed" };
+    req.params = { ticketId: "ticket-1", commentId: "comment-1" };
+    mockDeleteTicketCommentService.mockResolvedValue(comment);
+
+    await deleteTicketCommentController(req, res, next);
+
+    expect(mockDeleteTicketCommentService).toHaveBeenCalledWith(
+      "ticket-1",
+      "comment-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { comment },
+    });
+  });
+
+  it("should call next if delete ticket comment service throws", async () => {
+    const error = new Error("Delete comment failed");
+    req.params = { ticketId: "ticket-1", commentId: "comment-1" };
+    mockDeleteTicketCommentService.mockRejectedValue(error);
+
+    await deleteTicketCommentController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

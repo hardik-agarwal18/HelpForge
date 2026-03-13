@@ -4,7 +4,9 @@ const mockCreateTicket = jest.fn();
 const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
+const mockDeleteTicketComment = jest.fn();
 const mockGetTicketById = jest.fn();
+const mockGetTicketCommentById = jest.fn();
 const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
@@ -16,8 +18,10 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketAttachment: mockCreateTicketAttachment,
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
+  deleteTicketComment: mockDeleteTicketComment,
   getTicketAttachments: mockGetTicketAttachments,
   getTicketById: mockGetTicketById,
+  getTicketCommentById: mockGetTicketCommentById,
   getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
@@ -28,6 +32,7 @@ const {
   createTicketAttachmentService,
   createTicketCommentService,
   createTicketService,
+  deleteTicketCommentService,
   getTicketByIdService,
   getTicketAttachmentsService,
   getTicketCommentsService,
@@ -676,6 +681,185 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to add attachments to this ticket",
+      });
+    });
+  });
+
+  describe("deleteTicketCommentService", () => {
+    it("should allow elevated roles to delete any comment on the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-7",
+        message: "Internal note",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockDeleteTicketComment.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-7",
+        message: "Internal note",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await deleteTicketCommentService(
+        "ticket-1",
+        "comment-1",
+        "user-1",
+      );
+
+      expect(mockDeleteTicketComment).toHaveBeenCalledWith("comment-1");
+      expect(mockCreateTicketActivityLog).toHaveBeenCalledWith("ticket-1", {
+        actorId: "user-1",
+        action: "COMMENT_DELETED",
+        oldValue: "Internal note",
+      });
+      expect(result.id).toBe("comment-1");
+    });
+
+    it("should allow members to delete their own comments on accessible tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-1",
+        message: "Own comment",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockDeleteTicketComment.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-1",
+        message: "Own comment",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await deleteTicketCommentService(
+        "ticket-1",
+        "comment-1",
+        "user-1",
+      );
+
+      expect(result.message).toBe("Own comment");
+    });
+
+    it("should reject when the ticket does not exist", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject when the comment does not exist for the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-2",
+      });
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Comment not found",
+      });
+    });
+
+    it("should reject users outside the organization", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to delete comments on this ticket",
+      });
+    });
+
+    it("should reject members deleting another user's comment", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-2",
+        message: "Other comment",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to delete this comment",
+      });
+    });
+
+    it("should reject unrelated members even for their own comment", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-1",
+        message: "Own but inaccessible",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to delete this comment",
       });
     });
   });
