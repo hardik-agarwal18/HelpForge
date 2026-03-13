@@ -125,26 +125,23 @@ describe("Ticket API Integration Tests", () => {
           role: "AGENT",
         },
       });
-
-      await prisma.ticket.createMany({
+      await prisma.agentWorkload.createMany({
         data: [
           {
+            userId: user2.id,
             organizationId: organization.id,
-            title: "Busy agent ticket 1",
-            priority: "MEDIUM",
-            status: "OPEN",
-            source: "WEB",
-            createdById: user1.id,
-            assignedToId: user2.id,
+            assignedToday: 3,
+            assignedThisWeek: 8,
+            lastDailyReset: new Date(),
+            lastWeeklyReset: new Date(),
           },
           {
+            userId: secondAgent.id,
             organizationId: organization.id,
-            title: "Busy agent ticket 2",
-            priority: "MEDIUM",
-            status: "IN_PROGRESS",
-            source: "WEB",
-            createdById: user1.id,
-            assignedToId: user2.id,
+            assignedToday: 1,
+            assignedThisWeek: 2,
+            lastDailyReset: new Date(),
+            lastWeeklyReset: new Date(),
           },
         ],
       });
@@ -160,6 +157,7 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.ticket.assignedToId).toBe(secondAgent.id);
+      expect(response.body.data.ticket.status).toBe("IN_PROGRESS");
     });
 
     it("should return 400 for invalid payload", async () => {
@@ -384,6 +382,16 @@ describe("Ticket API Integration Tests", () => {
           userId: secondAgent.id,
           organizationId: organization.id,
           role: "AGENT",
+        },
+      });
+      await prisma.agentWorkload.create({
+        data: {
+          userId: secondAgent.id,
+          organizationId: organization.id,
+          assignedToday: 0,
+          assignedThisWeek: 0,
+          lastDailyReset: new Date(),
+          lastWeeklyReset: new Date(),
         },
       });
 
@@ -1017,26 +1025,23 @@ describe("Ticket API Integration Tests", () => {
           role: "AGENT",
         },
       });
-
-      await prisma.ticket.createMany({
+      await prisma.agentWorkload.createMany({
         data: [
           {
+            userId: user2.id,
             organizationId: organization.id,
-            title: "Busy 1",
-            priority: "MEDIUM",
-            status: "OPEN",
-            source: "WEB",
-            createdById: user1.id,
-            assignedToId: user2.id,
+            assignedToday: 4,
+            assignedThisWeek: 10,
+            lastDailyReset: new Date(),
+            lastWeeklyReset: new Date(),
           },
           {
+            userId: secondAgent.id,
             organizationId: organization.id,
-            title: "Busy 2",
-            priority: "MEDIUM",
-            status: "IN_PROGRESS",
-            source: "WEB",
-            createdById: user1.id,
-            assignedToId: user2.id,
+            assignedToday: 1,
+            assignedThisWeek: 3,
+            lastDailyReset: new Date(),
+            lastWeeklyReset: new Date(),
           },
         ],
       });
@@ -1048,6 +1053,7 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.ticket.assignedToId).toBe(secondAgent.id);
+      expect(response.body.data.ticket.status).toBe("IN_PROGRESS");
     });
 
     it("should reject members from auto-assigning tickets", async () => {

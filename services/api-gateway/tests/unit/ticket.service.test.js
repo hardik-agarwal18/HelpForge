@@ -12,7 +12,8 @@ const mockDeleteTicketAttachment = jest.fn();
 const mockDeleteTicketComment = jest.fn();
 const mockGetTagById = jest.fn();
 const mockGetTagByName = jest.fn();
-const mockGetOrganizationAgentsWithLoad = jest.fn();
+const mockGetOrganizationAvailableAgents = jest.fn();
+const mockGetOrganizationAgentWorkloads = jest.fn();
 const mockGetTicketAttachmentById = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
@@ -26,6 +27,7 @@ const mockGetTickets = jest.fn();
 const mockGetAgentTickets = jest.fn();
 const mockGetTags = jest.fn();
 const mockUpdateAgentAvailability = jest.fn();
+const mockAutoAssignTicket = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
 
@@ -36,13 +38,15 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
   assignTicket: mockAssignTicket,
+  autoAssignTicket: mockAutoAssignTicket,
   createTag: mockCreateTag,
   deleteTicketTag: mockDeleteTicketTag,
   deleteTicketAttachment: mockDeleteTicketAttachment,
   deleteTicketComment: mockDeleteTicketComment,
   getTagById: mockGetTagById,
   getTagByName: mockGetTagByName,
-  getOrganizationAgentsWithLoad: mockGetOrganizationAgentsWithLoad,
+  getOrganizationAvailableAgents: mockGetOrganizationAvailableAgents,
+  getOrganizationAgentWorkloads: mockGetOrganizationAgentWorkloads,
   getTicketAttachments: mockGetTicketAttachments,
   getTicketTagById: mockGetTicketTagById,
   getTicketActivities: mockGetTicketActivities,
@@ -134,21 +138,40 @@ describe("Ticket Service", () => {
       title: "Login issue",
       assignedToId: null,
     });
-    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+    mockGetOrganizationAvailableAgents.mockResolvedValue([
       {
         userId: "agent-1",
-        user: { assignedTickets: [{ id: "t-1" }, { id: "t-2" }] },
+        maxTicketsPerDay: 10,
+        maxTicketsPerWeek: 50,
       },
       {
         userId: "agent-2",
-        user: { assignedTickets: [{ id: "t-3" }] },
+        maxTicketsPerDay: 10,
+        maxTicketsPerWeek: 50,
       },
     ]);
-    mockAssignTicket.mockResolvedValue({
+    mockGetOrganizationAgentWorkloads.mockResolvedValue([
+      {
+        userId: "agent-1",
+        assignedToday: 2,
+        assignedThisWeek: 5,
+        lastDailyReset: new Date(),
+        lastWeeklyReset: new Date(),
+      },
+      {
+        userId: "agent-2",
+        assignedToday: 1,
+        assignedThisWeek: 4,
+        lastDailyReset: new Date(),
+        lastWeeklyReset: new Date(),
+      },
+    ]);
+    mockAutoAssignTicket.mockResolvedValue({
       id: "ticket-1",
       organizationId: "org-1",
       title: "Login issue",
       assignedToId: "agent-2",
+      status: "IN_PROGRESS",
     });
 
     const result = await createTicketService(
@@ -159,16 +182,15 @@ describe("Ticket Service", () => {
       "user-1",
     );
 
-    expect(mockAssignTicket).toHaveBeenCalledWith(
+    expect(mockAutoAssignTicket).toHaveBeenCalledWith(
       "ticket-1",
+      "org-1",
       "agent-2",
-      "user-1",
-      null,
     );
     expect(result.assignedToId).toBe("agent-2");
   });
 
-  it("should skip unavailable agents during auto-assignment", async () => {
+  it("should respect per-agent workload limits during auto-assignment", async () => {
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
       role: "MEMBER",
@@ -179,14 +201,35 @@ describe("Ticket Service", () => {
       title: "Login issue",
       assignedToId: null,
     });
-    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+    mockGetOrganizationAvailableAgents.mockResolvedValue([
+      {
+        userId: "agent-1",
+        maxTicketsPerDay: 1,
+        maxTicketsPerWeek: 50,
+      },
       {
         userId: "agent-2",
-        isAvailable: true,
-        user: { assignedTickets: [] },
+        maxTicketsPerDay: 10,
+        maxTicketsPerWeek: 50,
       },
     ]);
-    mockAssignTicket.mockResolvedValue({
+    mockGetOrganizationAgentWorkloads.mockResolvedValue([
+      {
+        userId: "agent-1",
+        assignedToday: 1,
+        assignedThisWeek: 3,
+        lastDailyReset: new Date(),
+        lastWeeklyReset: new Date(),
+      },
+      {
+        userId: "agent-2",
+        assignedToday: 0,
+        assignedThisWeek: 2,
+        lastDailyReset: new Date(),
+        lastWeeklyReset: new Date(),
+      },
+    ]);
+    mockAutoAssignTicket.mockResolvedValue({
       id: "ticket-1",
       organizationId: "org-1",
       title: "Login issue",
@@ -201,10 +244,7 @@ describe("Ticket Service", () => {
       "user-1",
     );
 
-    expect(mockGetOrganizationAgentsWithLoad).toHaveBeenCalledWith("org-1", [
-      "OPEN",
-      "IN_PROGRESS",
-    ]);
+    expect(mockGetOrganizationAvailableAgents).toHaveBeenCalledWith("org-1");
     expect(result.assignedToId).toBe("agent-2");
   });
 
@@ -219,14 +259,20 @@ describe("Ticket Service", () => {
       title: "Login issue",
       assignedToId: null,
     });
-    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+    mockGetOrganizationAvailableAgents.mockResolvedValue([
       {
         userId: "agent-1",
-        user: {
-          assignedTickets: Array.from({ length: 5 }, (_, index) => ({
-            id: `ticket-${index}`,
-          })),
-        },
+        maxTicketsPerDay: 1,
+        maxTicketsPerWeek: 1,
+      },
+    ]);
+    mockGetOrganizationAgentWorkloads.mockResolvedValue([
+      {
+        userId: "agent-1",
+        assignedToday: 1,
+        assignedThisWeek: 1,
+        lastDailyReset: new Date(),
+        lastWeeklyReset: new Date(),
       },
     ]);
 
@@ -238,8 +284,62 @@ describe("Ticket Service", () => {
       "user-1",
     );
 
-    expect(mockAssignTicket).not.toHaveBeenCalled();
+    expect(mockAutoAssignTicket).not.toHaveBeenCalled();
     expect(result.assignedToId).toBeNull();
+  });
+
+  it("should ignore stale workload counters from a previous period", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 8);
+
+    mockGetTicketOrganizationMembership.mockResolvedValue({
+      id: "membership-1",
+      role: "MEMBER",
+    });
+    mockCreateTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: null,
+    });
+    mockGetOrganizationAvailableAgents.mockResolvedValue([
+      {
+        userId: "agent-1",
+        maxTicketsPerDay: 1,
+        maxTicketsPerWeek: 1,
+      },
+    ]);
+    mockGetOrganizationAgentWorkloads.mockResolvedValue([
+      {
+        userId: "agent-1",
+        assignedToday: 10,
+        assignedThisWeek: 10,
+        lastDailyReset: yesterday,
+        lastWeeklyReset: lastWeek,
+      },
+    ]);
+    mockAutoAssignTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      assignedToId: "agent-1",
+    });
+
+    const result = await createTicketService(
+      {
+        organizationId: "org-1",
+        title: "Login issue",
+      },
+      "user-1",
+    );
+
+    expect(mockAutoAssignTicket).toHaveBeenCalledWith(
+      "ticket-1",
+      "org-1",
+      "agent-1",
+    );
+    expect(result.assignedToId).toBe("agent-1");
   });
 
   it("should reject users outside the organization", async () => {
@@ -980,28 +1080,46 @@ describe("Ticket Service", () => {
         id: "membership-1",
         role: "AGENT",
       });
-      mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+      mockGetOrganizationAvailableAgents.mockResolvedValue([
         {
           userId: "agent-1",
-          user: { assignedTickets: [{ id: "t-1" }] },
+          maxTicketsPerDay: 10,
+          maxTicketsPerWeek: 50,
         },
         {
           userId: "agent-2",
-          user: { assignedTickets: [] },
+          maxTicketsPerDay: 10,
+          maxTicketsPerWeek: 50,
         },
       ]);
-      mockAssignTicket.mockResolvedValue({
+      mockGetOrganizationAgentWorkloads.mockResolvedValue([
+        {
+          userId: "agent-1",
+          assignedToday: 1,
+          assignedThisWeek: 3,
+          lastDailyReset: new Date(),
+          lastWeeklyReset: new Date(),
+        },
+        {
+          userId: "agent-2",
+          assignedToday: 0,
+          assignedThisWeek: 2,
+          lastDailyReset: new Date(),
+          lastWeeklyReset: new Date(),
+        },
+      ]);
+      mockAutoAssignTicket.mockResolvedValue({
         id: "ticket-1",
         assignedToId: "agent-2",
+        status: "IN_PROGRESS",
       });
 
       const result = await autoAssignTicketService("ticket-1", "user-1");
 
-      expect(mockAssignTicket).toHaveBeenCalledWith(
+      expect(mockAutoAssignTicket).toHaveBeenCalledWith(
         "ticket-1",
+        "org-1",
         "agent-2",
-        "user-1",
-        null,
       );
       expect(result.assignedToId).toBe("agent-2");
     });
@@ -1044,7 +1162,8 @@ describe("Ticket Service", () => {
         id: "membership-1",
         role: "ADMIN",
       });
-      mockGetOrganizationAgentsWithLoad.mockResolvedValue([]);
+      mockGetOrganizationAvailableAgents.mockResolvedValue([]);
+      mockGetOrganizationAgentWorkloads.mockResolvedValue([]);
 
       await expect(
         autoAssignTicketService("ticket-1", "user-1"),
@@ -1064,13 +1183,15 @@ describe("Ticket Service", () => {
         id: "membership-1",
         role: "OWNER",
       });
-      mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+      mockGetOrganizationAvailableAgents.mockResolvedValue([
         {
           userId: "agent-2",
-          user: { assignedTickets: [] },
+          maxTicketsPerDay: 10,
+          maxTicketsPerWeek: 50,
         },
       ]);
-      mockAssignTicket.mockResolvedValue(null);
+      mockGetOrganizationAgentWorkloads.mockResolvedValue([]);
+      mockAutoAssignTicket.mockResolvedValue(null);
 
       await expect(
         autoAssignTicketService("ticket-1", "user-1"),

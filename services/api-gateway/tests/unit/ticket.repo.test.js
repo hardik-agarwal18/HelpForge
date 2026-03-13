@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockMembershipFindMany = jest.fn();
 const mockMembershipFindUnique = jest.fn();
 const mockMembershipUpdate = jest.fn();
+const mockAgentWorkloadFindMany = jest.fn();
+const mockAgentWorkloadUpsert = jest.fn();
+const mockTicketUpdate = jest.fn();
+const mockTicketActivityLogCreate = jest.fn();
+const mockTransaction = jest.fn();
 
 jest.unstable_mockModule("../../src/config/database.config.js", () => ({
   default: {
@@ -21,7 +26,11 @@ jest.unstable_mockModule("../../src/config/database.config.js", () => ({
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
-      update: jest.fn(),
+      update: mockTicketUpdate,
+    },
+    agentWorkload: {
+      findMany: mockAgentWorkloadFindMany,
+      upsert: mockAgentWorkloadUpsert,
     },
     ticketComment: {
       create: jest.fn(),
@@ -36,7 +45,7 @@ jest.unstable_mockModule("../../src/config/database.config.js", () => ({
       delete: jest.fn(),
     },
     ticketActivityLog: {
-      create: jest.fn(),
+      create: mockTicketActivityLogCreate,
       findMany: jest.fn(),
     },
     ticketTag: {
@@ -44,11 +53,14 @@ jest.unstable_mockModule("../../src/config/database.config.js", () => ({
       findUnique: jest.fn(),
       delete: jest.fn(),
     },
+    $transaction: mockTransaction,
   },
 }));
 
 const {
-  getOrganizationAgentsWithLoad,
+  autoAssignTicket,
+  getOrganizationAgentWorkloads,
+  getOrganizationAvailableAgents,
   updateAgentAvailability,
 } = await import("../../src/modules/tickets/ticket.repo.js");
 
@@ -82,14 +94,11 @@ describe("Ticket Repo", () => {
     expect(result).toBe(membership);
   });
 
-  it("should fetch only available organization agents with org-scoped active load", async () => {
+  it("should fetch only available organization agents", async () => {
     const memberships = [{ id: "membership-1", userId: "agent-1" }];
     mockMembershipFindMany.mockResolvedValue(memberships);
 
-    const result = await getOrganizationAgentsWithLoad("org-1", [
-      "OPEN",
-      "IN_PROGRESS",
-    ]);
+    const result = await getOrganizationAvailableAgents("org-1");
 
     expect(mockMembershipFindMany).toHaveBeenCalledWith({
       where: {
@@ -98,26 +107,67 @@ describe("Ticket Repo", () => {
         isAvailable: true,
       },
       include: {
-        user: {
-          include: {
-            assignedTickets: {
-              where: {
-                organizationId: "org-1",
-                status: {
-                  in: ["OPEN", "IN_PROGRESS"],
-                },
-              },
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
+        user: true,
       },
       orderBy: {
         createdAt: "asc",
       },
     });
     expect(result).toBe(memberships);
+  });
+
+  it("should fetch organization agent workloads", async () => {
+    const workloads = [{ id: "workload-1", userId: "agent-1" }];
+    mockAgentWorkloadFindMany.mockResolvedValue(workloads);
+
+    const result = await getOrganizationAgentWorkloads("org-1");
+
+    expect(mockAgentWorkloadFindMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+      },
+    });
+    expect(result).toBe(workloads);
+  });
+
+  it("should auto-assign a ticket inside a transaction", async () => {
+    const updatedTicket = { id: "ticket-1", assignedToId: "agent-1" };
+    mockTicketUpdate.mockResolvedValue(updatedTicket);
+    mockTransaction.mockImplementation(async (callback) =>
+      callback({
+        agentWorkload: {
+          upsert: mockAgentWorkloadUpsert,
+        },
+        ticketActivityLog: {
+          create: mockTicketActivityLogCreate,
+        },
+        ticket: {
+          update: mockTicketUpdate,
+        },
+      }),
+    );
+
+    const result = await autoAssignTicket("ticket-1", "org-1", "agent-1");
+
+    expect(mockTransaction).toHaveBeenCalled();
+    expect(mockAgentWorkloadUpsert).toHaveBeenCalled();
+    expect(mockTicketActivityLogCreate).toHaveBeenCalledWith({
+      data: {
+        ticketId: "ticket-1",
+        actorId: "agent-1",
+        action: "TICKET_ASSIGNED",
+        newValue: "agent-1",
+      },
+    });
+    expect(mockTicketUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "ticket-1" },
+        data: {
+          assignedToId: "agent-1",
+          status: "IN_PROGRESS",
+        },
+      }),
+    );
+    expect(result).toBe(updatedTicket);
   });
 });
