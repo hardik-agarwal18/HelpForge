@@ -14,6 +14,8 @@ import {
   getTicketCommentsService,
   getTicketsService,
   getTagsService,
+  getMyAgentStatsService,
+  getMyAgentTicketsService,
   updateTicketStatusService,
   updateTicketService,
 } from "./ticket.service.js";
@@ -64,6 +66,32 @@ export const getTagsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { tags },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyAgentTicketsController = async (req, res, next) => {
+  try {
+    const tickets = await getMyAgentTicketsService(req.query, req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      data: { tickets },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyAgentStatsController = async (req, res, next) => {
+  try {
+    const stats = await getMyAgentStatsService(req.query, req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      data: { stats },
     });
   } catch (error) {
     next(error);

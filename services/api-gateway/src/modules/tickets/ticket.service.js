@@ -20,7 +20,9 @@ import {
   getTicketComments,
   getTicketAttachments,
   getTicketOrganizationMembership,
+  getTicketMembershipsByUserId,
   getTickets,
+  getAgentTickets,
   getTags,
   updateTicketStatus,
   updateTicket,
@@ -43,6 +45,8 @@ const canEditAllOrganizationTickets = (role) =>
 
 const canAssignOrganizationTickets = (role) =>
   getTicketRolePolicy(role).canAssign;
+
+const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
 
 const canMemberViewTicket = (ticket, userId) =>
   ticket.createdById === userId || ticket.assignedToId === userId;
@@ -127,7 +131,55 @@ const normalizeTicketFilters = (filters) => ({
   tagId: filters.tagId,
   dateFrom: filters.dateFrom,
   dateTo: filters.dateTo,
+  organizationId: filters.organizationId,
 });
+
+const buildCommonTicketFilters = (filters, userId) => {
+  const resolvedAssignedToId =
+    filters.assignedTo === "me"
+      ? userId
+      : filters.assignedToId ?? filters.assignedTo;
+
+  const createdAtFilter = {};
+  const parsedDateFrom = parseDateFilter(filters.dateFrom, "dateFrom");
+  const parsedDateTo = parseDateFilter(filters.dateTo, "dateTo");
+  const tagFilter = {};
+
+  if (parsedDateFrom) {
+    createdAtFilter.gte = parsedDateFrom;
+  }
+
+  if (parsedDateTo) {
+    createdAtFilter.lte = parsedDateTo;
+  }
+
+  if (filters.tagId) {
+    tagFilter.tagId = filters.tagId;
+  }
+
+  if (filters.tag) {
+    tagFilter.tag = { name: filters.tag };
+  }
+
+  return {
+    ...(filters.organizationId ? { organizationId: filters.organizationId } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.source ? { source: filters.source } : {}),
+    ...(resolvedAssignedToId ? { assignedToId: resolvedAssignedToId } : {}),
+    ...(Object.keys(tagFilter).length > 0
+      ? { tags: { some: tagFilter } }
+      : {}),
+    ...(Object.keys(createdAtFilter).length > 0
+      ? { createdAt: createdAtFilter }
+      : {}),
+  };
+};
+
+const getStaffMemberships = async (userId) => {
+  const memberships = await getTicketMembershipsByUserId(userId);
+  return memberships.filter((membership) => STAFF_ROLES.includes(membership.role));
+};
 
 const parseDateFilter = (value, fieldName) => {
   if (!value) {
@@ -143,8 +195,10 @@ const parseDateFilter = (value, fieldName) => {
   return parsedDate;
 };
 
-const validateListFilters = (filters) => {
-  if (!filters.organizationId) {
+const validateListFilters = (filters, options = {}) => {
+  const { requireOrganizationId = true } = options;
+
+  if (requireOrganizationId && !filters.organizationId) {
     throw new ApiError(400, "Organization ID is required");
   }
 
@@ -278,49 +332,7 @@ export const getTicketsService = async (query, userId) => {
     );
   }
 
-  const resolvedAssignedToId =
-    normalizedFilters.assignedTo === "me"
-      ? userId
-      : normalizedFilters.assignedToId ?? normalizedFilters.assignedTo;
-
-  const createdAtFilter = {};
-  const parsedDateFrom = parseDateFilter(normalizedFilters.dateFrom, "dateFrom");
-  const parsedDateTo = parseDateFilter(normalizedFilters.dateTo, "dateTo");
-  const tagFilter = {};
-
-  if (parsedDateFrom) {
-    createdAtFilter.gte = parsedDateFrom;
-  }
-
-  if (parsedDateTo) {
-    createdAtFilter.lte = parsedDateTo;
-  }
-
-  if (normalizedFilters.tagId) {
-    tagFilter.tagId = normalizedFilters.tagId;
-  }
-
-  if (normalizedFilters.tag) {
-    tagFilter.tag = { name: normalizedFilters.tag };
-  }
-
-  const baseFilters = {
-    organizationId: normalizedFilters.organizationId,
-    ...(normalizedFilters.status ? { status: normalizedFilters.status } : {}),
-    ...(normalizedFilters.priority
-      ? { priority: normalizedFilters.priority }
-      : {}),
-    ...(normalizedFilters.source ? { source: normalizedFilters.source } : {}),
-    ...(resolvedAssignedToId
-      ? { assignedToId: resolvedAssignedToId }
-      : {}),
-    ...(Object.keys(tagFilter).length > 0
-      ? { tags: { some: tagFilter } }
-      : {}),
-    ...(Object.keys(createdAtFilter).length > 0
-      ? { createdAt: createdAtFilter }
-      : {}),
-  };
+  const baseFilters = buildCommonTicketFilters(normalizedFilters, userId);
 
   const tickets = await getTickets({
     ...baseFilters,
@@ -332,6 +344,59 @@ export const getTicketsService = async (query, userId) => {
   });
 
   return tickets || [];
+};
+
+export const getMyAgentTicketsService = async (query, userId) => {
+  const normalizedFilters = normalizeTicketFilters(query);
+  validateListFilters(normalizedFilters, { requireOrganizationId: false });
+
+  const staffMemberships = await getStaffMemberships(userId);
+
+  if (staffMemberships.length === 0) {
+    throw new ApiError(403, "You do not have permission to view assigned agent tickets");
+  }
+
+  const organizationIds = staffMemberships.map((membership) => membership.organizationId);
+
+  if (
+    normalizedFilters.organizationId &&
+    !organizationIds.includes(normalizedFilters.organizationId)
+  ) {
+    throw new ApiError(403, "You do not have permission to view assigned agent tickets");
+  }
+
+  const tickets = await getAgentTickets({
+    ...buildCommonTicketFilters(
+      {
+        ...normalizedFilters,
+        assignedTo: "me",
+      },
+      userId,
+    ),
+    organizationId: normalizedFilters.organizationId
+      ? normalizedFilters.organizationId
+      : { in: organizationIds },
+  });
+
+  return tickets || [];
+};
+
+export const getMyAgentStatsService = async (query, userId) => {
+  const tickets = await getMyAgentTicketsService(query, userId);
+
+  const byStatus = Object.fromEntries(TICKET_STATUSES.map((status) => [status, 0]));
+  const byPriority = Object.fromEntries(TICKET_PRIORITIES.map((priority) => [priority, 0]));
+
+  tickets.forEach((ticket) => {
+    byStatus[ticket.status] += 1;
+    byPriority[ticket.priority] += 1;
+  });
+
+  return {
+    totalAssigned: tickets.length,
+    byStatus,
+    byPriority,
+  };
 };
 
 export const getTicketByIdService = async (ticketId, userId) => {

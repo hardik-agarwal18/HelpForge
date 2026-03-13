@@ -11,6 +11,14 @@ export const getTicketOrganizationMembership = async (organizationId, userId) =>
   });
 };
 
+export const getTicketMembershipsByUserId = async (userId) => {
+  return await prisma.membership.findMany({
+    where: {
+      userId,
+    },
+  });
+};
+
 export const createTag = async (tagData) => {
   return await prisma.tag.create({
     data: tagData,
@@ -73,6 +81,26 @@ export const getTickets = async (filters) => {
       organization: true,
       createdBy: true,
       assignedTo: true,
+      activities: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
+
+export const getAgentTickets = async (filters) => {
+  return await prisma.ticket.findMany({
+    where: filters,
+    include: {
+      organization: true,
+      createdBy: true,
+      assignedTo: true,
+      tags: {
+        include: {
+          tag: true,
+        },
+      },
       activities: true,
     },
     orderBy: {

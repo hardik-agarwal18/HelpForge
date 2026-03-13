@@ -1,6 +1,7 @@
 import express from "express";
 import authRoutes from "./modules/auth/auth.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
+import agentRoutes from "./modules/tickets/agent.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 
@@ -15,6 +16,7 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/agents", agentRoutes);
 app.use("/api/tickets", ticketRoutes);
 
 // Error handler middleware (must be last)
