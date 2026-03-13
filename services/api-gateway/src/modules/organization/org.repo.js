@@ -39,3 +39,18 @@ export const patchOrganization = async (orgId, name) => {
     },
   });
 };
+
+export const deleteOrganization = async (orgId) => {
+  // First delete all memberships to avoid foreign key constraints
+  await prisma.membership.deleteMany({
+    where: {
+      organizationId: orgId,
+    },
+  });
+
+  return await prisma.organization.delete({
+    where: {
+      id: orgId,
+    },
+  });
+};

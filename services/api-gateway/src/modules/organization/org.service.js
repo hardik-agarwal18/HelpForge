@@ -1,5 +1,6 @@
 import {
   createOrganization,
+  deleteOrganization,
   getOrganizationsByUserId,
   patchOrganization,
 } from "./org.repo.js";
@@ -29,4 +30,14 @@ export const updateOrganizationService = async (orgId, name) => {
   }
 
   return updatedOrganization;
+};
+
+export const deleteOrganizationService = async (orgId) => {
+  const deletedOrganization = await deleteOrganization(orgId);
+
+  if (!deletedOrganization || !deletedOrganization.id) {
+    throw new ApiError(500, "Failed to delete organization");
+  }
+
+  return deletedOrganization;
 };

@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createOrganizationController,
+  deleteOrganizationController,
   getOrganizationByIdController,
   getOrganizationsByUserIdController,
   updateOrganizationController,
@@ -11,7 +12,11 @@ import {
   updateOrganizationSchema,
 } from "./org.validator.js";
 import { authenticate } from "../../middleware/auth.middleware.js";
-import { verifyOrganizationMembership } from "./org.middleware.js";
+import {
+  verifyOrganizationMembership,
+  requireOwner,
+  requireOwnerOrAdmin,
+} from "./org.middleware.js";
 
 const router = express.Router();
 
@@ -32,8 +37,17 @@ router.patch(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
+  requireOwnerOrAdmin,
   validate(updateOrganizationSchema),
   updateOrganizationController,
+);
+
+router.delete(
+  "/:orgId",
+  authenticate,
+  verifyOrganizationMembership,
+  requireOwner,
+  deleteOrganizationController,
 );
 
 export default router;
