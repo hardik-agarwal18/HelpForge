@@ -4,7 +4,9 @@ import {
   createTicketActivityLog,
   createTicketComment,
   createTicket,
+  deleteTicketComment,
   getTicketById,
+  getTicketCommentById,
   getTicketComments,
   getTicketAttachments,
   getTicketOrganizationMembership,
@@ -79,6 +81,8 @@ const filterCommentsForRole = (comments, role) => {
 };
 
 const canCreateInternalComment = (role) => canViewAllOrganizationTickets(role);
+
+const canDeleteAnyTicketComment = (role) => canViewAllOrganizationTickets(role);
 
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
@@ -349,6 +353,56 @@ export const getTicketCommentsService = async (ticketId, userId) => {
   const comments = await getTicketComments(ticketId);
 
   return filterCommentsForRole(comments || [], membership.role);
+};
+
+export const deleteTicketCommentService = async (ticketId, commentId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const comment = await getTicketCommentById(commentId);
+
+  if (!comment || !comment.id || comment.ticketId !== ticketId) {
+    throw new ApiError(404, "Comment not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to delete comments on this ticket",
+    );
+  }
+
+  if (
+    !canDeleteAnyTicketComment(membership.role) &&
+    (!canMemberViewTicket(ticket, userId) || comment.authorId !== userId)
+  ) {
+    throw new ApiError(
+      403,
+      "You do not have permission to delete this comment",
+    );
+  }
+
+  const deletedComment = await deleteTicketComment(commentId);
+
+  if (!deletedComment || !deletedComment.id) {
+    throw new ApiError(500, "Failed to delete ticket comment");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "COMMENT_DELETED",
+    oldValue: deletedComment.message,
+  });
+
+  return deletedComment;
 };
 
 export const createTicketAttachmentService = async (

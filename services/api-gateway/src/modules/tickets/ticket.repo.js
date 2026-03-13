@@ -146,6 +146,30 @@ export const getTicketComments = async (ticketId) => {
   });
 };
 
+export const getTicketCommentById = async (commentId) => {
+  return await prisma.ticketComment.findUnique({
+    where: {
+      id: commentId,
+    },
+    include: {
+      author: true,
+      ticket: true,
+    },
+  });
+};
+
+export const deleteTicketComment = async (commentId) => {
+  return await prisma.ticketComment.delete({
+    where: {
+      id: commentId,
+    },
+    include: {
+      author: true,
+      ticket: true,
+    },
+  });
+};
+
 export const createTicketAttachment = async (ticketId, attachmentData) => {
   return await prisma.ticketAttachment.create({
     data: {

@@ -5,6 +5,7 @@ import {
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
+  deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
   getTicketCommentsController,
@@ -25,6 +26,11 @@ router.get("/", authenticate, getTicketsController);
 router.get("/:ticketId", authenticate, getTicketByIdController);
 router.patch("/:ticketId", authenticate, validate(updateTicketSchema), updateTicketController);
 router.get("/:ticketId/comments", authenticate, getTicketCommentsController);
+router.delete(
+  "/:ticketId/comments/:commentId",
+  authenticate,
+  deleteTicketCommentController,
+);
 router.get("/:ticketId/attachments", authenticate, getTicketAttachmentsController);
 router.post(
   "/:ticketId/attachments",
