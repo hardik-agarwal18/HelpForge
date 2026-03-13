@@ -32,6 +32,7 @@ const {
   deleteOrganizationController,
   inviteMemberInOrganizationController,
   updateMemberFromOrganizationController,
+  viewAllMembersInOrganizationController,
 } = await import("../../src/modules/organization/org.controller.js");
 
 describe("Organization Controller", () => {
@@ -83,6 +84,20 @@ describe("Organization Controller", () => {
 
       expect(mockNext).toHaveBeenCalledWith(error);
     });
+
+    it("should call next with the expected status code and message when service returns no organization", async () => {
+      mockReq.body = { name: "Test Org" };
+      mockCreateOrganizationService.mockResolvedValue(null);
+
+      await createOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 500,
+          message: "Failed to create organization",
+        }),
+      );
+    });
   });
 
   describe("getOrganizationsByUserIdController", () => {
@@ -122,6 +137,18 @@ describe("Organization Controller", () => {
         success: true,
         data: { organization: mockOrg },
       });
+    });
+
+    it("should call next when response building throws", async () => {
+      const error = new Error("Response failed");
+      mockReq.organization = { id: "org-1", name: "Test Org" };
+      mockRes.status.mockImplementation(() => {
+        throw error;
+      });
+
+      await getOrganizationByIdController(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
     });
   });
 
@@ -202,6 +229,46 @@ describe("Organization Controller", () => {
       );
       expect(mockRes.status).toHaveBeenCalledWith(201);
     });
+
+    it("should call next if invite service throws", async () => {
+      mockReq.params = { orgId: "org-1" };
+      mockReq.body = { userId: "user-2", role: "agent" };
+      const error = new Error("Invite failed");
+      mockInviteMemberInOrganizationService.mockRejectedValue(error);
+
+      await inviteMemberInOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
+    });
+  });
+
+  describe("viewAllMembersInOrganizationController", () => {
+    it("should return members and 200", async () => {
+      mockReq.params = { orgId: "org-1" };
+      const members = [{ id: "membership-1" }, { id: "membership-2" }];
+      mockViewAllMembersInOrganizationService.mockResolvedValue(members);
+
+      await viewAllMembersInOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockViewAllMembersInOrganizationService).toHaveBeenCalledWith(
+        "org-1",
+      );
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        data: { members },
+      });
+    });
+
+    it("should call next if view members service throws", async () => {
+      mockReq.params = { orgId: "org-1" };
+      const error = new Error("Members failed");
+      mockViewAllMembersInOrganizationService.mockRejectedValue(error);
+
+      await viewAllMembersInOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
+    });
   });
 
   describe("updateMemberFromOrganizationController", () => {
@@ -220,6 +287,17 @@ describe("Organization Controller", () => {
         mockReq.membership,
       );
       expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it("should call next if update member service throws", async () => {
+      mockReq.params = { orgId: "org-1", userId: "user-2" };
+      mockReq.body = { role: "member" };
+      const error = new Error("Update member failed");
+      mockUpdateMemberFromOrganizationService.mockRejectedValue(error);
+
+      await updateMemberFromOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith(error);
     });
   });
 });
