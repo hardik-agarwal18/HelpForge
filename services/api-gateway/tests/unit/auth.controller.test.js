@@ -72,6 +72,24 @@ describe("Auth Controller Unit Tests", () => {
 
       expect(next).toHaveBeenCalledWith(error);
     });
+
+    it("should call next with the expected status code and message when register result is incomplete", async () => {
+      req.body = {
+        email: "test@example.com",
+        password: "password123",
+        name: "Test User",
+      };
+      mockRegisterUser.mockResolvedValue(null);
+
+      await register(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 500,
+          message: "Failed to register user",
+        }),
+      );
+    });
   });
 
   describe("login", () => {
@@ -119,6 +137,20 @@ describe("Auth Controller Unit Tests", () => {
       await login(req, res, next);
 
       expect(next).toHaveBeenCalledWith(error);
+    });
+
+    it("should call next with the expected status code and message when login result is incomplete", async () => {
+      req.body = { email: "test@example.com", password: "password123" };
+      mockLoginUser.mockResolvedValue({ user: null, token: null });
+
+      await login(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 500,
+          message: "Failed to login user",
+        }),
+      );
     });
   });
 
