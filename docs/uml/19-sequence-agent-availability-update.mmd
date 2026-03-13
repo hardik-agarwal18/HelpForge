@@ -1,0 +1,32 @@
+sequenceDiagram
+  autonumber
+  actor A as Agent/Staff User
+  participant Auth as Auth Middleware
+  participant R as Agent Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  A->>Auth: PATCH /api/tickets/agents/me/availability
+  Auth-->>R: req.user
+  R->>C: updateMyAvailability(request)
+  C->>S: updateMyAvailabilityService(userId, organizationId, isAvailable)
+
+  S->>Repo: getStaffMemberships(userId)
+  Repo->>DB: Membership.findMany(userId, role in OWNER/ADMIN/AGENT)
+  DB-->>Repo: staff memberships
+  Repo-->>S: memberships
+
+  S->>S: verify requested organization scope
+  alt Not staff in organization
+    S-->>C: throw 403
+    C-->>A: 403 response
+  else Allowed
+    S->>Repo: updateMembershipAvailability(userId, organizationId, isAvailable)
+    Repo->>DB: Membership.update(isAvailable)
+    DB-->>Repo: updated membership
+    Repo-->>S: updated membership
+    S-->>C: success
+    C-->>A: 200 OK
+  end

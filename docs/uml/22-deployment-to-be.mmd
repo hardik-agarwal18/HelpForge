@@ -1,0 +1,75 @@
+flowchart TB
+  subgraph Edge[Edge]
+    Nginx[Nginx Reverse Proxy]
+  end
+
+  subgraph Client[Client]
+    Frontend[React Frontend]
+  end
+
+  subgraph Services[Microservices]
+    APIGW[API Gateway]
+    AuthSvc[Auth Service]
+    OrgSvc[Organization Service]
+    TicketSvc[Ticket Service]
+    DocSvc[Document Service]
+    AISvc[AI Service]
+    NotifySvc[Notification Service]
+  end
+
+  subgraph Async[Event and Worker Layer]
+    Kafka[Kafka]
+    Workers[Background Workers]
+    N8n[n8n Automation]
+  end
+
+  subgraph Storage[Storage and Infra]
+    PG[(PostgreSQL + pgvector)]
+    Redis[(Redis)]
+    S3[(S3/MinIO)]
+    Prom[Prometheus]
+    Grafana[Grafana]
+  end
+
+  Frontend --> Nginx
+  Nginx --> APIGW
+
+  APIGW --> AuthSvc
+  APIGW --> OrgSvc
+  APIGW --> TicketSvc
+  APIGW --> DocSvc
+  APIGW --> AISvc
+  APIGW --> NotifySvc
+
+  AuthSvc --> PG
+  OrgSvc --> PG
+  TicketSvc --> PG
+  TicketSvc --> Redis
+  DocSvc --> S3
+  DocSvc --> PG
+  AISvc --> PG
+  AISvc --> Redis
+  NotifySvc --> Kafka
+
+  TicketSvc --> Kafka
+  DocSvc --> Kafka
+  AISvc --> Kafka
+  Kafka --> Workers
+  Workers --> PG
+  Workers --> S3
+  Workers --> Redis
+  Workers --> N8n
+
+  Prom --> APIGW
+  Prom --> AuthSvc
+  Prom --> OrgSvc
+  Prom --> TicketSvc
+  Prom --> DocSvc
+  Prom --> AISvc
+  Prom --> NotifySvc
+  Grafana --> Prom
+
+  Planned[Planned target deployment from roadmap]
+  Planned -.-> Services
+  Planned -.-> Async
+  Planned -.-> Storage

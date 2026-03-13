@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  actor U as Member/Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  U->>Auth: PATCH /api/tickets/:ticketId/status
+  Auth-->>R: req.user
+  R->>C: updateTicketStatus(request)
+  C->>S: updateTicketStatusService(actorId, ticketId, newStatus)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(actorId, organizationId)
+  Repo->>DB: Membership.findUnique(actor)
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  S->>S: canEditAllOrganizationTickets(role)
+  alt Not allowed and not ticket owner
+    S-->>C: throw 403
+    C-->>U: 403 response
+  else Allowed
+    S->>Repo: updateTicketStatus(ticketId, newStatus, oldStatus, actorId)
+    Repo->>DB: Ticket.update + ActivityLog(TICKET_STATUS_UPDATED)
+    DB-->>Repo: updated ticket
+    Repo-->>S: updated ticket
+    S-->>C: success
+    C-->>U: 200 OK
+  end

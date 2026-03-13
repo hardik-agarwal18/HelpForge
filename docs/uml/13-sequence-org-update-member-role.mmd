@@ -1,0 +1,36 @@
+sequenceDiagram
+  autonumber
+  actor A as Owner/Admin
+  participant Auth as Auth Middleware
+  participant OrgMW as Org Middleware
+  participant R as Org Route
+  participant C as Org Controller
+  participant S as Org Service
+  participant Repo as Org Repo
+  participant DB as Prisma/PostgreSQL
+
+  A->>Auth: PATCH /api/organizations/:orgId/members/:userId/role
+  Auth-->>OrgMW: req.user
+  OrgMW->>DB: Membership.findUnique(requester, org)
+  DB-->>OrgMW: requester membership
+  OrgMW-->>R: proceed
+
+  R->>C: updateMemberRole(request)
+  C->>S: updateMemberRoleInOrganizationService(...)
+  S->>Repo: getMembershipByUserAndOrganization(targetUserId, orgId)
+  Repo->>DB: Membership.findUnique(target)
+  DB-->>Repo: target membership
+  Repo-->>S: target membership
+
+  S->>S: assertCanUpdateRole(requesterRole, targetRole, newRole)
+  alt Policy violation
+    S-->>C: throw 403
+    C-->>A: 403 response
+  else Allowed
+    S->>Repo: updateMembershipRole(targetMembershipId, newRole)
+    Repo->>DB: Membership.update(role)
+    DB-->>Repo: updated membership
+    Repo-->>S: updated record
+    S-->>C: success
+    C-->>A: 200 OK
+  end

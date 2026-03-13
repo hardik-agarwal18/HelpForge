@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> OPEN : ticket created
+  OPEN --> IN_PROGRESS : assigned to agent
+  OPEN --> CLOSED : closed without work
+
+  IN_PROGRESS --> RESOLVED : work completed
+  IN_PROGRESS --> OPEN : unassign or requeue
+
+  RESOLVED --> CLOSED : confirmed closure
+  RESOLVED --> IN_PROGRESS : reopened by staff
+
+  CLOSED --> OPEN : reopened by staff
+  CLOSED --> [*]

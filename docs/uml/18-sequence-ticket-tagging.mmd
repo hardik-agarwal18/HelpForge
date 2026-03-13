@@ -1,0 +1,41 @@
+sequenceDiagram
+  autonumber
+  actor SUser as Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  SUser->>Auth: POST /api/tickets/:ticketId/tags
+  Auth-->>R: req.user
+  R->>C: addTagToTicket(request)
+  C->>S: addTagToTicketService(actorId, ticketId, tagId)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(actorId, organizationId)
+  Repo->>DB: Membership.findUnique
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  S->>S: canEditAllOrganizationTickets(role)
+  alt Not allowed
+    S-->>C: throw 403
+    C-->>SUser: 403 response
+  else Allowed
+    S->>Repo: addTagToTicket(ticketId, tagId)
+    Repo->>DB: TicketTag.create
+    DB-->>Repo: mapping
+    Repo-->>S: mapping
+    S->>Repo: createTicketActivityLog(TAG_ADDED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: log
+    Repo-->>S: log
+    S-->>C: success
+    C-->>SUser: 200 OK
+  end
