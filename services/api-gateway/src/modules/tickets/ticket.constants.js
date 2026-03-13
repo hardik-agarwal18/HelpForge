@@ -34,3 +34,7 @@ export const TICKET_ROLE_POLICIES = {
     canDeleteAnyComment: false,
   },
 };
+
+export const AUTO_ASSIGNABLE_STATUSES = ["OPEN", "IN_PROGRESS"];
+
+export const AUTO_ASSIGNMENT_MAX_ACTIVE_TICKETS = 5;
