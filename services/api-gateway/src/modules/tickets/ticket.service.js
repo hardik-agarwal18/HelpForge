@@ -1,19 +1,26 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
   assignTicket,
+  addTagToTicket,
+  createTag,
   createTicketAttachment,
   createTicketActivityLog,
   createTicketComment,
   createTicket,
+  deleteTicketTag,
   deleteTicketAttachment,
   deleteTicketComment,
+  getTagById,
+  getTagByName,
   getTicketAttachmentById,
   getTicketById,
   getTicketCommentById,
+  getTicketTagById,
   getTicketComments,
   getTicketAttachments,
   getTicketOrganizationMembership,
   getTickets,
+  getTags,
   updateTicketStatus,
   updateTicket,
 } from "./ticket.repo.js";
@@ -100,6 +107,8 @@ const canDeleteAnyTicketComment = (role) =>
 const canDeleteAnyTicketAttachment = (role) =>
   getTicketRolePolicy(role).canDeleteAnyComment;
 
+const normalizeTagName = (name) => name.trim();
+
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
   priority: ticketData.priority?.toUpperCase(),
@@ -176,6 +185,54 @@ export const createTicketService = async (ticketData, userId) => {
   }
 
   return ticket;
+};
+
+export const createTagService = async (tagData, userId) => {
+  const membership = await getTicketOrganizationMembership(
+    tagData.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+    throw new ApiError(403, "You do not have permission to create tags");
+  }
+
+  const normalizedName = normalizeTagName(tagData.name);
+  const existingTag = await getTagByName(tagData.organizationId, normalizedName);
+
+  if (existingTag && existingTag.id) {
+    throw new ApiError(409, "Tag already exists in this organization");
+  }
+
+  const tag = await createTag({
+    organizationId: tagData.organizationId,
+    name: normalizedName,
+  });
+
+  if (!tag || !tag.id) {
+    throw new ApiError(500, "Failed to create tag");
+  }
+
+  return tag;
+};
+
+export const getTagsService = async (organizationId, userId) => {
+  if (!organizationId) {
+    throw new ApiError(400, "Organization ID is required");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(403, "You do not have permission to view tags");
+  }
+
+  const tags = await getTags(organizationId);
+
+  return tags || [];
 };
 
 export const getTicketsService = async (query, userId) => {
@@ -620,4 +677,87 @@ export const deleteTicketAttachmentService = async (
   });
 
   return deletedAttachment;
+};
+
+export const addTicketTagService = async (ticketId, tagId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+    throw new ApiError(403, "You do not have permission to tag this ticket");
+  }
+
+  const tag = await getTagById(tagId);
+
+  if (!tag || !tag.id || tag.organizationId !== ticket.organizationId) {
+    throw new ApiError(404, "Tag not found");
+  }
+
+  const existingTicketTag = await getTicketTagById(ticketId, tagId);
+
+  if (existingTicketTag && existingTicketTag.tagId) {
+    throw new ApiError(409, "Tag already added to this ticket");
+  }
+
+  const ticketTag = await addTagToTicket(ticketId, tagId);
+
+  if (!ticketTag || !ticketTag.tagId) {
+    throw new ApiError(500, "Failed to add tag to ticket");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "TAG_ADDED",
+    newValue: ticketTag.tag.name,
+  });
+
+  return ticketTag;
+};
+
+export const deleteTicketTagService = async (ticketId, tagId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to remove tags from this ticket",
+    );
+  }
+
+  const ticketTag = await getTicketTagById(ticketId, tagId);
+
+  if (!ticketTag || !ticketTag.tagId) {
+    throw new ApiError(404, "Tag not found on this ticket");
+  }
+
+  const deletedTicketTag = await deleteTicketTag(ticketId, tagId);
+
+  if (!deletedTicketTag || !deletedTicketTag.tagId) {
+    throw new ApiError(500, "Failed to remove tag from ticket");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "TAG_REMOVED",
+    oldValue: deletedTicketTag.tag.name,
+  });
+
+  return deletedTicketTag;
 };

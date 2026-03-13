@@ -11,6 +11,40 @@ export const getTicketOrganizationMembership = async (organizationId, userId) =>
   });
 };
 
+export const createTag = async (tagData) => {
+  return await prisma.tag.create({
+    data: tagData,
+  });
+};
+
+export const getTags = async (organizationId) => {
+  return await prisma.tag.findMany({
+    where: {
+      organizationId,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
+};
+
+export const getTagById = async (tagId) => {
+  return await prisma.tag.findUnique({
+    where: {
+      id: tagId,
+    },
+  });
+};
+
+export const getTagByName = async (organizationId, name) => {
+  return await prisma.tag.findFirst({
+    where: {
+      organizationId,
+      name,
+    },
+  });
+};
+
 export const createTicket = async (ticketData) => {
   return await prisma.ticket.create({
     data: {
@@ -214,6 +248,49 @@ export const createTicketActivityLog = async (ticketId, activityData) => {
     data: {
       ticketId,
       ...activityData,
+    },
+  });
+};
+
+export const addTagToTicket = async (ticketId, tagId) => {
+  return await prisma.ticketTag.create({
+    data: {
+      ticketId,
+      tagId,
+    },
+    include: {
+      tag: true,
+      ticket: true,
+    },
+  });
+};
+
+export const getTicketTagById = async (ticketId, tagId) => {
+  return await prisma.ticketTag.findUnique({
+    where: {
+      ticketId_tagId: {
+        ticketId,
+        tagId,
+      },
+    },
+    include: {
+      tag: true,
+      ticket: true,
+    },
+  });
+};
+
+export const deleteTicketTag = async (ticketId, tagId) => {
+  return await prisma.ticketTag.delete({
+    where: {
+      ticketId_tagId: {
+        ticketId,
+        tagId,
+      },
+    },
+    include: {
+      tag: true,
+      ticket: true,
     },
   });
 };

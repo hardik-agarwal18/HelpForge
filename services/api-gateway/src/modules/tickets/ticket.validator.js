@@ -69,3 +69,16 @@ export const updateTicketStatusSchema = z.object({
       message: "Invalid status",
     }),
 });
+
+export const createTagSchema = z.object({
+  organizationId: z.string().min(1, "Organization ID is required"),
+  name: z.string().trim().min(1, "Tag name is required"),
+});
+
+export const getTagsSchema = z.object({
+  organizationId: z.string().min(1, "Organization ID is required"),
+});
+
+export const addTicketTagSchema = z.object({
+  tagId: z.string().min(1, "Tag ID is required"),
+});

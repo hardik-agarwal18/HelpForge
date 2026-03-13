@@ -1,14 +1,18 @@
 import {
   assignTicketService,
+  addTicketTagService,
+  createTagService,
   createTicketAttachmentService,
   createTicketCommentService,
   createTicketService,
+  deleteTicketTagService,
   deleteTicketCommentService,
   deleteTicketAttachmentService,
   getTicketByIdService,
   getTicketAttachmentsService,
   getTicketCommentsService,
   getTicketsService,
+  getTagsService,
   updateTicketStatusService,
   updateTicketService,
 } from "./ticket.service.js";
@@ -33,6 +37,32 @@ export const getTicketsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { tickets },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createTagController = async (req, res, next) => {
+  try {
+    const tag = await createTagService(req.body, req.user.id);
+
+    return res.status(201).json({
+      success: true,
+      data: { tag },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTagsController = async (req, res, next) => {
+  try {
+    const tags = await getTagsService(req.query.organizationId, req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      data: { tags },
     });
   } catch (error) {
     next(error);
@@ -197,6 +227,40 @@ export const deleteTicketAttachmentController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { attachment },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addTicketTagController = async (req, res, next) => {
+  try {
+    const ticketTag = await addTicketTagService(
+      req.params.ticketId,
+      req.body.tagId,
+      req.user.id,
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: { ticketTag },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteTicketTagController = async (req, res, next) => {
+  try {
+    const ticketTag = await deleteTicketTagService(
+      req.params.ticketId,
+      req.params.tagId,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { ticketTag },
     });
   } catch (error) {
     next(error);
