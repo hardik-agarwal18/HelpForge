@@ -2,6 +2,7 @@ import {
   createOrganizationService,
   deleteOrganizationService,
   getOrganizationByUserIdService,
+  inviteMemberInOrganizationService,
   updateOrganizationService,
 } from "./org.service.js";
 import { ApiError } from "../../utils/errorHandler.js";
@@ -78,6 +79,26 @@ export const deleteOrganizationController = async (req, res, next) => {
       success: true,
       message: "Organization deleted successfully",
       data: { organization: deletedOrganization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const inviteMemberInOrganizationController = async (req, res, next) => {
+  try {
+    const orgId = req.params.orgId;
+    const { userId, role } = req.body;
+
+    const membership = await inviteMemberInOrganizationService(
+      orgId,
+      userId,
+      role,
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: { membership },
     });
   } catch (error) {
     next(error);

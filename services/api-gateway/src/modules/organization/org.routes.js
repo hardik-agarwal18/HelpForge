@@ -4,6 +4,7 @@ import {
   deleteOrganizationController,
   getOrganizationByIdController,
   getOrganizationsByUserIdController,
+  inviteMemberInOrganizationController,
   updateOrganizationController,
 } from "./org.controller.js";
 import { validate } from "../../middleware/validation.middleware.js";
@@ -48,6 +49,16 @@ router.delete(
   verifyOrganizationMembership,
   requireOwner,
   deleteOrganizationController,
+);
+
+//Organization Member Routes
+
+router.post(
+  "/:orgId/members",
+  authenticate,
+  verifyOrganizationMembership,
+  requireOwnerOrAdmin,
+  inviteMemberInOrganizationController,
 );
 
 export default router;

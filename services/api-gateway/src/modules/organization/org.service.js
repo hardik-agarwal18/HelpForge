@@ -2,6 +2,7 @@ import {
   createOrganization,
   deleteOrganization,
   getOrganizationsByUserId,
+  inviteMemberInOrganization,
   patchOrganization,
 } from "./org.repo.js";
 import { ApiError } from "../../utils/errorHandler.js";
@@ -40,4 +41,18 @@ export const deleteOrganizationService = async (orgId) => {
   }
 
   return deletedOrganization;
+};
+
+export const inviteMemberInOrganizationService = async (
+  orgId,
+  userId,
+  role,
+) => {
+  const membership = await inviteMemberInOrganization(orgId, userId, role);
+
+  if (!membership || !membership.id) {
+    throw new ApiError(500, "Failed to invite member to organization");
+  }
+
+  return membership;
 };

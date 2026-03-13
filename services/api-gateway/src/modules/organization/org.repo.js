@@ -54,3 +54,13 @@ export const deleteOrganization = async (orgId) => {
     },
   });
 };
+
+export const inviteMemberInOrganization = async (orgId, userId, role) => {
+  return await prisma.membership.create({
+    data: {
+      organizationId: orgId,
+      userId,
+      role,
+    },
+  });
+};
