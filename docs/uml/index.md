@@ -2,6 +2,8 @@
 
 This directory contains the complete UML diagram suite for the current API Gateway implementation and planned platform deployment.
 
+Quick preview page: `gallery.md` (renders all diagrams in one markdown file).
+
 ## Structural Diagrams
 
 1. `01-use-case.mmd` - Actor capabilities across auth, organization, and ticketing.
