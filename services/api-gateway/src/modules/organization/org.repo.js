@@ -60,7 +60,7 @@ export const inviteMemberInOrganization = async (orgId, userId, role) => {
     data: {
       organizationId: orgId,
       userId,
-      role,
+      role: role || "MEMBER",
     },
   });
 };
