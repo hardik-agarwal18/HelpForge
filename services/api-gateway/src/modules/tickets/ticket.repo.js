@@ -158,3 +158,17 @@ export const createTicketAttachment = async (ticketId, attachmentData) => {
     },
   });
 };
+
+export const getTicketAttachments = async (ticketId) => {
+  return await prisma.ticketAttachment.findMany({
+    where: {
+      ticketId,
+    },
+    include: {
+      uploader: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+};

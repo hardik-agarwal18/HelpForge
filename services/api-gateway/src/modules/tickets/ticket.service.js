@@ -6,6 +6,7 @@ import {
   createTicket,
   getTicketById,
   getTicketComments,
+  getTicketAttachments,
   getTicketOrganizationMembership,
   getTickets,
   updateTicket,
@@ -398,4 +399,35 @@ export const createTicketAttachmentService = async (
   });
 
   return attachment;
+};
+
+export const getTicketAttachmentsService = async (ticketId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view attachments on this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view attachments on this ticket",
+    );
+  }
+
+  const attachments = await getTicketAttachments(ticketId);
+
+  return attachments || [];
 };
