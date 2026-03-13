@@ -73,3 +73,39 @@ export const getTicketById = async (ticketId) => {
     },
   });
 };
+
+export const updateTicket = async (ticketId, ticketData, actorId) => {
+  return await prisma.ticket.update({
+    where: { id: ticketId },
+    data: {
+      ...ticketData,
+      activities: {
+        create: {
+          actorId,
+          action: "TICKET_UPDATED",
+        },
+      },
+    },
+    include: {
+      organization: true,
+      createdBy: true,
+      assignedTo: true,
+      comments: {
+        include: {
+          author: true,
+        },
+      },
+      attachments: true,
+      tags: {
+        include: {
+          tag: true,
+        },
+      },
+      activities: {
+        include: {
+          actor: true,
+        },
+      },
+    },
+  });
+};

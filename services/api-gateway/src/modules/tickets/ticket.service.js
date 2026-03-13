@@ -4,6 +4,7 @@ import {
   getTicketById,
   getTicketOrganizationMembership,
   getTickets,
+  updateTicket,
 } from "./ticket.repo.js";
 import {
   TICKET_PRIORITIES,
@@ -14,8 +15,44 @@ import {
 const canViewAllOrganizationTickets = (role) =>
   ["OWNER", "ADMIN", "AGENT"].includes(role);
 
+const canEditAllOrganizationTickets = (role) =>
+  ["OWNER", "ADMIN", "AGENT"].includes(role);
+
 const canMemberViewTicket = (ticket, userId) =>
   ticket.createdById === userId || ticket.assignedToId === userId;
+
+const normalizeTicketUpdateFields = (ticketData) => ({
+  title: ticketData.title,
+  description: ticketData.description,
+  priority: ticketData.priority?.toUpperCase(),
+  status: ticketData.status?.toUpperCase(),
+  assignedToId: ticketData.assignedToId,
+});
+
+const getProvidedUpdateFields = (ticketData) =>
+  Object.fromEntries(
+    Object.entries(ticketData).filter(([, value]) => value !== undefined),
+  );
+
+const assertCanUpdateTicket = (membership, ticket, userId, updateData) => {
+  if (canEditAllOrganizationTickets(membership.role)) {
+    return;
+  }
+
+  if (membership.role !== "MEMBER" || ticket.createdById !== userId) {
+    throw new ApiError(403, "You do not have permission to update this ticket");
+  }
+
+  const allowedFields = ["title", "description", "priority"];
+  const attemptedFields = Object.keys(updateData);
+
+  if (!attemptedFields.every((field) => allowedFields.includes(field))) {
+    throw new ApiError(
+      403,
+      "Members can only update title, description, and priority on their own tickets",
+    );
+  }
+};
 
 const filterInternalCommentsForRole = (ticket, role) => {
   if (canViewAllOrganizationTickets(role) || !ticket.comments) {
@@ -173,4 +210,36 @@ export const getTicketByIdService = async (ticketId, userId) => {
   }
 
   return filterInternalCommentsForRole(ticket, membership.role);
+};
+
+export const updateTicketService = async (ticketId, ticketData, userId) => {
+  const normalizedUpdateData = getProvidedUpdateFields(
+    normalizeTicketUpdateFields(ticketData),
+  );
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(403, "You do not have permission to update this ticket");
+  }
+
+  assertCanUpdateTicket(membership, ticket, userId, normalizedUpdateData);
+
+  await validateTicketAssignee(ticket.organizationId, normalizedUpdateData.assignedToId);
+
+  const updatedTicket = await updateTicket(ticketId, normalizedUpdateData, userId);
+
+  if (!updatedTicket || !updatedTicket.id) {
+    throw new ApiError(500, "Failed to update ticket");
+  }
+
+  return filterInternalCommentsForRole(updatedTicket, membership.role);
 };

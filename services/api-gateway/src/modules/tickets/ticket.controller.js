@@ -2,6 +2,7 @@ import {
   createTicketService,
   getTicketByIdService,
   getTicketsService,
+  updateTicketService,
 } from "./ticket.service.js";
 
 export const createTicketController = async (req, res, next) => {
@@ -33,6 +34,23 @@ export const getTicketsController = async (req, res, next) => {
 export const getTicketByIdController = async (req, res, next) => {
   try {
     const ticket = await getTicketByIdService(req.params.ticketId, req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      data: { ticket },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateTicketController = async (req, res, next) => {
+  try {
+    const ticket = await updateTicketService(
+      req.params.ticketId,
+      req.body,
+      req.user.id,
+    );
 
     return res.status(200).json({
       success: true,
