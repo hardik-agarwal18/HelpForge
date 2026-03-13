@@ -1,4 +1,4 @@
-name: Test-Api-Gateway
+name: Test-Api-Gateway-Integration
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  api-gateway-tests:
+  api-gateway-integration-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -31,6 +31,7 @@ jobs:
         working-directory: services/api-gateway
 
     env:
+      NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/helpforge_test?schema=public
       DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/helpforge_test?schema=public
       JWT_SECRET: ci-test-secret
@@ -55,8 +56,9 @@ jobs:
           DATABASE_URL=${{ env.DATABASE_URL }}
           DATABASE_URL_TEST=${{ env.DATABASE_URL_TEST }}
           JWT_SECRET=${{ env.JWT_SECRET }}
+          NODE_ENV=${{ env.NODE_ENV }}
           "@ | Set-Content -Path .env
         shell: pwsh
 
-      - name: Run test suite
-        run: npm test
+      - name: Run integration tests
+        run: npm run test:integration
