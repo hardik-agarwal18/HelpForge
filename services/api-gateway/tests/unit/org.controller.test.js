@@ -5,6 +5,9 @@ const mockCreateOrganizationService = jest.fn();
 const mockGetOrganizationByUserIdService = jest.fn();
 const mockUpdateOrganizationService = jest.fn();
 const mockDeleteOrganizationService = jest.fn();
+const mockInviteMemberInOrganizationService = jest.fn();
+const mockUpdateMemberFromOrganizationService = jest.fn();
+const mockViewAllMembersInOrganizationService = jest.fn();
 
 // Mock the service
 jest.unstable_mockModule(
@@ -14,6 +17,9 @@ jest.unstable_mockModule(
     getOrganizationByUserIdService: mockGetOrganizationByUserIdService,
     updateOrganizationService: mockUpdateOrganizationService,
     deleteOrganizationService: mockDeleteOrganizationService,
+    inviteMemberInOrganizationService: mockInviteMemberInOrganizationService,
+    updateMemberFromOrganizationService: mockUpdateMemberFromOrganizationService,
+    viewAllMembersInOrganizationService: mockViewAllMembersInOrganizationService,
   }),
 );
 
@@ -24,6 +30,8 @@ const {
   getOrganizationByIdController,
   updateOrganizationController,
   deleteOrganizationController,
+  inviteMemberInOrganizationController,
+  updateMemberFromOrganizationController,
 } = await import("../../src/modules/organization/org.controller.js");
 
 describe("Organization Controller", () => {
@@ -38,6 +46,7 @@ describe("Organization Controller", () => {
       user: { id: "user-1" },
       params: {},
       organization: undefined,
+      membership: { userId: "user-1", role: "OWNER" },
     };
     mockRes = {
       status: jest.fn().mockReturnThis(),
@@ -173,6 +182,44 @@ describe("Organization Controller", () => {
       await deleteOrganizationController(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(error);
+    });
+  });
+
+  describe("inviteMemberInOrganizationController", () => {
+    it("should pass actor membership to the invite service", async () => {
+      mockReq.params = { orgId: "org-1" };
+      mockReq.body = { userId: "user-2", role: "agent" };
+      const membership = { id: "membership-1", role: "AGENT" };
+      mockInviteMemberInOrganizationService.mockResolvedValue(membership);
+
+      await inviteMemberInOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockInviteMemberInOrganizationService).toHaveBeenCalledWith(
+        "org-1",
+        "user-2",
+        "agent",
+        mockReq.membership,
+      );
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+  });
+
+  describe("updateMemberFromOrganizationController", () => {
+    it("should pass actor membership to the update service", async () => {
+      mockReq.params = { orgId: "org-1", userId: "user-2" };
+      mockReq.body = { role: "member" };
+      const membership = { id: "membership-2", role: "MEMBER" };
+      mockUpdateMemberFromOrganizationService.mockResolvedValue(membership);
+
+      await updateMemberFromOrganizationController(mockReq, mockRes, mockNext);
+
+      expect(mockUpdateMemberFromOrganizationService).toHaveBeenCalledWith(
+        "org-1",
+        "user-2",
+        "member",
+        mockReq.membership,
+      );
+      expect(mockRes.status).toHaveBeenCalledWith(200);
     });
   });
 });
