@@ -1,6 +1,12 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import { createTicket, getTicketOrganizationMembership } from "./ticket.repo.js";
 
+const normalizeTicketFields = (ticketData) => ({
+  ...ticketData,
+  priority: ticketData.priority?.toUpperCase(),
+  source: ticketData.source?.toUpperCase(),
+});
+
 const validateTicketAssignee = async (organizationId, assignedToId) => {
   if (!assignedToId) {
     return;
@@ -17,8 +23,9 @@ const validateTicketAssignee = async (organizationId, assignedToId) => {
 };
 
 export const createTicketService = async (ticketData, userId) => {
+  const normalizedTicketData = normalizeTicketFields(ticketData);
   const membership = await getTicketOrganizationMembership(
-    ticketData.organizationId,
+    normalizedTicketData.organizationId,
     userId,
   );
 
@@ -29,10 +36,13 @@ export const createTicketService = async (ticketData, userId) => {
     );
   }
 
-  await validateTicketAssignee(ticketData.organizationId, ticketData.assignedToId);
+  await validateTicketAssignee(
+    normalizedTicketData.organizationId,
+    normalizedTicketData.assignedToId,
+  );
 
   const ticket = await createTicket({
-    ...ticketData,
+    ...normalizedTicketData,
     createdById: userId,
   });
 
