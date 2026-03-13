@@ -5,6 +5,7 @@ import {
   getOrganizationByIdController,
   getOrganizationsByUserIdController,
   inviteMemberInOrganizationController,
+  updateMemberFromOrganizationController,
   updateOrganizationController,
   viewAllMembersInOrganizationController,
 } from "./org.controller.js";
@@ -67,6 +68,14 @@ router.get(
   authenticate,
   verifyOrganizationMembership,
   viewAllMembersInOrganizationController,
+);
+
+router.patch(
+  "/:orgId/members/:userId",
+  authenticate,
+  verifyOrganizationMembership,
+  requireOwnerOrAdmin,
+  updateMemberFromOrganizationController,
 );
 
 export default router;

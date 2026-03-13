@@ -3,6 +3,7 @@ import {
   deleteOrganizationService,
   getOrganizationByUserIdService,
   inviteMemberInOrganizationService,
+  updateMemberFromOrganizationService,
   updateOrganizationService,
   viewAllMembersInOrganizationService,
 } from "./org.service.js";
@@ -118,6 +119,30 @@ export const viewAllMembersInOrganizationController = async (
     return res.status(200).json({
       success: true,
       data: { members },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateMemberFromOrganizationController = async (
+  req,
+  res,
+  next,
+) => {
+  try {
+    const orgId = req.params.orgId;
+    const userId = req.params.userId;
+    const { role } = req.body;
+    const updatedMembership = await updateMemberFromOrganizationService(
+      orgId,
+      userId,
+      role,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { membership: updatedMembership },
     });
   } catch (error) {
     next(error);

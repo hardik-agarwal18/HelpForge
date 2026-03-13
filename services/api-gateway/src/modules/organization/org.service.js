@@ -5,6 +5,7 @@ import {
   getOrganizationsByUserId,
   inviteMemberInOrganization,
   patchOrganization,
+  updateMembershipRole,
 } from "./org.repo.js";
 import { ApiError } from "../../utils/errorHandler.js";
 
@@ -75,4 +76,28 @@ export const viewAllMembersInOrganizationService = async (orgId) => {
   const members = await getOrganizationMembersById(orgId);
 
   return members || [];
+};
+
+export const updateMemberFromOrganizationService = async (
+  orgId,
+  userId,
+  role,
+) => {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === "OWNER") {
+    throw new ApiError(400, "Cannot assign OWNER role to a member");
+  }
+
+  const updatedMembership = await updateMembershipRole(
+    orgId,
+    userId,
+    normalizedRole,
+  );
+
+  if (!updatedMembership || !updatedMembership.id) {
+    throw new ApiError(500, "Failed to update member in organization");
+  }
+
+  return updatedMembership;
 };

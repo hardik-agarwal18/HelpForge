@@ -75,3 +75,15 @@ export const getOrganizationMembersById = async (orgId) => {
     },
   });
 };
+
+export const updateMembershipRole = (orgId, userId, role) => {
+  return prisma.membership.update({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId: orgId,
+      },
+    },
+    data: { role },
+  });
+};
