@@ -12,6 +12,8 @@ import {
 import { validate } from "../../middleware/validation.middleware.js";
 import {
   createOrganizationSchema,
+  inviteMemberSchema,
+  updateMemberRoleSchema,
   updateOrganizationSchema,
 } from "./org.validator.js";
 import { authenticate } from "../../middleware/auth.middleware.js";
@@ -60,6 +62,7 @@ router.post(
   authenticate,
   verifyOrganizationMembership,
   requireOwnerOrAdmin,
+  validate(inviteMemberSchema),
   inviteMemberInOrganizationController,
 );
 
@@ -75,6 +78,7 @@ router.patch(
   authenticate,
   verifyOrganizationMembership,
   requireOwnerOrAdmin,
+  validate(updateMemberRoleSchema),
   updateMemberFromOrganizationController,
 );
 
