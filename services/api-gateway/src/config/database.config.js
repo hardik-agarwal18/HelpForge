@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import config from "./index.js";
 
 const getDatabaseUrl = () => {
-  if (process.env.NODE_ENV === "test") {
-    return process.env.DATABASE_URL_TEST;
+  if (config.nodeEnv === "test") {
+    return config.database.testUrl;
   }
-  return process.env.DATABASE_URL;
+  return config.database.url;
 };
 
 const prisma = new PrismaClient({
