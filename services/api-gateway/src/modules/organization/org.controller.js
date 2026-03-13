@@ -1,6 +1,7 @@
 import {
   createOrganizationService,
   getOrganizationByUserIdService,
+  updateOrganizationService,
 } from "./org.service.js";
 import { ApiError } from "../../utils/errorHandler.js";
 
@@ -44,6 +45,22 @@ export const getOrganizationByIdController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { organization: req.organization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateOrganizationController = async (req, res, next) => {
+  try {
+    const orgId = req.params.orgId;
+    const { name } = req.body;
+
+    const updatedOrganization = await updateOrganizationService(orgId, name);
+
+    return res.status(200).json({
+      success: true,
+      data: { organization: updatedOrganization },
     });
   } catch (error) {
     next(error);

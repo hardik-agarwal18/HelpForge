@@ -28,3 +28,14 @@ export const getOrganizationsByUserId = async (userId) => {
     },
   });
 };
+
+export const patchOrganization = async (orgId, name) => {
+  return await prisma.organization.update({
+    where: {
+      id: orgId,
+    },
+    data: {
+      name,
+    },
+  });
+};
