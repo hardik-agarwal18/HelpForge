@@ -7,6 +7,7 @@ import {
   createTicketCommentSchema,
   createTicketSchema,
   getTagsSchema,
+  updateAgentAvailabilitySchema,
   updateTicketStatusSchema,
   updateTicketSchema,
 } from "../../src/modules/tickets/ticket.validator.js";
@@ -172,6 +173,25 @@ describe("Ticket Validator", () => {
       });
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe("updateAgentAvailabilitySchema", () => {
+    it("should validate a valid availability payload", () => {
+      const result = updateAgentAvailabilitySchema.safeParse({
+        organizationId: "org-1",
+        isAvailable: false,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject a missing organizationId", () => {
+      const result = updateAgentAvailabilitySchema.safeParse({
+        isAvailable: true,
+      });
+
+      expect(result.success).toBe(false);
     });
   });
 });

@@ -299,6 +299,60 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("PATCH /api/agents/me/availability", () => {
+    it("should allow an agent to update their availability for an organization", async () => {
+      const response = await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          organizationId: organization.id,
+          isAvailable: false,
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.membership.isAvailable).toBe(false);
+
+      const membership = await prisma.membership.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: user2.id,
+            organizationId: organization.id,
+          },
+        },
+      });
+
+      expect(membership.isAvailable).toBe(false);
+    });
+
+    it("should reject non-agents from updating availability", async () => {
+      const response = await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({
+          organizationId: organization.id,
+          isAvailable: false,
+        })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Only agents can update their availability");
+    });
+
+    it("should reject invalid availability payloads", async () => {
+      const response = await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          isAvailable: false,
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Validation error");
+    });
+  });
+
   describe("GET /api/tickets", () => {
     let ticket1;
     let ticket2;

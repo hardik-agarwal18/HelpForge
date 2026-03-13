@@ -25,6 +25,7 @@ const mockGetTicketMembershipsByUserId = jest.fn();
 const mockGetTickets = jest.fn();
 const mockGetAgentTickets = jest.fn();
 const mockGetTags = jest.fn();
+const mockUpdateAgentAvailability = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
 
@@ -54,6 +55,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   getTickets: mockGetTickets,
   getAgentTickets: mockGetAgentTickets,
   getTags: mockGetTags,
+  updateAgentAvailability: mockUpdateAgentAvailability,
   updateTicketStatus: mockUpdateTicketStatus,
   updateTicket: mockUpdateTicket,
 }));
@@ -76,6 +78,7 @@ const {
   getTagsService,
   getMyAgentStatsService,
   getMyAgentTicketsService,
+  updateMyAgentAvailabilityService,
   updateTicketStatusService,
   updateTicketService,
 } = await import(
@@ -161,6 +164,46 @@ describe("Ticket Service", () => {
       "user-1",
       null,
     );
+    expect(result.assignedToId).toBe("agent-2");
+  });
+
+  it("should skip unavailable agents during auto-assignment", async () => {
+    mockGetTicketOrganizationMembership.mockResolvedValue({
+      id: "membership-1",
+      role: "MEMBER",
+    });
+    mockCreateTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: null,
+    });
+    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+      {
+        userId: "agent-2",
+        isAvailable: true,
+        user: { assignedTickets: [] },
+      },
+    ]);
+    mockAssignTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: "agent-2",
+    });
+
+    const result = await createTicketService(
+      {
+        organizationId: "org-1",
+        title: "Login issue",
+      },
+      "user-1",
+    );
+
+    expect(mockGetOrganizationAgentsWithLoad).toHaveBeenCalledWith("org-1", [
+      "OPEN",
+      "IN_PROGRESS",
+    ]);
     expect(result.assignedToId).toBe("agent-2");
   });
 
@@ -488,6 +531,76 @@ describe("Ticket Service", () => {
           HIGH: 1,
           URGENT: 0,
         },
+      });
+    });
+  });
+
+  describe("updateMyAgentAvailabilityService", () => {
+    it("should update availability for an agent membership", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockUpdateAgentAvailability.mockResolvedValue({
+        id: "membership-1",
+        organizationId: "org-1",
+        userId: "user-1",
+        role: "AGENT",
+        isAvailable: false,
+      });
+
+      const result = await updateMyAgentAvailabilityService(
+        "org-1",
+        false,
+        "user-1",
+      );
+
+      expect(mockUpdateAgentAvailability).toHaveBeenCalledWith(
+        "org-1",
+        "user-1",
+        false,
+      );
+      expect(result.isAvailable).toBe(false);
+    });
+
+    it("should reject non-members from updating availability", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        updateMyAgentAvailabilityService("org-1", false, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message:
+          "You do not have permission to update agent availability for this organization",
+      });
+    });
+
+    it("should reject non-agents from updating availability", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        updateMyAgentAvailabilityService("org-1", false, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "Only agents can update their availability",
+      });
+    });
+
+    it("should throw when availability update fails", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockUpdateAgentAvailability.mockResolvedValue(null);
+
+      await expect(
+        updateMyAgentAvailabilityService("org-1", false, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to update agent availability",
       });
     });
   });

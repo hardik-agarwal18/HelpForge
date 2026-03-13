@@ -17,6 +17,7 @@ const mockGetTicketsService = jest.fn();
 const mockGetTagsService = jest.fn();
 const mockGetMyAgentStatsService = jest.fn();
 const mockGetMyAgentTicketsService = jest.fn();
+const mockUpdateMyAgentAvailabilityService = jest.fn();
 const mockUpdateTicketStatusService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
@@ -38,6 +39,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   getTagsService: mockGetTagsService,
   getMyAgentStatsService: mockGetMyAgentStatsService,
   getMyAgentTicketsService: mockGetMyAgentTicketsService,
+  updateMyAgentAvailabilityService: mockUpdateMyAgentAvailabilityService,
   updateTicketStatusService: mockUpdateTicketStatusService,
   updateTicketService: mockUpdateTicketService,
 }));
@@ -60,6 +62,7 @@ const {
   getTagsController,
   getMyAgentStatsController,
   getMyAgentTicketsController,
+  updateMyAgentAvailabilityController,
   updateTicketStatusController,
   updateTicketController,
 } = await import(
@@ -201,6 +204,41 @@ describe("Ticket Controller", () => {
       success: true,
       data: { stats },
     });
+  });
+
+  it("should update my agent availability and return 200", async () => {
+    const membership = {
+      id: "membership-1",
+      organizationId: "org-1",
+      userId: "user-1",
+      role: "AGENT",
+      isAvailable: false,
+    };
+    req.body = { organizationId: "org-1", isAvailable: false };
+    mockUpdateMyAgentAvailabilityService.mockResolvedValue(membership);
+
+    await updateMyAgentAvailabilityController(req, res, next);
+
+    expect(mockUpdateMyAgentAvailabilityService).toHaveBeenCalledWith(
+      "org-1",
+      false,
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { membership },
+    });
+  });
+
+  it("should call next if update my agent availability service throws", async () => {
+    const error = new Error("Availability update failed");
+    req.body = { organizationId: "org-1", isAvailable: false };
+    mockUpdateMyAgentAvailabilityService.mockRejectedValue(error);
+
+    await updateMyAgentAvailabilityController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
   });
 
   it("should return a single ticket and 200", async () => {
