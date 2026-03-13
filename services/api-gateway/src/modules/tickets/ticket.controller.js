@@ -1,4 +1,5 @@
 import {
+  autoAssignTicketService,
   assignTicketService,
   addTicketTagService,
   createTagService,
@@ -153,6 +154,19 @@ export const assignTicketController = async (req, res, next) => {
       req.body.assignedToId,
       req.user.id,
     );
+
+    return res.status(200).json({
+      success: true,
+      data: { ticket },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const autoAssignTicketController = async (req, res, next) => {
+  try {
+    const ticket = await autoAssignTicketService(req.params.ticketId, req.user.id);
 
     return res.status(200).json({
       success: true,

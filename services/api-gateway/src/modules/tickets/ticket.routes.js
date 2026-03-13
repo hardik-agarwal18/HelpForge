@@ -2,6 +2,7 @@ import express from "express";
 import { authenticate } from "../../middleware/auth.middleware.js";
 import { validate } from "../../middleware/validation.middleware.js";
 import {
+  autoAssignTicketController,
   assignTicketController,
   addTicketTagController,
   createTagController,
@@ -44,6 +45,7 @@ router.patch(
   validate(assignTicketSchema),
   assignTicketController,
 );
+router.post("/:ticketId/auto-assign", authenticate, autoAssignTicketController);
 router.patch(
   "/:ticketId/status",
   authenticate,

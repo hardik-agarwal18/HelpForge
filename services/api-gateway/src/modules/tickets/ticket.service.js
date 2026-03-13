@@ -265,6 +265,27 @@ const findBestAutoAssignAgent = async (organizationId) => {
   return leastLoadedAgent.userId;
 };
 
+const autoAssignTicketForOrganization = async (ticket, actorId) => {
+  const autoAssignedUserId = await findBestAutoAssignAgent(ticket.organizationId);
+
+  if (!autoAssignedUserId) {
+    throw new ApiError(409, "No available agent found for auto-assignment");
+  }
+
+  const autoAssignedTicket = await assignTicket(
+    ticket.id,
+    autoAssignedUserId,
+    actorId,
+    ticket.assignedToId ?? null,
+  );
+
+  if (!autoAssignedTicket || !autoAssignedTicket.id) {
+    throw new ApiError(500, "Failed to auto-assign ticket");
+  }
+
+  return autoAssignedTicket;
+};
+
 export const createTicketService = async (ticketData, userId) => {
   const normalizedTicketData = normalizeTicketFields(ticketData);
   const membership = await getTicketOrganizationMembership(
@@ -297,24 +318,34 @@ export const createTicketService = async (ticketData, userId) => {
     return ticket;
   }
 
-  const autoAssignedUserId = await findBestAutoAssignAgent(ticket.organizationId);
+  try {
+    return await autoAssignTicketForOrganization(ticket, userId);
+  } catch (error) {
+    if (error.statusCode === 409) {
+      return ticket;
+    }
 
-  if (!autoAssignedUserId) {
-    return ticket;
+    throw error;
+  }
+};
+
+export const autoAssignTicketService = async (ticketId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
   }
 
-  const autoAssignedTicket = await assignTicket(
-    ticket.id,
-    autoAssignedUserId,
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
     userId,
-    ticket.assignedToId ?? null,
   );
 
-  if (!autoAssignedTicket || !autoAssignedTicket.id) {
-    throw new ApiError(500, "Failed to auto-assign ticket");
+  if (!membership || !membership.id || !canAssignOrganizationTickets(membership.role)) {
+    throw new ApiError(403, "You do not have permission to auto-assign this ticket");
   }
 
-  return autoAssignedTicket;
+  return await autoAssignTicketForOrganization(ticket, userId);
 };
 
 export const createTagService = async (tagData, userId) => {
