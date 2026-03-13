@@ -1,5 +1,6 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
+  assignTicket,
   createTicketAttachment,
   createTicketActivityLog,
   createTicketComment,
@@ -15,15 +16,22 @@ import {
 } from "./ticket.repo.js";
 import {
   TICKET_PRIORITIES,
+  TICKET_ROLE_POLICIES,
   TICKET_SOURCES,
   TICKET_STATUSES,
 } from "./ticket.constants.js";
 
+const getTicketRolePolicy = (role) =>
+  TICKET_ROLE_POLICIES[role] ?? TICKET_ROLE_POLICIES.MEMBER;
+
 const canViewAllOrganizationTickets = (role) =>
-  ["OWNER", "ADMIN", "AGENT"].includes(role);
+  getTicketRolePolicy(role).canViewAll;
 
 const canEditAllOrganizationTickets = (role) =>
-  ["OWNER", "ADMIN", "AGENT"].includes(role);
+  getTicketRolePolicy(role).canEditAll;
+
+const canAssignOrganizationTickets = (role) =>
+  getTicketRolePolicy(role).canAssign;
 
 const canMemberViewTicket = (ticket, userId) =>
   ticket.createdById === userId || ticket.assignedToId === userId;
@@ -80,9 +88,11 @@ const filterCommentsForRole = (comments, role) => {
   return comments.filter((comment) => !comment.isInternal);
 };
 
-const canCreateInternalComment = (role) => canViewAllOrganizationTickets(role);
+const canCreateInternalComment = (role) =>
+  getTicketRolePolicy(role).canCreateInternalComment;
 
-const canDeleteAnyTicketComment = (role) => canViewAllOrganizationTickets(role);
+const canDeleteAnyTicketComment = (role) =>
+  getTicketRolePolicy(role).canDeleteAnyComment;
 
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
@@ -261,6 +271,38 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
   }
 
   return filterInternalCommentsForRole(updatedTicket, membership.role);
+};
+
+export const assignTicketService = async (ticketId, assignedToId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id || !canAssignOrganizationTickets(membership.role)) {
+    throw new ApiError(403, "You do not have permission to assign this ticket");
+  }
+
+  await validateTicketAssignee(ticket.organizationId, assignedToId);
+
+  const updatedTicket = await assignTicket(
+    ticketId,
+    assignedToId,
+    userId,
+    ticket.assignedToId ?? null,
+  );
+
+  if (!updatedTicket || !updatedTicket.id) {
+    throw new ApiError(500, "Failed to assign ticket");
+  }
+
+  return updatedTicket;
 };
 
 export const createTicketCommentService = async (ticketId, commentData, userId) => {

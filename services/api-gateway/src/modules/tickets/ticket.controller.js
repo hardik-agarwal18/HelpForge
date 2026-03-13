@@ -1,4 +1,5 @@
 import {
+  assignTicketService,
   createTicketAttachmentService,
   createTicketCommentService,
   createTicketService,
@@ -54,6 +55,23 @@ export const updateTicketController = async (req, res, next) => {
     const ticket = await updateTicketService(
       req.params.ticketId,
       req.body,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { ticket },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const assignTicketController = async (req, res, next) => {
+  try {
+    const ticket = await assignTicketService(
+      req.params.ticketId,
+      req.body.assignedToId,
       req.user.id,
     );
 

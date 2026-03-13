@@ -56,3 +56,7 @@ export const createTicketAttachmentSchema = z.object({
   fileType: z.string().min(1, "File type is required"),
   fileSize: z.number().int().positive("File size must be a positive integer"),
 });
+
+export const assignTicketSchema = z.object({
+  assignedToId: z.string().min(1, "Assigned user ID is required"),
+});

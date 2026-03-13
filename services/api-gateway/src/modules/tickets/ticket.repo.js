@@ -110,6 +110,49 @@ export const updateTicket = async (ticketId, ticketData, actorId) => {
   });
 };
 
+export const assignTicket = async (
+  ticketId,
+  assignedToId,
+  actorId,
+  previousAssignedToId,
+) => {
+  return await prisma.ticket.update({
+    where: { id: ticketId },
+    data: {
+      assignedToId,
+      activities: {
+        create: {
+          actorId,
+          action: "TICKET_ASSIGNED",
+          oldValue: previousAssignedToId,
+          newValue: assignedToId,
+        },
+      },
+    },
+    include: {
+      organization: true,
+      createdBy: true,
+      assignedTo: true,
+      comments: {
+        include: {
+          author: true,
+        },
+      },
+      attachments: true,
+      tags: {
+        include: {
+          tag: true,
+        },
+      },
+      activities: {
+        include: {
+          actor: true,
+        },
+      },
+    },
+  });
+};
+
 export const createTicketComment = async (ticketId, commentData) => {
   return await prisma.ticketComment.create({
     data: {
