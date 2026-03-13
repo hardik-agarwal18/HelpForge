@@ -207,6 +207,60 @@ describe("Ticket Service", () => {
       });
     });
 
+    it("should support assignedTo=me filter", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
+
+      await getTicketsService(
+        {
+          organizationId: "org-1",
+          assignedTo: "me",
+        },
+        "user-1",
+      );
+
+      expect(mockGetTickets).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        assignedToId: "user-1",
+      });
+    });
+
+    it("should support tag and date range filters", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
+
+      await getTicketsService(
+        {
+          organizationId: "org-1",
+          tag: "Bug",
+          dateFrom: "2026-03-01T00:00:00.000Z",
+          dateTo: "2026-03-31T23:59:59.999Z",
+        },
+        "user-1",
+      );
+
+      expect(mockGetTickets).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        tags: {
+          some: {
+            tag: {
+              name: "Bug",
+            },
+          },
+        },
+        createdAt: {
+          gte: new Date("2026-03-01T00:00:00.000Z"),
+          lte: new Date("2026-03-31T23:59:59.999Z"),
+        },
+      });
+    });
+
     it("should reject missing organizationId", async () => {
       await expect(getTicketsService({}, "user-1")).rejects.toMatchObject({
         statusCode: 400,
@@ -260,6 +314,22 @@ describe("Ticket Service", () => {
       );
 
       expect(result).toEqual([]);
+    });
+
+    it("should reject invalid date ranges", async () => {
+      await expect(
+        getTicketsService(
+          {
+            organizationId: "org-1",
+            dateFrom: "2026-03-10T00:00:00.000Z",
+            dateTo: "2026-03-01T00:00:00.000Z",
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "dateFrom cannot be after dateTo",
+      });
     });
   });
 

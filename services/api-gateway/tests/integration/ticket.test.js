@@ -266,6 +266,52 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.data.tickets[0].id).toBe(ticket1.id);
     });
 
+    it("should filter tickets by assignedTo=me", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .query({
+          organizationId: organization.id,
+          assignedTo: "me",
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(1);
+      expect(response.body.data.tickets[0].id).toBe(ticket1.id);
+    });
+
+    it("should filter tickets by tag and date range", async () => {
+      const tag = await prisma.tag.create({
+        data: {
+          organizationId: organization.id,
+          name: "Bug",
+        },
+      });
+
+      await prisma.ticketTag.create({
+        data: {
+          ticketId: ticket1.id,
+          tagId: tag.id,
+        },
+      });
+
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .query({
+          organizationId: organization.id,
+          tag: "Bug",
+          dateFrom: "2026-03-01T00:00:00.000Z",
+          dateTo: "2026-03-31T23:59:59.999Z",
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(1);
+      expect(response.body.data.tickets[0].id).toBe(ticket1.id);
+    });
+
     it("should return 400 when organizationId is missing", async () => {
       const response = await request(app)
         .get("/api/tickets")
@@ -288,6 +334,21 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe("Invalid status");
+    });
+
+    it("should return 400 for invalid date ranges", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .query({
+          organizationId: organization.id,
+          dateFrom: "2026-03-10T00:00:00.000Z",
+          dateTo: "2026-03-01T00:00:00.000Z",
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("dateFrom cannot be after dateTo");
     });
 
     it("should return 403 for a user outside the organization", async () => {

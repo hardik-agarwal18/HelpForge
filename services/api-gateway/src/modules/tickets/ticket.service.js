@@ -121,8 +121,27 @@ const normalizeTicketFilters = (filters) => ({
   status: filters.status?.toUpperCase(),
   priority: filters.priority?.toUpperCase(),
   source: filters.source?.toUpperCase(),
+  assignedTo: filters.assignedTo,
   assignedToId: filters.assignedToId,
+  tag: filters.tag?.trim(),
+  tagId: filters.tagId,
+  dateFrom: filters.dateFrom,
+  dateTo: filters.dateTo,
 });
+
+const parseDateFilter = (value, fieldName) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new ApiError(400, `Invalid ${fieldName}`);
+  }
+
+  return parsedDate;
+};
 
 const validateListFilters = (filters) => {
   if (!filters.organizationId) {
@@ -139,6 +158,13 @@ const validateListFilters = (filters) => {
 
   if (filters.source && !TICKET_SOURCES.includes(filters.source)) {
     throw new ApiError(400, "Invalid source");
+  }
+
+  const dateFrom = parseDateFilter(filters.dateFrom, "dateFrom");
+  const dateTo = parseDateFilter(filters.dateTo, "dateTo");
+
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    throw new ApiError(400, "dateFrom cannot be after dateTo");
   }
 };
 
@@ -252,6 +278,32 @@ export const getTicketsService = async (query, userId) => {
     );
   }
 
+  const resolvedAssignedToId =
+    normalizedFilters.assignedTo === "me"
+      ? userId
+      : normalizedFilters.assignedToId ?? normalizedFilters.assignedTo;
+
+  const createdAtFilter = {};
+  const parsedDateFrom = parseDateFilter(normalizedFilters.dateFrom, "dateFrom");
+  const parsedDateTo = parseDateFilter(normalizedFilters.dateTo, "dateTo");
+  const tagFilter = {};
+
+  if (parsedDateFrom) {
+    createdAtFilter.gte = parsedDateFrom;
+  }
+
+  if (parsedDateTo) {
+    createdAtFilter.lte = parsedDateTo;
+  }
+
+  if (normalizedFilters.tagId) {
+    tagFilter.tagId = normalizedFilters.tagId;
+  }
+
+  if (normalizedFilters.tag) {
+    tagFilter.tag = { name: normalizedFilters.tag };
+  }
+
   const baseFilters = {
     organizationId: normalizedFilters.organizationId,
     ...(normalizedFilters.status ? { status: normalizedFilters.status } : {}),
@@ -259,8 +311,14 @@ export const getTicketsService = async (query, userId) => {
       ? { priority: normalizedFilters.priority }
       : {}),
     ...(normalizedFilters.source ? { source: normalizedFilters.source } : {}),
-    ...(normalizedFilters.assignedToId
-      ? { assignedToId: normalizedFilters.assignedToId }
+    ...(resolvedAssignedToId
+      ? { assignedToId: resolvedAssignedToId }
+      : {}),
+    ...(Object.keys(tagFilter).length > 0
+      ? { tags: { some: tagFilter } }
+      : {}),
+    ...(Object.keys(createdAtFilter).length > 0
+      ? { createdAt: createdAtFilter }
       : {}),
   };
 
