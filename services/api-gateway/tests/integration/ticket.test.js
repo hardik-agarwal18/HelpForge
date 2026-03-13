@@ -533,4 +533,183 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.message).toBe("Ticket not found");
     });
   });
+
+  describe("POST /api/tickets/:ticketId/comments", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Commentable ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to create internal comments", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({ message: "Internal investigation note", isInternal: true })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comment.isInternal).toBe(true);
+    });
+
+    it("should allow members to create public comments on their own tickets", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ message: "Customer follow-up" })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comment.message).toBe("Customer follow-up");
+      expect(response.body.data.comment.isInternal).toBe(false);
+    });
+
+    it("should reject members creating internal comments", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ message: "Secret", isInternal: true })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to create internal comments",
+      );
+    });
+
+    it("should reject unrelated members from commenting", async () => {
+      const unrelatedMember = await createTestUser({
+        email: `member2_${Date.now()}@example.com`,
+        name: "Another Member",
+      });
+      const unrelatedMemberToken = signToken(unrelatedMember);
+      await prisma.membership.create({
+        data: {
+          userId: unrelatedMember.id,
+          organizationId: organization.id,
+          role: "MEMBER",
+        },
+      });
+
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${unrelatedMemberToken}`)
+        .send({ message: "Blocked comment" })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to comment on this ticket",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .post("/api/tickets/non-existent-ticket-id/comments")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ message: "Missing ticket" })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
+
+  describe("GET /api/tickets/:ticketId/comments", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Comments listing ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+          comments: {
+            create: [
+              {
+                authorId: user1.id,
+                message: "Public note",
+                isInternal: false,
+              },
+              {
+                authorId: user2.id,
+                message: "Internal note",
+                isInternal: true,
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    it("should return all comments for elevated roles", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comments).toHaveLength(2);
+    });
+
+    it("should hide internal comments from members", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.comments).toHaveLength(1);
+      expect(response.body.data.comments[0].message).toBe("Public note");
+    });
+
+    it("should reject unrelated members from viewing comments", async () => {
+      const unrelatedMember = await createTestUser({
+        email: `member3_${Date.now()}@example.com`,
+        name: "Third Member",
+      });
+      const unrelatedMemberToken = signToken(unrelatedMember);
+      await prisma.membership.create({
+        data: {
+          userId: unrelatedMember.id,
+          organizationId: organization.id,
+          role: "MEMBER",
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/comments`)
+        .set("Authorization", `Bearer ${unrelatedMemberToken}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view comments on this ticket",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .get("/api/tickets/non-existent-ticket-id/comments")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  createTicketCommentSchema,
   createTicketSchema,
   updateTicketSchema,
 } from "../../src/modules/tickets/ticket.validator.js";
@@ -57,6 +58,25 @@ describe("Ticket Validator", () => {
 
       expect(result.success).toBe(false);
       expect(result.error.issues[0].message).toBe("At least one field is required");
+    });
+  });
+
+  describe("createTicketCommentSchema", () => {
+    it("should validate a valid comment payload", () => {
+      const result = createTicketCommentSchema.safeParse({
+        message: "This is a comment",
+        isInternal: true,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject missing message", () => {
+      const result = createTicketCommentSchema.safeParse({
+        isInternal: true,
+      });
+
+      expect(result.success).toBe(false);
     });
   });
 });

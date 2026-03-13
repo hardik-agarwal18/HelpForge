@@ -1,20 +1,26 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicketService = jest.fn();
+const mockCreateTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
+const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
+  createTicketCommentService: mockCreateTicketCommentService,
   createTicketService: mockCreateTicketService,
   getTicketByIdService: mockGetTicketByIdService,
+  getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
   updateTicketService: mockUpdateTicketService,
 }));
 
 const {
+  createTicketCommentController,
   createTicketController,
   getTicketByIdController,
+  getTicketCommentsController,
   getTicketsController,
   updateTicketController,
 } = await import(
@@ -147,6 +153,62 @@ describe("Ticket Controller", () => {
     mockUpdateTicketService.mockRejectedValue(error);
 
     await updateTicketController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should create a comment and return 201", async () => {
+    const comment = { id: "comment-1", message: "Public reply" };
+    req.params = { ticketId: "ticket-1" };
+    req.body = { message: "Public reply" };
+    mockCreateTicketCommentService.mockResolvedValue(comment);
+
+    await createTicketCommentController(req, res, next);
+
+    expect(mockCreateTicketCommentService).toHaveBeenCalledWith(
+      "ticket-1",
+      { message: "Public reply" },
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { comment },
+    });
+  });
+
+  it("should call next if create comment service throws", async () => {
+    const error = new Error("Comment failed");
+    req.params = { ticketId: "ticket-1" };
+    req.body = { message: "Public reply" };
+    mockCreateTicketCommentService.mockRejectedValue(error);
+
+    await createTicketCommentController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should return comments and 200", async () => {
+    const comments = [{ id: "comment-1", message: "Hello" }];
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketCommentsService.mockResolvedValue(comments);
+
+    await getTicketCommentsController(req, res, next);
+
+    expect(mockGetTicketCommentsService).toHaveBeenCalledWith("ticket-1", "user-1");
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { comments },
+    });
+  });
+
+  it("should call next if get ticket comments service throws", async () => {
+    const error = new Error("Comments failed");
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketCommentsService.mockRejectedValue(error);
+
+    await getTicketCommentsController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

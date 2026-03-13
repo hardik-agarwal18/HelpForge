@@ -1,22 +1,30 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicket = jest.fn();
+const mockCreateTicketActivityLog = jest.fn();
+const mockCreateTicketComment = jest.fn();
 const mockGetTicketById = jest.fn();
+const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
 const mockUpdateTicket = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
+  createTicketActivityLog: mockCreateTicketActivityLog,
+  createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
   getTicketById: mockGetTicketById,
+  getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
   updateTicket: mockUpdateTicket,
 }));
 
 const {
+  createTicketCommentService,
   createTicketService,
   getTicketByIdService,
+  getTicketCommentsService,
   getTicketsService,
   updateTicketService,
 } = await import(
@@ -395,6 +403,177 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 404,
         message: "Ticket not found",
+      });
+    });
+  });
+
+  describe("createTicketCommentService", () => {
+    it("should allow elevated roles to create internal comments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockCreateTicketComment.mockResolvedValue({
+        id: "comment-1",
+        message: "Internal note",
+        isInternal: true,
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await createTicketCommentService(
+        "ticket-1",
+        { message: "Internal note", isInternal: true },
+        "user-1",
+      );
+
+      expect(mockCreateTicketComment).toHaveBeenCalledWith("ticket-1", {
+        authorId: "user-1",
+        message: "Internal note",
+        isInternal: true,
+      });
+      expect(result).toEqual({
+        id: "comment-1",
+        message: "Internal note",
+        isInternal: true,
+      });
+    });
+
+    it("should allow members to comment on their own tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicketComment.mockResolvedValue({
+        id: "comment-1",
+        message: "Public reply",
+        isInternal: false,
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await createTicketCommentService(
+        "ticket-1",
+        { message: "Public reply" },
+        "user-1",
+      );
+
+      expect(result.message).toBe("Public reply");
+    });
+
+    it("should reject members creating internal comments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        createTicketCommentService(
+          "ticket-1",
+          { message: "Hidden", isInternal: true },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to create internal comments",
+      });
+    });
+
+    it("should reject users who cannot access the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        createTicketCommentService(
+          "ticket-1",
+          { message: "Blocked" },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to comment on this ticket",
+      });
+    });
+  });
+
+  describe("getTicketCommentsService", () => {
+    it("should return all comments for elevated roles", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockGetTicketComments.mockResolvedValue([
+        { id: "comment-1", isInternal: false },
+        { id: "comment-2", isInternal: true },
+      ]);
+
+      const result = await getTicketCommentsService("ticket-1", "user-1");
+
+      expect(result).toHaveLength(2);
+    });
+
+    it("should hide internal comments from members", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTicketComments.mockResolvedValue([
+        { id: "comment-1", isInternal: false },
+        { id: "comment-2", isInternal: true },
+      ]);
+
+      const result = await getTicketCommentsService("ticket-1", "user-1");
+
+      expect(result).toEqual([{ id: "comment-1", isInternal: false }]);
+    });
+
+    it("should reject unrelated members from viewing comments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(getTicketCommentsService("ticket-1", "user-1")).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view comments on this ticket",
       });
     });
   });
