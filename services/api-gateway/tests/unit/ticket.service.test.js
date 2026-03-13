@@ -4,15 +4,22 @@ const mockCreateTicket = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
+const mockUpdateTicket = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicket: mockCreateTicket,
   getTicketById: mockGetTicketById,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
+  updateTicket: mockUpdateTicket,
 }));
 
-const { createTicketService, getTicketByIdService, getTicketsService } = await import(
+const {
+  createTicketService,
+  getTicketByIdService,
+  getTicketsService,
+  updateTicketService,
+} = await import(
   "../../src/modules/tickets/ticket.service.js"
 );
 
@@ -284,6 +291,111 @@ describe("Ticket Service", () => {
       const result = await getTicketByIdService("ticket-1", "user-1");
 
       expect(result.comments).toEqual([{ id: "comment-1", isInternal: false }]);
+    });
+  });
+
+  describe("updateTicketService", () => {
+    it("should allow elevated roles to update any ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockUpdateTicket.mockResolvedValue({
+        id: "ticket-1",
+        title: "Updated title",
+      });
+
+      const result = await updateTicketService(
+        "ticket-1",
+        { status: "resolved", assignedToId: "user-2" },
+        "user-1",
+      );
+
+      expect(mockUpdateTicket).toHaveBeenCalledWith(
+        "ticket-1",
+        { status: "RESOLVED", assignedToId: "user-2" },
+        "user-1",
+      );
+      expect(result).toEqual({ id: "ticket-1", title: "Updated title" });
+    });
+
+    it("should allow members to update limited fields on their own tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockUpdateTicket.mockResolvedValue({
+        id: "ticket-1",
+        title: "Updated title",
+      });
+
+      await updateTicketService("ticket-1", { priority: "high" }, "user-1");
+
+      expect(mockUpdateTicket).toHaveBeenCalledWith(
+        "ticket-1",
+        { priority: "HIGH" },
+        "user-1",
+      );
+    });
+
+    it("should reject members updating tickets they do not own", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        updateTicketService("ticket-1", { title: "Updated" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to update this ticket",
+      });
+    });
+
+    it("should reject members changing restricted fields", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        updateTicketService("ticket-1", { status: "CLOSED" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message:
+          "Members can only update title, description, and priority on their own tickets",
+      });
+    });
+
+    it("should reject when the ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        updateTicketService("ticket-1", { title: "Updated" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
     });
   });
 });

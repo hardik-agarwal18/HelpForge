@@ -432,4 +432,105 @@ describe("Ticket API Integration Tests", () => {
       );
     });
   });
+
+  describe("PATCH /api/tickets/:ticketId", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Ticket to update",
+          description: "Original",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to update any ticket", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ status: "resolved", assignedToId: user2.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.status).toBe("RESOLVED");
+    });
+
+    it("should allow members to update title/description/priority on their own tickets", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ priority: "high", title: "Updated by member" })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.priority).toBe("HIGH");
+      expect(response.body.data.ticket.title).toBe("Updated by member");
+    });
+
+    it("should reject member updates on unrelated tickets", async () => {
+      const unrelatedTicket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Not member owned",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+        },
+      });
+
+      const response = await request(app)
+        .patch(`/api/tickets/${unrelatedTicket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ title: "Blocked" })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to update this ticket",
+      );
+    });
+
+    it("should reject member updates to restricted fields", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ status: "closed" })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "Members can only update title, description, and priority on their own tickets",
+      );
+    });
+
+    it("should reject invalid payloads with 400", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Validation error");
+    });
+
+    it("should return 404 when the ticket does not exist", async () => {
+      const response = await request(app)
+        .patch("/api/tickets/non-existent-ticket-id")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ title: "Updated" })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
 });
