@@ -29,6 +29,7 @@ const {
   getOrganizationByUserIdService,
   updateOrganizationService,
   deleteOrganizationService,
+  viewAllMembersInOrganizationService,
   updateMemberFromOrganizationService,
 } = await import("../../src/modules/organization/org.service.js");
 
@@ -144,6 +145,34 @@ describe("Organization Service", () => {
       expect(result).toEqual(mockMembership);
     });
 
+    it("should reject when role is missing", async () => {
+      await expect(
+        inviteMemberInOrganizationService(
+          "org-1",
+          "user-2",
+          undefined,
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Role is required",
+      });
+    });
+
+    it("should reject when role is invalid", async () => {
+      await expect(
+        inviteMemberInOrganizationService(
+          "org-1",
+          "user-2",
+          "viewer",
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Invalid role",
+      });
+    });
+
     it("should reject admin inviting another admin", async () => {
       await expect(
         inviteMemberInOrganizationService(
@@ -156,6 +185,43 @@ describe("Organization Service", () => {
         statusCode: 403,
         message: "You do not have permission to invite this role",
       });
+    });
+
+    it("should throw when invite repository call returns no membership", async () => {
+      mockInviteMemberInOrganization.mockResolvedValue(null);
+
+      await expect(
+        inviteMemberInOrganizationService(
+          "org-1",
+          "user-2",
+          "MEMBER",
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to invite member to organization",
+      });
+    });
+  });
+
+  describe("viewAllMembersInOrganizationService", () => {
+    it("should return members when found", async () => {
+      const members = [{ id: "membership-1" }, { id: "membership-2" }];
+      mockGetOrganizationMembersById.mockResolvedValue(members);
+
+      const result = await viewAllMembersInOrganizationService("org-1");
+
+      expect(mockGetOrganizationMembersById).toHaveBeenCalledWith("org-1");
+      expect(result).toEqual(members);
+    });
+
+    it("should return an empty array when repository returns null", async () => {
+      mockGetOrganizationMembersById.mockResolvedValue(null);
+
+      const result = await viewAllMembersInOrganizationService("org-1");
+
+      expect(mockGetOrganizationMembersById).toHaveBeenCalledWith("org-1");
+      expect(result).toEqual([]);
     });
   });
 
@@ -211,6 +277,27 @@ describe("Organization Service", () => {
       });
     });
 
+    it("should reject agent updating any role", async () => {
+      mockGetOrganizationMembershipByUserId.mockResolvedValue({
+        id: "membership-2",
+        userId: "user-2",
+        organizationId: "org-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        updateMemberFromOrganizationService(
+          "org-1",
+          "user-2",
+          "AGENT",
+          { userId: "user-1", role: "AGENT" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to update roles",
+      });
+    });
+
     it("should reject admin updating another admin", async () => {
       mockGetOrganizationMembershipByUserId.mockResolvedValue({
         id: "membership-2",
@@ -232,6 +319,27 @@ describe("Organization Service", () => {
       });
     });
 
+    it("should reject assigning owner through member update", async () => {
+      mockGetOrganizationMembershipByUserId.mockResolvedValue({
+        id: "membership-2",
+        userId: "user-2",
+        organizationId: "org-1",
+        role: "ADMIN",
+      });
+
+      await expect(
+        updateMemberFromOrganizationService(
+          "org-1",
+          "user-2",
+          "OWNER",
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Cannot assign OWNER role to a member",
+      });
+    });
+
     it("should reject admin promoting someone to admin", async () => {
       mockGetOrganizationMembershipByUserId.mockResolvedValue({
         id: "membership-2",
@@ -250,6 +358,44 @@ describe("Organization Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You cannot promote a member to your role or higher",
+      });
+    });
+
+    it("should reject when target membership is not found", async () => {
+      mockGetOrganizationMembershipByUserId.mockResolvedValue(null);
+
+      await expect(
+        updateMemberFromOrganizationService(
+          "org-1",
+          "user-2",
+          "MEMBER",
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Member not found in organization",
+      });
+    });
+
+    it("should throw when updated membership is missing after repo update", async () => {
+      mockGetOrganizationMembershipByUserId.mockResolvedValue({
+        id: "membership-2",
+        userId: "user-2",
+        organizationId: "org-1",
+        role: "AGENT",
+      });
+      mockUpdateMembershipRole.mockResolvedValue(null);
+
+      await expect(
+        updateMemberFromOrganizationService(
+          "org-1",
+          "user-2",
+          "MEMBER",
+          { userId: "user-1", role: "OWNER" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to update member in organization",
       });
     });
   });
