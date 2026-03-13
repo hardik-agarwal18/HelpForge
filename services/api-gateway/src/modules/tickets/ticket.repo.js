@@ -37,10 +37,7 @@ export const updateAgentAvailability = async (
   });
 };
 
-export const getOrganizationAgentsWithLoad = async (
-  organizationId,
-  activeStatuses,
-) => {
+export const getOrganizationAvailableAgents = async (organizationId) => {
   return await prisma.membership.findMany({
     where: {
       organizationId,
@@ -48,24 +45,18 @@ export const getOrganizationAgentsWithLoad = async (
       isAvailable: true,
     },
     include: {
-      user: {
-        include: {
-          assignedTickets: {
-            where: {
-              organizationId,
-              status: {
-                in: activeStatuses,
-              },
-            },
-            select: {
-              id: true,
-            },
-          },
-        },
-      },
+      user: true,
     },
     orderBy: {
       createdAt: "asc",
+    },
+  });
+};
+
+export const getOrganizationAgentWorkloads = async (organizationId) => {
+  return await prisma.agentWorkload.findMany({
+    where: {
+      organizationId,
     },
   });
 };
@@ -263,6 +254,75 @@ export const assignTicket = async (
         },
       },
     },
+  });
+};
+
+export const autoAssignTicket = async (ticketId, organizationId, agentUserId) => {
+  return await prisma.$transaction(async (tx) => {
+    const now = new Date();
+
+    await tx.agentWorkload.upsert({
+      where: {
+        userId_organizationId: {
+          userId: agentUserId,
+          organizationId,
+        },
+      },
+      update: {
+        assignedToday: {
+          increment: 1,
+        },
+        assignedThisWeek: {
+          increment: 1,
+        },
+      },
+      create: {
+        userId: agentUserId,
+        organizationId,
+        assignedToday: 1,
+        assignedThisWeek: 1,
+        lastDailyReset: now,
+        lastWeeklyReset: now,
+      },
+    });
+
+    await tx.ticketActivityLog.create({
+      data: {
+        ticketId,
+        actorId: agentUserId,
+        action: "TICKET_ASSIGNED",
+        newValue: agentUserId,
+      },
+    });
+
+    return await tx.ticket.update({
+      where: { id: ticketId },
+      data: {
+        assignedToId: agentUserId,
+        status: "IN_PROGRESS",
+      },
+      include: {
+        organization: true,
+        createdBy: true,
+        assignedTo: true,
+        comments: {
+          include: {
+            author: true,
+          },
+        },
+        attachments: true,
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+        activities: {
+          include: {
+            actor: true,
+          },
+        },
+      },
+    });
   });
 };
 

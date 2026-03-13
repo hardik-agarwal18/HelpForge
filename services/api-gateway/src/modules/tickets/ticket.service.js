@@ -2,6 +2,7 @@ import { ApiError } from "../../utils/errorHandler.js";
 import {
   assignTicket,
   addTagToTicket,
+  autoAssignTicket,
   createTag,
   createTicketAttachment,
   createTicketActivityLog,
@@ -19,7 +20,8 @@ import {
   getTicketActivities,
   getTicketComments,
   getTicketAttachments,
-  getOrganizationAgentsWithLoad,
+  getOrganizationAvailableAgents,
+  getOrganizationAgentWorkloads,
   getTicketOrganizationMembership,
   getTicketMembershipsByUserId,
   getTickets,
@@ -30,8 +32,6 @@ import {
   updateTicket,
 } from "./ticket.repo.js";
 import {
-  AUTO_ASSIGNABLE_STATUSES,
-  AUTO_ASSIGNMENT_MAX_ACTIVE_TICKETS,
   TICKET_PRIORITIES,
   TICKET_ROLE_POLICIES,
   TICKET_SOURCES,
@@ -241,26 +241,107 @@ const validateTicketAssignee = async (organizationId, assignedToId) => {
   }
 };
 
+const getWorkloadMap = (workloads) =>
+  new Map(workloads.map((workload) => [workload.userId, workload]));
+
+const startOfDay = (date) => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const startOfWeek = (date) => {
+  const normalized = startOfDay(date);
+  const day = normalized.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  normalized.setDate(normalized.getDate() - diff);
+  return normalized;
+};
+
+const getEffectiveWorkload = (workload, now) => {
+  if (!workload) {
+    return {
+      assignedToday: 0,
+      assignedThisWeek: 0,
+    };
+  }
+
+  const dayStart = startOfDay(now);
+  const weekStart = startOfWeek(now);
+  const lastDailyReset = workload.lastDailyReset
+    ? new Date(workload.lastDailyReset)
+    : null;
+  const lastWeeklyReset = workload.lastWeeklyReset
+    ? new Date(workload.lastWeeklyReset)
+    : null;
+
+  return {
+    assignedToday:
+      lastDailyReset && lastDailyReset >= dayStart ? workload.assignedToday : 0,
+    assignedThisWeek:
+      lastWeeklyReset && lastWeeklyReset >= weekStart
+        ? workload.assignedThisWeek
+        : 0,
+  };
+};
+
+const isEligibleForAutoAssignment = (membership, workload, now) => {
+  const effectiveWorkload = getEffectiveWorkload(workload, now);
+
+  if (
+    membership.maxTicketsPerDay !== null &&
+    membership.maxTicketsPerDay !== undefined &&
+    effectiveWorkload.assignedToday >= membership.maxTicketsPerDay
+  ) {
+    return false;
+  }
+
+  if (
+    membership.maxTicketsPerWeek !== null &&
+    membership.maxTicketsPerWeek !== undefined &&
+    effectiveWorkload.assignedThisWeek >= membership.maxTicketsPerWeek
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 const findBestAutoAssignAgent = async (organizationId) => {
-  const agents = await getOrganizationAgentsWithLoad(
-    organizationId,
-    AUTO_ASSIGNABLE_STATUSES,
+  const [agents, workloads] = await Promise.all([
+    getOrganizationAvailableAgents(organizationId),
+    getOrganizationAgentWorkloads(organizationId),
+  ]);
+  const now = new Date();
+  const workloadMap = getWorkloadMap(workloads);
+  const eligibleAgents = agents.filter((membership) =>
+    isEligibleForAutoAssignment(
+      membership,
+      workloadMap.get(membership.userId),
+      now,
+    ),
   );
 
-  const availableAgents = agents.filter(
-    (membership) =>
-      membership.user &&
-      membership.user.assignedTickets.length < AUTO_ASSIGNMENT_MAX_ACTIVE_TICKETS,
-  );
-
-  if (availableAgents.length === 0) {
+  if (eligibleAgents.length === 0) {
     return null;
   }
 
-  const [leastLoadedAgent] = availableAgents.sort(
-    (left, right) =>
-      left.user.assignedTickets.length - right.user.assignedTickets.length,
-  );
+  const [leastLoadedAgent] = eligibleAgents.sort((left, right) => {
+    const leftWorkload = getEffectiveWorkload(
+      workloadMap.get(left.userId),
+      now,
+    );
+    const rightWorkload = getEffectiveWorkload(
+      workloadMap.get(right.userId),
+      now,
+    );
+
+    if (leftWorkload.assignedToday !== rightWorkload.assignedToday) {
+      return leftWorkload.assignedToday - rightWorkload.assignedToday;
+    }
+
+    return leftWorkload.assignedThisWeek - rightWorkload.assignedThisWeek;
+  });
 
   return leastLoadedAgent.userId;
 };
@@ -272,11 +353,10 @@ const autoAssignTicketForOrganization = async (ticket, actorId) => {
     throw new ApiError(409, "No available agent found for auto-assignment");
   }
 
-  const autoAssignedTicket = await assignTicket(
+  const autoAssignedTicket = await autoAssignTicket(
     ticket.id,
+    ticket.organizationId,
     autoAssignedUserId,
-    actorId,
-    ticket.assignedToId ?? null,
   );
 
   if (!autoAssignedTicket || !autoAssignedTicket.id) {
