@@ -9,6 +9,7 @@
     "test:coverage": "npm run db:test:migrate && cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand --coverage",
     "test:integration": "npm run db:test:migrate && cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration --runInBand",
     "test:unit": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
+    "test:unit:coverage": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/unit --coverage",
     "test:only": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
     "db:test:migrate": "dotenv -e .env -- cross-env DATABASE_URL=$DATABASE_URL_TEST npx prisma migrate deploy",
     "db:test:reset": "dotenv -e .env -- cross-env DATABASE_URL=$DATABASE_URL_TEST npx prisma migrate reset --force",

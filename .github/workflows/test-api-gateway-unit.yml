@@ -36,7 +36,7 @@ jobs:
 
       - name: Run unit tests with coverage
         run: |
-          $duration = (Measure-Command { npm run test:coverage }).TotalSeconds
+          $duration = (Measure-Command { npm run test:unit:coverage }).TotalSeconds
           "UNIT_TEST_SECONDS=$([math]::Round($duration, 2))" >> $env:GITHUB_ENV
         shell: pwsh
 
