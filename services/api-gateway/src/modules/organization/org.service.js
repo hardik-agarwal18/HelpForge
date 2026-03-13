@@ -8,6 +8,14 @@ import {
 } from "./org.repo.js";
 import { ApiError } from "../../utils/errorHandler.js";
 
+const normalizeRole = (role) => {
+  if (typeof role !== "string" || !role.trim()) {
+    throw new ApiError(400, "Role is required");
+  }
+
+  return role.toUpperCase();
+};
+
 export const createOrganizationService = async (name, userId) => {
   const organization = await createOrganization(name, userId);
 
@@ -49,7 +57,12 @@ export const inviteMemberInOrganizationService = async (
   userId,
   role,
 ) => {
-  const membership = await inviteMemberInOrganization(orgId, userId, role);
+  const normalizedRole = normalizeRole(role);
+  const membership = await inviteMemberInOrganization(
+    orgId,
+    userId,
+    normalizedRole,
+  );
 
   if (!membership || !membership.id) {
     throw new ApiError(500, "Failed to invite member to organization");
