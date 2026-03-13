@@ -7,6 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  OWNER
+  ADMIN
+  AGENT
+  MEMBER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketSource {
+  WEB
+  EMAIL
+  CHAT
+  API
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -15,6 +43,13 @@ model User {
   createdAt DateTime @default(now())
 
   memberships Membership[]
+
+  createdTickets  Ticket[] @relation("CreatedTickets")
+  assignedTickets Ticket[] @relation("AssignedTickets")
+
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+  activities  TicketActivityLog[]
 }
 
 model Organization {
@@ -23,6 +58,8 @@ model Organization {
   createdAt DateTime @default(now())
 
   memberships Membership[]
+  tickets     Ticket[]
+  tags        Tag[]
 }
 
 model Membership {
@@ -41,9 +78,101 @@ model Membership {
   @@unique([userId, organizationId])
 }
 
-enum Role {
-  OWNER
-  ADMIN
-  AGENT
-  MEMBER
+model Ticket {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+
+  status   TicketStatus @default(OPEN)
+  priority Priority     @default(MEDIUM)
+  source   TicketSource @default(WEB)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("CreatedTickets", fields: [createdById], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+  tags        TicketTag[]
+  activities  TicketActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model TicketComment {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  message    String
+  isInternal Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model TicketAttachment {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  uploadedBy String
+  uploader   User   @relation(fields: [uploadedBy], references: [id])
+
+  fileUrl  String
+  fileType String
+  fileSize Int
+
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id String @id @default(uuid())
+
+  name           String
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  tickets TicketTag[]
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  tag    Tag    @relation(fields: [tagId], references: [id])
+
+  @@id([ticketId, tagId])
+}
+
+model TicketActivityLog {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+
+  action   String
+  oldValue String?
+  newValue String?
+
+  createdAt DateTime @default(now())
 }
