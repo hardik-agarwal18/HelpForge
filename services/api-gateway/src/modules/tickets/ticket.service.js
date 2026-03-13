@@ -1,6 +1,7 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
   createTicket,
+  getTicketById,
   getTicketOrganizationMembership,
   getTickets,
 } from "./ticket.repo.js";
@@ -9,6 +10,23 @@ import {
   TICKET_SOURCES,
   TICKET_STATUSES,
 } from "./ticket.constants.js";
+
+const canViewAllOrganizationTickets = (role) =>
+  ["OWNER", "ADMIN", "AGENT"].includes(role);
+
+const canMemberViewTicket = (ticket, userId) =>
+  ticket.createdById === userId || ticket.assignedToId === userId;
+
+const filterInternalCommentsForRole = (ticket, role) => {
+  if (canViewAllOrganizationTickets(role) || !ticket.comments) {
+    return ticket;
+  }
+
+  return {
+    ...ticket,
+    comments: ticket.comments.filter((comment) => !comment.isInternal),
+  };
+};
 
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
@@ -104,7 +122,7 @@ export const getTicketsService = async (query, userId) => {
     );
   }
 
-  const tickets = await getTickets({
+  const baseFilters = {
     organizationId: normalizedFilters.organizationId,
     ...(normalizedFilters.status ? { status: normalizedFilters.status } : {}),
     ...(normalizedFilters.priority
@@ -114,7 +132,45 @@ export const getTicketsService = async (query, userId) => {
     ...(normalizedFilters.assignedToId
       ? { assignedToId: normalizedFilters.assignedToId }
       : {}),
+  };
+
+  const tickets = await getTickets({
+    ...baseFilters,
+    ...(!canViewAllOrganizationTickets(membership.role)
+      ? {
+          OR: [{ createdById: userId }, { assignedToId: userId }],
+        }
+      : {}),
   });
 
   return tickets || [];
+};
+
+export const getTicketByIdService = async (ticketId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view this ticket",
+    );
+  }
+
+  return filterInternalCommentsForRole(ticket, membership.role);
 };
