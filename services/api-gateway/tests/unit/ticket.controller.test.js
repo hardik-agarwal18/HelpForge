@@ -4,41 +4,53 @@ const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
 const mockAssignTicketService = jest.fn();
+const mockAddTicketTagService = jest.fn();
+const mockCreateTagService = jest.fn();
+const mockDeleteTicketTagService = jest.fn();
 const mockDeleteTicketAttachmentService = jest.fn();
 const mockDeleteTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
+const mockGetTagsService = jest.fn();
 const mockUpdateTicketStatusService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
+  addTicketTagService: mockAddTicketTagService,
   assignTicketService: mockAssignTicketService,
+  createTagService: mockCreateTagService,
   createTicketCommentService: mockCreateTicketCommentService,
   createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
+  deleteTicketTagService: mockDeleteTicketTagService,
   deleteTicketAttachmentService: mockDeleteTicketAttachmentService,
   deleteTicketCommentService: mockDeleteTicketCommentService,
   getTicketAttachmentsService: mockGetTicketAttachmentsService,
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
+  getTagsService: mockGetTagsService,
   updateTicketStatusService: mockUpdateTicketStatusService,
   updateTicketService: mockUpdateTicketService,
 }));
 
 const {
+  addTicketTagController,
   assignTicketController,
+  createTagController,
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
+  deleteTicketTagController,
   deleteTicketAttachmentController,
   deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
   getTicketCommentsController,
   getTicketsController,
+  getTagsController,
   updateTicketStatusController,
   updateTicketController,
 } = await import(
@@ -117,6 +129,36 @@ describe("Ticket Controller", () => {
     await getTicketsController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should create a tag and return 201", async () => {
+    const tag = { id: "tag-1", name: "Bug" };
+    req.body = { organizationId: "org-1", name: "Bug" };
+    mockCreateTagService.mockResolvedValue(tag);
+
+    await createTagController(req, res, next);
+
+    expect(mockCreateTagService).toHaveBeenCalledWith(req.body, "user-1");
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { tag },
+    });
+  });
+
+  it("should return tags and 200", async () => {
+    const tags = [{ id: "tag-1", name: "Bug" }];
+    req.query = { organizationId: "org-1" };
+    mockGetTagsService.mockResolvedValue(tags);
+
+    await getTagsController(req, res, next);
+
+    expect(mockGetTagsService).toHaveBeenCalledWith("org-1", "user-1");
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { tags },
+    });
   });
 
   it("should return a single ticket and 200", async () => {
@@ -349,6 +391,45 @@ describe("Ticket Controller", () => {
     await deleteTicketAttachmentController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should add a tag to a ticket and return 201", async () => {
+    const ticketTag = { ticketId: "ticket-1", tagId: "tag-1" };
+    req.params = { ticketId: "ticket-1" };
+    req.body = { tagId: "tag-1" };
+    mockAddTicketTagService.mockResolvedValue(ticketTag);
+
+    await addTicketTagController(req, res, next);
+
+    expect(mockAddTicketTagService).toHaveBeenCalledWith(
+      "ticket-1",
+      "tag-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { ticketTag },
+    });
+  });
+
+  it("should delete a ticket tag and return 200", async () => {
+    const ticketTag = { ticketId: "ticket-1", tagId: "tag-1" };
+    req.params = { ticketId: "ticket-1", tagId: "tag-1" };
+    mockDeleteTicketTagService.mockResolvedValue(ticketTag);
+
+    await deleteTicketTagController(req, res, next);
+
+    expect(mockDeleteTicketTagService).toHaveBeenCalledWith(
+      "ticket-1",
+      "tag-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { ticketTag },
+    });
   });
 
   it("should create an attachment and return 201", async () => {

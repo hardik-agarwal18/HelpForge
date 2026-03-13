@@ -5,48 +5,66 @@ const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
 const mockAssignTicket = jest.fn();
+const mockAddTagToTicket = jest.fn();
+const mockCreateTag = jest.fn();
+const mockDeleteTicketTag = jest.fn();
 const mockDeleteTicketAttachment = jest.fn();
 const mockDeleteTicketComment = jest.fn();
+const mockGetTagById = jest.fn();
+const mockGetTagByName = jest.fn();
 const mockGetTicketAttachmentById = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
+const mockGetTicketTagById = jest.fn();
 const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
+const mockGetTags = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
+  addTagToTicket: mockAddTagToTicket,
   createTicketActivityLog: mockCreateTicketActivityLog,
   createTicketAttachment: mockCreateTicketAttachment,
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
   assignTicket: mockAssignTicket,
+  createTag: mockCreateTag,
+  deleteTicketTag: mockDeleteTicketTag,
   deleteTicketAttachment: mockDeleteTicketAttachment,
   deleteTicketComment: mockDeleteTicketComment,
+  getTagById: mockGetTagById,
+  getTagByName: mockGetTagByName,
   getTicketAttachments: mockGetTicketAttachments,
+  getTicketTagById: mockGetTicketTagById,
   getTicketAttachmentById: mockGetTicketAttachmentById,
   getTicketById: mockGetTicketById,
   getTicketCommentById: mockGetTicketCommentById,
   getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
+  getTags: mockGetTags,
   updateTicketStatus: mockUpdateTicketStatus,
   updateTicket: mockUpdateTicket,
 }));
 
 const {
+  addTicketTagService,
   createTicketAttachmentService,
   assignTicketService,
+  createTagService,
   createTicketCommentService,
   createTicketService,
+  deleteTicketTagService,
   deleteTicketAttachmentService,
   deleteTicketCommentService,
   getTicketByIdService,
   getTicketAttachmentsService,
   getTicketCommentsService,
   getTicketsService,
+  getTagsService,
   updateTicketStatusService,
   updateTicketService,
 } = await import(
@@ -239,6 +257,87 @@ describe("Ticket Service", () => {
       );
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("createTagService", () => {
+    it("should allow elevated roles to create tags", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTagByName.mockResolvedValue(null);
+      mockCreateTag.mockResolvedValue({
+        id: "tag-1",
+        organizationId: "org-1",
+        name: "Bug",
+      });
+
+      const result = await createTagService(
+        { organizationId: "org-1", name: " Bug " },
+        "user-1",
+      );
+
+      expect(mockCreateTag).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        name: "Bug",
+      });
+      expect(result.id).toBe("tag-1");
+    });
+
+    it("should reject non-staff from creating tags", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        createTagService({ organizationId: "org-1", name: "Bug" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to create tags",
+      });
+    });
+
+    it("should reject duplicate tags in the same organization", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockGetTagByName.mockResolvedValue({
+        id: "tag-1",
+      });
+
+      await expect(
+        createTagService({ organizationId: "org-1", name: "Bug" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        message: "Tag already exists in this organization",
+      });
+    });
+  });
+
+  describe("getTagsService", () => {
+    it("should return tags for organization members", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTags.mockResolvedValue([{ id: "tag-1", name: "Bug" }]);
+
+      const result = await getTagsService("org-1", "user-1");
+
+      expect(mockGetTags).toHaveBeenCalledWith("org-1");
+      expect(result).toEqual([{ id: "tag-1", name: "Bug" }]);
+    });
+
+    it("should reject non-members from viewing tags", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(getTagsService("org-1", "user-1")).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view tags",
+      });
     });
   });
 
@@ -1258,6 +1357,123 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to delete this attachment",
+      });
+    });
+  });
+
+  describe("addTicketTagService", () => {
+    it("should allow elevated roles to add tags to tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockGetTagById.mockResolvedValue({
+        id: "tag-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketTagById.mockResolvedValue(null);
+      mockAddTagToTicket.mockResolvedValue({
+        ticketId: "ticket-1",
+        tagId: "tag-1",
+        tag: { name: "Bug" },
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await addTicketTagService("ticket-1", "tag-1", "user-1");
+
+      expect(mockAddTagToTicket).toHaveBeenCalledWith("ticket-1", "tag-1");
+      expect(result.tagId).toBe("tag-1");
+    });
+
+    it("should reject non-staff from tagging tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        addTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to tag this ticket",
+      });
+    });
+
+    it("should reject tags outside the ticket organization", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockGetTagById.mockResolvedValue({
+        id: "tag-1",
+        organizationId: "org-2",
+      });
+
+      await expect(
+        addTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Tag not found",
+      });
+    });
+  });
+
+  describe("deleteTicketTagService", () => {
+    it("should allow elevated roles to remove tags from tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTicketTagById.mockResolvedValue({
+        ticketId: "ticket-1",
+        tagId: "tag-1",
+        tag: { name: "Bug" },
+      });
+      mockDeleteTicketTag.mockResolvedValue({
+        ticketId: "ticket-1",
+        tagId: "tag-1",
+        tag: { name: "Bug" },
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await deleteTicketTagService("ticket-1", "tag-1", "user-1");
+
+      expect(mockDeleteTicketTag).toHaveBeenCalledWith("ticket-1", "tag-1");
+      expect(result.tagId).toBe("tag-1");
+    });
+
+    it("should reject missing ticket tags", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockGetTicketTagById.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Tag not found on this ticket",
       });
     });
   });

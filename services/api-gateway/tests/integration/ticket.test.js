@@ -304,6 +304,64 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("POST /api/tickets/tags", () => {
+    it("should allow elevated roles to create tags", async () => {
+      const response = await request(app)
+        .post("/api/tickets/tags")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({
+          organizationId: organization.id,
+          name: "Bug",
+        })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tag.name).toBe("Bug");
+    });
+
+    it("should reject members from creating tags", async () => {
+      const response = await request(app)
+        .post("/api/tickets/tags")
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({
+          organizationId: organization.id,
+          name: "Bug",
+        })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("You do not have permission to create tags");
+    });
+  });
+
+  describe("GET /api/tickets/tags", () => {
+    beforeEach(async () => {
+      await prisma.tag.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            name: "Bug",
+          },
+          {
+            organizationId: organization.id,
+            name: "Billing",
+          },
+        ],
+      });
+    });
+
+    it("should return tags for organization members", async () => {
+      const response = await request(app)
+        .get("/api/tickets/tags")
+        .set("Authorization", `Bearer ${user4Token}`)
+        .query({ organizationId: organization.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tags).toHaveLength(2);
+    });
+  });
+
   describe("GET /api/tickets/:ticketId", () => {
     let ticket;
 
@@ -1333,6 +1391,111 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe("Attachment not found");
+    });
+  });
+
+  describe("POST /api/tickets/:ticketId/tags", () => {
+    let ticket;
+    let tag;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Taggable ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+        },
+      });
+      tag = await prisma.tag.create({
+        data: {
+          organizationId: organization.id,
+          name: "Bug",
+        },
+      });
+    });
+
+    it("should allow elevated roles to add tags to tickets", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/tags`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({ tagId: tag.id })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticketTag.tagId).toBe(tag.id);
+    });
+
+    it("should reject members from tagging tickets", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/tags`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ tagId: tag.id })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to tag this ticket",
+      );
+    });
+  });
+
+  describe("DELETE /api/tickets/:ticketId/tags/:tagId", () => {
+    let ticket;
+    let tag;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Tagged ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+        },
+      });
+      tag = await prisma.tag.create({
+        data: {
+          organizationId: organization.id,
+          name: "Bug",
+        },
+      });
+      await prisma.ticketTag.create({
+        data: {
+          ticketId: ticket.id,
+          tagId: tag.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to remove tags from tickets", async () => {
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/tags/${tag.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticketTag.tagId).toBe(tag.id);
+    });
+
+    it("should return 404 when the tag is not on the ticket", async () => {
+      const otherTag = await prisma.tag.create({
+        data: {
+          organizationId: organization.id,
+          name: "Billing",
+        },
+      });
+
+      const response = await request(app)
+        .delete(`/api/tickets/${ticket.id}/tags/${otherTag.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Tag not found on this ticket");
     });
   });
 });

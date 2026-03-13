@@ -1,9 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  addTicketTagSchema,
   assignTicketSchema,
+  createTagSchema,
   createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
+  getTagsSchema,
   updateTicketStatusSchema,
   updateTicketSchema,
 } from "../../src/modules/tickets/ticket.validator.js";
@@ -138,6 +141,37 @@ describe("Ticket Validator", () => {
 
       expect(result.success).toBe(false);
       expect(result.error.issues[0].message).toBe("Invalid status");
+    });
+  });
+
+  describe("createTagSchema", () => {
+    it("should validate a valid tag payload", () => {
+      const result = createTagSchema.safeParse({
+        organizationId: "org-1",
+        name: "Bug",
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("getTagsSchema", () => {
+    it("should validate a valid get tags query", () => {
+      const result = getTagsSchema.safeParse({
+        organizationId: "org-1",
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("addTicketTagSchema", () => {
+    it("should validate a valid add tag payload", () => {
+      const result = addTicketTagSchema.safeParse({
+        tagId: "tag-1",
+      });
+
+      expect(result.success).toBe(true);
     });
   });
 });
