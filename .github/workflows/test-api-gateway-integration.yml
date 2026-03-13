@@ -61,4 +61,16 @@ jobs:
         shell: pwsh
 
       - name: Run integration tests
-        run: npm run test:integration
+        run: |
+          $duration = (Measure-Command { npm run test:integration }).TotalSeconds
+          "INTEGRATION_TEST_SECONDS=$([math]::Round($duration, 2))" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Publish integration test summary
+        run: |
+          @"
+          ## API Gateway Integration Tests
+
+          - Duration: ${{ env.INTEGRATION_TEST_SECONDS }} seconds
+          "@ >> $env:GITHUB_STEP_SUMMARY
+        shell: pwsh
