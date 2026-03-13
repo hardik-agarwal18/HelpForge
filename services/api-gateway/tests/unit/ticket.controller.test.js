@@ -4,6 +4,7 @@ const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
 const mockAssignTicketService = jest.fn();
+const mockDeleteTicketAttachmentService = jest.fn();
 const mockDeleteTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
@@ -17,6 +18,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   createTicketCommentService: mockCreateTicketCommentService,
   createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
+  deleteTicketAttachmentService: mockDeleteTicketAttachmentService,
   deleteTicketCommentService: mockDeleteTicketCommentService,
   getTicketAttachmentsService: mockGetTicketAttachmentsService,
   getTicketByIdService: mockGetTicketByIdService,
@@ -31,6 +33,7 @@ const {
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
+  deleteTicketAttachmentController,
   deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
@@ -315,6 +318,35 @@ describe("Ticket Controller", () => {
     mockDeleteTicketCommentService.mockRejectedValue(error);
 
     await deleteTicketCommentController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should delete an attachment and return 200", async () => {
+    const attachment = { id: "attachment-1", fileUrl: "https://example.com/file.pdf" };
+    req.params = { ticketId: "ticket-1", id: "attachment-1" };
+    mockDeleteTicketAttachmentService.mockResolvedValue(attachment);
+
+    await deleteTicketAttachmentController(req, res, next);
+
+    expect(mockDeleteTicketAttachmentService).toHaveBeenCalledWith(
+      "ticket-1",
+      "attachment-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { attachment },
+    });
+  });
+
+  it("should call next if delete ticket attachment service throws", async () => {
+    const error = new Error("Delete attachment failed");
+    req.params = { ticketId: "ticket-1", id: "attachment-1" };
+    mockDeleteTicketAttachmentService.mockRejectedValue(error);
+
+    await deleteTicketAttachmentController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

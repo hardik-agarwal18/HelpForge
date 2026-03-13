@@ -5,7 +5,9 @@ const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
 const mockAssignTicket = jest.fn();
+const mockDeleteTicketAttachment = jest.fn();
 const mockDeleteTicketComment = jest.fn();
+const mockGetTicketAttachmentById = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
 const mockGetTicketAttachments = jest.fn();
@@ -21,8 +23,10 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
   assignTicket: mockAssignTicket,
+  deleteTicketAttachment: mockDeleteTicketAttachment,
   deleteTicketComment: mockDeleteTicketComment,
   getTicketAttachments: mockGetTicketAttachments,
+  getTicketAttachmentById: mockGetTicketAttachmentById,
   getTicketById: mockGetTicketById,
   getTicketCommentById: mockGetTicketCommentById,
   getTicketComments: mockGetTicketComments,
@@ -37,6 +41,7 @@ const {
   assignTicketService,
   createTicketCommentService,
   createTicketService,
+  deleteTicketAttachmentService,
   deleteTicketCommentService,
   getTicketByIdService,
   getTicketAttachmentsService,
@@ -1100,6 +1105,159 @@ describe("Ticket Service", () => {
       await expect(getTicketAttachmentsService("ticket-1", "user-1")).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view attachments on this ticket",
+      });
+    });
+  });
+
+  describe("deleteTicketAttachmentService", () => {
+    it("should allow elevated roles to delete any attachment on the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-7",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockDeleteTicketAttachment.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-7",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await deleteTicketAttachmentService(
+        "ticket-1",
+        "attachment-1",
+        "user-1",
+      );
+
+      expect(mockDeleteTicketAttachment).toHaveBeenCalledWith("attachment-1");
+      expect(mockCreateTicketActivityLog).toHaveBeenCalledWith("ticket-1", {
+        actorId: "user-1",
+        action: "ATTACHMENT_DELETED",
+        oldValue: "https://example.com/file.pdf",
+      });
+      expect(result.id).toBe("attachment-1");
+    });
+
+    it("should allow members to delete their own attachments on accessible tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-1",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockDeleteTicketAttachment.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-1",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
+
+      const result = await deleteTicketAttachmentService(
+        "ticket-1",
+        "attachment-1",
+        "user-1",
+      );
+
+      expect(result.fileUrl).toBe("https://example.com/file.pdf");
+    });
+
+    it("should reject when the ticket does not exist", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject when the attachment does not exist for the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-2",
+      });
+
+      await expect(
+        deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Attachment not found",
+      });
+    });
+
+    it("should reject users outside the organization", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to delete attachments on this ticket",
+      });
+    });
+
+    it("should reject members deleting another user's attachment", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-2",
+        fileUrl: "https://example.com/file.pdf",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to delete this attachment",
       });
     });
   });
