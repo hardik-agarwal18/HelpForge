@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  assignTicketSchema,
   createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
@@ -98,6 +99,22 @@ describe("Ticket Validator", () => {
         fileType: "",
         fileSize: -1,
       });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("assignTicketSchema", () => {
+    it("should validate a valid assignment payload", () => {
+      const result = assignTicketSchema.safeParse({
+        assignedToId: "user-1",
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject a missing assignedToId", () => {
+      const result = assignTicketSchema.safeParse({});
 
       expect(result.success).toBe(false);
     });

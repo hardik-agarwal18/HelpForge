@@ -534,6 +534,93 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("PATCH /api/tickets/:ticketId/assign", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Ticket to assign",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to assign a ticket", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/assign`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({ assignedToId: user1.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.assignedToId).toBe(user1.id);
+
+      const updatedTicket = await prisma.ticket.findUnique({
+        where: { id: ticket.id },
+        include: { activities: true },
+      });
+      expect(updatedTicket.assignedToId).toBe(user1.id);
+      expect(
+        updatedTicket.activities.some(
+          (activity) => activity.action === "TICKET_ASSIGNED",
+        ),
+      ).toBe(true);
+    });
+
+    it("should reject members from assigning tickets", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/assign`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ assignedToId: user2.id })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to assign this ticket",
+      );
+    });
+
+    it("should reject assignees outside the organization", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/assign`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ assignedToId: user3.id })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "Assigned user must be a member of the organization",
+      );
+    });
+
+    it("should reject invalid payloads", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/assign`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Validation error");
+    });
+
+    it("should return 404 when the ticket does not exist", async () => {
+      const response = await request(app)
+        .patch("/api/tickets/non-existent-ticket-id/assign")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ assignedToId: user2.id })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
+
   describe("POST /api/tickets/:ticketId/comments", () => {
     let ticket;
 

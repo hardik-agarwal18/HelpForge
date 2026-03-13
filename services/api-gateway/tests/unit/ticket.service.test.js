@@ -4,6 +4,7 @@ const mockCreateTicket = jest.fn();
 const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
+const mockAssignTicket = jest.fn();
 const mockDeleteTicketComment = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
@@ -18,6 +19,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketAttachment: mockCreateTicketAttachment,
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
+  assignTicket: mockAssignTicket,
   deleteTicketComment: mockDeleteTicketComment,
   getTicketAttachments: mockGetTicketAttachments,
   getTicketById: mockGetTicketById,
@@ -30,6 +32,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
 
 const {
   createTicketAttachmentService,
+  assignTicketService,
   createTicketCommentService,
   createTicketService,
   deleteTicketCommentService,
@@ -414,6 +417,101 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 404,
         message: "Ticket not found",
+      });
+    });
+  });
+
+  describe("assignTicketService", () => {
+    it("should allow elevated roles to assign tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        assignedToId: "user-2",
+      });
+      mockGetTicketOrganizationMembership
+        .mockResolvedValueOnce({ id: "membership-1", role: "AGENT" })
+        .mockResolvedValueOnce({ id: "membership-2", role: "MEMBER" });
+      mockAssignTicket.mockResolvedValue({
+        id: "ticket-1",
+        assignedToId: "user-3",
+      });
+
+      const result = await assignTicketService("ticket-1", "user-3", "user-1");
+
+      expect(mockAssignTicket).toHaveBeenCalledWith(
+        "ticket-1",
+        "user-3",
+        "user-1",
+        "user-2",
+      );
+      expect(result).toEqual({
+        id: "ticket-1",
+        assignedToId: "user-3",
+      });
+    });
+
+    it("should reject missing tickets", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        assignTicketService("ticket-1", "user-2", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject members from assigning tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        assignTicketService("ticket-1", "user-2", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to assign this ticket",
+      });
+    });
+
+    it("should reject assignees outside the organization", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership
+        .mockResolvedValueOnce({ id: "membership-1", role: "ADMIN" })
+        .mockResolvedValueOnce(null);
+
+      await expect(
+        assignTicketService("ticket-1", "user-3", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Assigned user must be a member of the organization",
+      });
+    });
+
+    it("should throw when assignment fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership
+        .mockResolvedValueOnce({ id: "membership-1", role: "OWNER" })
+        .mockResolvedValueOnce({ id: "membership-2", role: "AGENT" });
+      mockAssignTicket.mockResolvedValue(null);
+
+      await expect(
+        assignTicketService("ticket-1", "user-2", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to assign ticket",
       });
     });
   });

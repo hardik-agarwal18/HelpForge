@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
+const mockAssignTicketService = jest.fn();
 const mockDeleteTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
@@ -11,6 +12,7 @@ const mockGetTicketsService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
+  assignTicketService: mockAssignTicketService,
   createTicketCommentService: mockCreateTicketCommentService,
   createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
@@ -23,6 +25,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
 }));
 
 const {
+  assignTicketController,
   createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
@@ -162,6 +165,37 @@ describe("Ticket Controller", () => {
     mockUpdateTicketService.mockRejectedValue(error);
 
     await updateTicketController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should assign a ticket and return 200", async () => {
+    const ticket = { id: "ticket-1", assignedToId: "user-2" };
+    req.params = { ticketId: "ticket-1" };
+    req.body = { assignedToId: "user-2" };
+    mockAssignTicketService.mockResolvedValue(ticket);
+
+    await assignTicketController(req, res, next);
+
+    expect(mockAssignTicketService).toHaveBeenCalledWith(
+      "ticket-1",
+      "user-2",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { ticket },
+    });
+  });
+
+  it("should call next if assign ticket service throws", async () => {
+    const error = new Error("Assign failed");
+    req.params = { ticketId: "ticket-1" };
+    req.body = { assignedToId: "user-2" };
+    mockAssignTicketService.mockRejectedValue(error);
+
+    await assignTicketController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });
