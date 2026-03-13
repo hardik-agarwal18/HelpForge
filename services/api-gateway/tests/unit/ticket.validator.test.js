@@ -4,6 +4,7 @@ import {
   createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
+  updateTicketStatusSchema,
   updateTicketSchema,
 } from "../../src/modules/tickets/ticket.validator.js";
 
@@ -117,6 +118,26 @@ describe("Ticket Validator", () => {
       const result = assignTicketSchema.safeParse({});
 
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe("updateTicketStatusSchema", () => {
+    it("should validate a valid status payload", () => {
+      const result = updateTicketStatusSchema.safeParse({
+        status: "in_progress",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data.status).toBe("IN_PROGRESS");
+    });
+
+    it("should reject an invalid status payload", () => {
+      const result = updateTicketStatusSchema.safeParse({
+        status: "pending",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error.issues[0].message).toBe("Invalid status");
     });
   });
 });

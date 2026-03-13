@@ -12,6 +12,7 @@ const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
+const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
@@ -27,6 +28,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
+  updateTicketStatus: mockUpdateTicketStatus,
   updateTicket: mockUpdateTicket,
 }));
 
@@ -40,6 +42,7 @@ const {
   getTicketAttachmentsService,
   getTicketCommentsService,
   getTicketsService,
+  updateTicketStatusService,
   updateTicketService,
 } = await import(
   "../../src/modules/tickets/ticket.service.js"
@@ -512,6 +515,91 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 500,
         message: "Failed to assign ticket",
+      });
+    });
+  });
+
+  describe("updateTicketStatusService", () => {
+    it("should allow elevated roles to update ticket status", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        status: "OPEN",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockUpdateTicketStatus.mockResolvedValue({
+        id: "ticket-1",
+        status: "RESOLVED",
+      });
+
+      const result = await updateTicketStatusService(
+        "ticket-1",
+        "resolved",
+        "user-1",
+      );
+
+      expect(mockUpdateTicketStatus).toHaveBeenCalledWith(
+        "ticket-1",
+        "RESOLVED",
+        "user-1",
+        "OPEN",
+      );
+      expect(result).toEqual({
+        id: "ticket-1",
+        status: "RESOLVED",
+      });
+    });
+
+    it("should reject missing tickets", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        updateTicketStatusService("ticket-1", "OPEN", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject members from updating ticket status", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        status: "OPEN",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        updateTicketStatusService("ticket-1", "RESOLVED", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to update this ticket status",
+      });
+    });
+
+    it("should throw when status update fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        status: "OPEN",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockUpdateTicketStatus.mockResolvedValue(null);
+
+      await expect(
+        updateTicketStatusService("ticket-1", "RESOLVED", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to update ticket status",
       });
     });
   });

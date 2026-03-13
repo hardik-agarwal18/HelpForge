@@ -621,6 +621,80 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("PATCH /api/tickets/:ticketId/status", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Ticket status update",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+        },
+      });
+    });
+
+    it("should allow elevated roles to update ticket status", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/status`)
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({ status: "resolved" })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.status).toBe("RESOLVED");
+
+      const updatedTicket = await prisma.ticket.findUnique({
+        where: { id: ticket.id },
+        include: { activities: true },
+      });
+      expect(updatedTicket.status).toBe("RESOLVED");
+      expect(
+        updatedTicket.activities.some(
+          (activity) => activity.action === "TICKET_STATUS_UPDATED",
+        ),
+      ).toBe(true);
+    });
+
+    it("should reject members from updating ticket status", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/status`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .send({ status: "resolved" })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to update this ticket status",
+      );
+    });
+
+    it("should reject invalid payloads", async () => {
+      const response = await request(app)
+        .patch(`/api/tickets/${ticket.id}/status`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ status: "pending" })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Validation error");
+    });
+
+    it("should return 404 when the ticket does not exist", async () => {
+      const response = await request(app)
+        .patch("/api/tickets/non-existent-ticket-id/status")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({ status: "resolved" })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
+
   describe("POST /api/tickets/:ticketId/comments", () => {
     let ticket;
 

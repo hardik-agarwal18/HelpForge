@@ -9,6 +9,7 @@ const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
+const mockUpdateTicketStatusService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
@@ -21,6 +22,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
+  updateTicketStatusService: mockUpdateTicketStatusService,
   updateTicketService: mockUpdateTicketService,
 }));
 
@@ -34,6 +36,7 @@ const {
   getTicketAttachmentsController,
   getTicketCommentsController,
   getTicketsController,
+  updateTicketStatusController,
   updateTicketController,
 } = await import(
   "../../src/modules/tickets/ticket.controller.js"
@@ -196,6 +199,37 @@ describe("Ticket Controller", () => {
     mockAssignTicketService.mockRejectedValue(error);
 
     await assignTicketController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should update ticket status and return 200", async () => {
+    const ticket = { id: "ticket-1", status: "RESOLVED" };
+    req.params = { ticketId: "ticket-1" };
+    req.body = { status: "resolved" };
+    mockUpdateTicketStatusService.mockResolvedValue(ticket);
+
+    await updateTicketStatusController(req, res, next);
+
+    expect(mockUpdateTicketStatusService).toHaveBeenCalledWith(
+      "ticket-1",
+      "resolved",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { ticket },
+    });
+  });
+
+  it("should call next if update ticket status service throws", async () => {
+    const error = new Error("Status update failed");
+    req.params = { ticketId: "ticket-1" };
+    req.body = { status: "resolved" };
+    mockUpdateTicketStatusService.mockRejectedValue(error);
+
+    await updateTicketStatusController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });
