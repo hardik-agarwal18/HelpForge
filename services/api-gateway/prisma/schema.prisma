@@ -47,9 +47,10 @@ model User {
   createdTickets  Ticket[] @relation("CreatedTickets")
   assignedTickets Ticket[] @relation("AssignedTickets")
 
-  comments    TicketComment[]
-  attachments TicketAttachment[]
-  activities  TicketActivityLog[]
+  comments       TicketComment[]
+  attachments    TicketAttachment[]
+  activities     TicketActivityLog[]
+  agentWorkloads AgentWorkload[]
 }
 
 model Organization {
@@ -57,9 +58,10 @@ model Organization {
   name      String   @unique
   createdAt DateTime @default(now())
 
-  memberships Membership[]
-  tickets     Ticket[]
-  tags        Tag[]
+  memberships    Membership[]
+  tickets        Ticket[]
+  tags           Tag[]
+  agentWorkloads AgentWorkload[]
 }
 
 model Membership {
@@ -69,6 +71,10 @@ model Membership {
   organizationId String
 
   role Role @default(MEMBER)
+
+  isAvailable       Boolean @default(true)
+  maxTicketsPerDay  Int?    @default(10)
+  maxTicketsPerWeek Int?    @default(50)
 
   user         User         @relation(fields: [userId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -107,6 +113,9 @@ model Ticket {
   @@index([organizationId])
   @@index([assignedToId])
   @@index([status])
+  @@index([organizationId, status])
+  @@index([organizationId, assignedToId])
+  @@index([createdAt])
 }
 
 model TicketComment {
@@ -147,8 +156,9 @@ model Tag {
   organizationId String
 
   organization Organization @relation(fields: [organizationId], references: [id])
+  tickets      TicketTag[]
 
-  tickets TicketTag[]
+  @@unique([organizationId, name])
 }
 
 model TicketTag {
@@ -170,9 +180,43 @@ model TicketActivityLog {
   actorId String
   actor   User   @relation(fields: [actorId], references: [id])
 
-  action   String
+  action   TicketActivityAction
   oldValue String?
   newValue String?
 
   createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model AgentWorkload {
+  id String @id @default(uuid())
+
+  userId         String
+  organizationId String
+
+  assignedToday    Int @default(0)
+  assignedThisWeek Int @default(0)
+
+  lastDailyReset  DateTime
+  lastWeeklyReset DateTime
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+enum TicketActivityAction {
+  TICKET_CREATED
+  TICKET_UPDATED
+  TICKET_ASSIGNED
+  TICKET_STATUS_UPDATED
+  COMMENT_ADDED
+  COMMENT_DELETED
+  ATTACHMENT_ADDED
+  ATTACHMENT_DELETED
+  TAG_ADDED
+  TAG_REMOVED
 }
