@@ -16,9 +16,11 @@ describe("Ticket API Integration Tests", () => {
   let user1;
   let user2;
   let user3;
+  let user4;
   let user1Token;
   let user2Token;
   let user3Token;
+  let user4Token;
   let organization;
 
   const signToken = (user) =>
@@ -41,10 +43,15 @@ describe("Ticket API Integration Tests", () => {
       email: `external_${Date.now()}@example.com`,
       name: "External User",
     });
+    user4 = await createTestUser({
+      email: `member_${Date.now()}@example.com`,
+      name: "Member User",
+    });
 
     user1Token = signToken(user1);
     user2Token = signToken(user2);
     user3Token = signToken(user3);
+    user4Token = signToken(user4);
 
     organization = await prisma.organization.create({
       data: {
@@ -58,6 +65,10 @@ describe("Ticket API Integration Tests", () => {
             {
               userId: user2.id,
               role: "AGENT",
+            },
+            {
+              userId: user4.id,
+              role: "MEMBER",
             },
           ],
         },
@@ -179,7 +190,7 @@ describe("Ticket API Integration Tests", () => {
       });
     });
 
-    it("should return tickets for an organization member", async () => {
+    it("should return all tickets for elevated roles", async () => {
       const response = await request(app)
         .get("/api/tickets")
         .set("Authorization", `Bearer ${user1Token}`)
@@ -188,6 +199,55 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.tickets).toHaveLength(2);
+    });
+
+    it("should only return created or assigned tickets for members", async () => {
+      await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Member created ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+        },
+      });
+
+      await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Member assigned ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+          assignedToId: user4.id,
+        },
+      });
+
+      await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Hidden from member",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+          assignedToId: user2.id,
+        },
+      });
+
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user4Token}`)
+        .query({ organizationId: organization.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(2);
+      expect(response.body.data.tickets.every((ticket) =>
+        ["Member created ticket", "Member assigned ticket"].includes(ticket.title),
+      )).toBe(true);
     });
 
     it("should filter tickets by query params", async () => {
@@ -240,6 +300,135 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe(
         "You do not have permission to view tickets for this organization",
+      );
+    });
+  });
+
+  describe("GET /api/tickets/:ticketId", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Single ticket lookup",
+          description: "Fetch this ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+          assignedToId: user2.id,
+          comments: {
+            create: {
+              authorId: user1.id,
+              message: "Initial note",
+            },
+          },
+        },
+      });
+    });
+
+    it("should return a ticket for elevated roles", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.id).toBe(ticket.id);
+      expect(response.body.data.ticket.comments).toHaveLength(1);
+    });
+
+    it("should allow members to view tickets they created and hide internal comments", async () => {
+      const memberTicket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Member ticket",
+          description: "Created by member",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          comments: {
+            create: [
+              {
+                authorId: user1.id,
+                message: "Public note",
+                isInternal: false,
+              },
+              {
+                authorId: user1.id,
+                message: "Internal note",
+                isInternal: true,
+              },
+            ],
+          },
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/tickets/${memberTicket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.comments).toHaveLength(1);
+      expect(response.body.data.ticket.comments[0].message).toBe("Public note");
+    });
+
+    it("should allow members to view tickets assigned to them", async () => {
+      const assignedTicket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Assigned to member",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+          assignedToId: user4.id,
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/tickets/${assignedTicket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.id).toBe(assignedTicket.id);
+    });
+
+    it("should reject members from viewing unrelated tickets", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view this ticket",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .get("/api/tickets/non-existent-ticket-id")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+
+    it("should return 403 for a user outside the organization", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}`)
+        .set("Authorization", `Bearer ${user3Token}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view this ticket",
       );
     });
   });

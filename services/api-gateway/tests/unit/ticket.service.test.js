@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicket = jest.fn();
+const mockGetTicketById = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicket: mockCreateTicket,
+  getTicketById: mockGetTicketById,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
   getTickets: mockGetTickets,
 }));
 
-const { createTicketService, getTicketsService } = await import(
+const { createTicketService, getTicketByIdService, getTicketsService } = await import(
   "../../src/modules/tickets/ticket.service.js"
 );
 
@@ -102,11 +104,11 @@ describe("Ticket Service", () => {
   });
 
   describe("getTicketsService", () => {
-    it("should return tickets for an organization member", async () => {
+    it("should return all matching tickets for elevated roles", async () => {
       const tickets = [{ id: "ticket-1" }, { id: "ticket-2" }];
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: "AGENT",
       });
       mockGetTickets.mockResolvedValue(tickets);
 
@@ -125,6 +127,26 @@ describe("Ticket Service", () => {
         priority: "HIGH",
       });
       expect(result).toEqual(tickets);
+    });
+
+    it("should restrict members to their created or assigned tickets", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
+
+      await getTicketsService(
+        {
+          organizationId: "org-1",
+        },
+        "user-1",
+      );
+
+      expect(mockGetTickets).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        OR: [{ createdById: "user-1" }, { assignedToId: "user-1" }],
+      });
     });
 
     it("should reject missing organizationId", async () => {
@@ -180,6 +202,88 @@ describe("Ticket Service", () => {
       );
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("getTicketByIdService", () => {
+    it("should return a ticket for elevated roles", async () => {
+      const ticket = {
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      };
+      mockGetTicketById.mockResolvedValue(ticket);
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+
+      const result = await getTicketByIdService("ticket-1", "user-1");
+
+      expect(mockGetTicketById).toHaveBeenCalledWith("ticket-1");
+      expect(result).toEqual(ticket);
+    });
+
+    it("should reject when the ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject users outside the organization from viewing a ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view this ticket",
+      });
+    });
+
+    it("should reject members who neither created nor were assigned the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view this ticket",
+      });
+    });
+
+    it("should hide internal comments from members who can view the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+        comments: [
+          { id: "comment-1", isInternal: false },
+          { id: "comment-2", isInternal: true },
+        ],
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      const result = await getTicketByIdService("ticket-1", "user-1");
+
+      expect(result.comments).toEqual([{ id: "comment-1", isInternal: false }]);
     });
   });
 });
