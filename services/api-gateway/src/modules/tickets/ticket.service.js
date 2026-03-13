@@ -16,6 +16,7 @@ import {
   getTicketById,
   getTicketCommentById,
   getTicketTagById,
+  getTicketActivities,
   getTicketComments,
   getTicketAttachments,
   getTicketOrganizationMembership,
@@ -492,6 +493,37 @@ export const getTicketCommentsService = async (ticketId, userId) => {
   const comments = await getTicketComments(ticketId);
 
   return filterCommentsForRole(comments || [], membership.role);
+};
+
+export const getTicketActivitiesService = async (ticketId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view activity on this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view activity on this ticket",
+    );
+  }
+
+  const activities = await getTicketActivities(ticketId);
+
+  return activities || [];
 };
 
 export const deleteTicketCommentService = async (ticketId, commentId, userId) => {

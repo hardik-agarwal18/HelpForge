@@ -309,6 +309,20 @@ export const getTicketComments = async (ticketId) => {
   });
 };
 
+export const getTicketActivities = async (ticketId) => {
+  return await prisma.ticketActivityLog.findMany({
+    where: {
+      ticketId,
+    },
+    include: {
+      actor: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+};
+
 export const getTicketCommentById = async (commentId) => {
   return await prisma.ticketComment.findUnique({
     where: {

@@ -10,6 +10,7 @@ import {
   deleteTicketAttachmentService,
   getTicketByIdService,
   getTicketAttachmentsService,
+  getTicketActivitiesService,
   getTicketCommentsService,
   getTicketsService,
   getTagsService,
@@ -160,6 +161,22 @@ export const getTicketCommentsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { comments },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTicketActivitiesController = async (req, res, next) => {
+  try {
+    const activities = await getTicketActivitiesService(
+      req.params.ticketId,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { activities },
     });
   } catch (error) {
     next(error);

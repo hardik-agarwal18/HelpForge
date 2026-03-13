@@ -13,6 +13,7 @@ import {
   deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
+  getTicketActivitiesController,
   getTicketCommentsController,
   getTicketsController,
   getTagsController,
@@ -50,6 +51,7 @@ router.patch(
   updateTicketStatusController,
 );
 router.patch("/:ticketId", authenticate, validate(updateTicketSchema), updateTicketController);
+router.get("/:ticketId/activity", authenticate, getTicketActivitiesController);
 router.get("/:ticketId/comments", authenticate, getTicketCommentsController);
 router.delete(
   "/:ticketId/comments/:commentId",
