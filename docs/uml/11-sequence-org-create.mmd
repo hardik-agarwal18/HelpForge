@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  actor U as Authenticated User
+  participant MW as Auth Middleware
+  participant R as Org Route
+  participant C as Org Controller
+  participant S as Org Service
+  participant Repo as Org Repo
+  participant DB as Prisma/PostgreSQL
+
+  U->>MW: POST /api/organizations + Bearer token
+  MW-->>R: req.user
+  R->>C: createOrganization(request)
+  C->>S: createOrganizationService(userId, payload)
+  S->>Repo: createOrganizationWithOwner(userId, orgData)
+  Repo->>DB: Organization.create + Membership.create(OWNER)
+  DB-->>Repo: organization and owner membership
+  Repo-->>S: created organization aggregate
+  S-->>C: result
+  C-->>U: 201 Created

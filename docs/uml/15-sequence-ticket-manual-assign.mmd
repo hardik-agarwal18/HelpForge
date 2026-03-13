@@ -1,0 +1,42 @@
+sequenceDiagram
+  autonumber
+  actor SUser as Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  SUser->>Auth: PATCH /api/tickets/:ticketId/assign
+  Auth-->>R: req.user
+  R->>C: assignTicket(request)
+  C->>S: assignTicketService(actorId, ticketId, assigneeId)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(actorId, orgId)
+  Repo->>DB: Membership.findUnique(actor)
+  DB-->>Repo: actor membership
+  Repo-->>S: actor membership
+
+  S->>S: canAssignTickets(actorRole)
+  alt Not allowed
+    S-->>C: throw 403
+    C-->>SUser: 403 response
+  else Allowed
+    S->>Repo: validateTicketAssignee(orgId, assigneeId)
+    Repo->>DB: Membership.findUnique(assignee)
+    DB-->>Repo: assignee membership
+    Repo-->>S: assignee membership
+
+    S->>Repo: assignTicket(ticketId, assigneeId, actorId)
+    Repo->>DB: Ticket.update + ActivityLog(TICKET_ASSIGNED)
+    DB-->>Repo: updated ticket
+    Repo-->>S: updated ticket
+    S-->>C: success
+    C-->>SUser: 200 OK
+  end

@@ -1,0 +1,24 @@
+flowchart TD
+  A([Start: Ticket Created]) --> B{Assigned agent provided?}
+  B -->|Yes| C[Validate assignee in organization]
+  C --> D{Valid assignee?}
+  D -->|No| X[Return validation error]
+  D -->|Yes| E[Persist ticket with assignedToId]
+
+  B -->|No| F[Load available AGENT memberships]
+  F --> G[Load agent workloads in parallel]
+  G --> H[Reset stale daily/weekly counters]
+  H --> I[Filter by capacity and availability]
+  I --> J{Eligible agents found?}
+  J -->|No| K[Persist unassigned ticket in OPEN status]
+  J -->|Yes| L[Select least-loaded eligible agent]
+  L --> M[Create assignment transaction]
+  M --> N[Increment workload counters]
+  N --> O[Update ticket assignedTo and status IN_PROGRESS]
+
+  E --> P[Create activity log: TICKET_CREATED]
+  K --> P
+  O --> Q[Create activity log: TICKET_ASSIGNED]
+  P --> R([End])
+  Q --> R
+  X --> R

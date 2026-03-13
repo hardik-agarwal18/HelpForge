@@ -1,0 +1,21 @@
+flowchart TD
+  A([Start: Role Update Request]) --> B[Authenticate JWT]
+  B --> C[Verify organization membership]
+  C --> D{Requester is OWNER or ADMIN?}
+  D -->|No| X[Reject with 403]
+  D -->|Yes| E[Load target membership]
+  E --> F{Target exists?}
+  F -->|No| Y[Reject with 404]
+  F -->|Yes| G[Normalize requested role]
+  G --> H{Role is valid enum?}
+  H -->|No| Z[Reject with 400]
+  H -->|Yes| I[Check role hierarchy policy]
+  I --> J{Policy allows transition?}
+  J -->|No| W[Reject with 403]
+  J -->|Yes| K[Update membership role]
+  K --> L([End: Updated])
+
+  X --> L
+  Y --> L
+  Z --> L
+  W --> L

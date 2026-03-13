@@ -1,0 +1,86 @@
+flowchart TB
+
+  subgraph API[api-gateway/src]
+    App[app.js]
+    Server[server.js]
+
+    subgraph ConfigPkg[config]
+      ConfigIndex[index.js]
+      DbConfig[database.config.js]
+    end
+
+    subgraph MiddlewarePkg[middleware]
+      AuthMW[auth.middleware.js]
+      ValidationMW[validation.middleware.js]
+    end
+
+    subgraph AuthPkg[modules/auth]
+      AuthRoutes[auth.routes.js]
+      AuthController[auth.controller.js]
+      AuthService[auth.service.js]
+      AuthRepo[auth.repo.js]
+      AuthValidator[auth.validator.js]
+    end
+
+    subgraph OrgPkg[modules/organization]
+      OrgRoutes[org.routes.js]
+      OrgController[org.controller.js]
+      OrgService[org.service.js]
+      OrgRepo[org.repo.js]
+      OrgMW[org.middleware.js]
+      OrgValidator[org.validator.js]
+      OrgConstants[org.constants.js]
+    end
+
+    subgraph TicketPkg[modules/tickets]
+      TicketRoutes[ticket.routes.js]
+      AgentRoutes[agent.routes.js]
+      TicketController[ticket.controller.js]
+      TicketService[ticket.service.js]
+      TicketRepo[ticket.repo.js]
+      TicketValidator[ticket.validator.js]
+      TicketConstants[ticket.constants.js]
+    end
+
+    subgraph UtilsPkg[utils]
+      ErrorHandler[errorHandler.js]
+    end
+  end
+
+  Server --> App
+  App --> AuthRoutes
+  App --> OrgRoutes
+  App --> TicketRoutes
+  App --> AgentRoutes
+  App --> ErrorHandler
+
+  AuthRoutes --> ValidationMW
+  AuthRoutes --> AuthMW
+  AuthRoutes --> AuthController
+  AuthController --> AuthService
+  AuthService --> AuthRepo
+  AuthService --> ConfigIndex
+  AuthRepo --> DbConfig
+  AuthRoutes --> AuthValidator
+
+  OrgRoutes --> ValidationMW
+  OrgRoutes --> AuthMW
+  OrgRoutes --> OrgMW
+  OrgRoutes --> OrgController
+  OrgController --> OrgService
+  OrgService --> OrgRepo
+  OrgService --> OrgConstants
+  OrgRepo --> DbConfig
+  OrgRoutes --> OrgValidator
+
+  TicketRoutes --> ValidationMW
+  TicketRoutes --> AuthMW
+  TicketRoutes --> TicketController
+  AgentRoutes --> AuthMW
+  AgentRoutes --> TicketController
+  TicketController --> TicketService
+  TicketService --> TicketRepo
+  TicketService --> TicketConstants
+  TicketRepo --> DbConfig
+  TicketRoutes --> TicketValidator
+  AgentRoutes --> TicketValidator

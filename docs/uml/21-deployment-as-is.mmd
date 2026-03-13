@@ -1,0 +1,18 @@
+flowchart TB
+  subgraph ClientLayer[Client Layer]
+    Web[Web/Frontend Client]
+  end
+
+  subgraph RuntimeLayer[Runtime Layer]
+    APIGW[api-gateway service\nNode.js + Express]
+  end
+
+  subgraph DataLayer[Data Layer]
+    PG[(PostgreSQL)]
+  end
+
+  Web -->|HTTPS| APIGW
+  APIGW -->|Prisma ORM| PG
+
+  Note1[Current implemented deployment view]
+  Note1 -.-> APIGW

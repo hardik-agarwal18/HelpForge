@@ -1,0 +1,165 @@
+classDiagram
+
+  class User {
+    +String id
+    +String email
+    +String password
+    +String name
+    +DateTime createdAt
+  }
+
+  class Organization {
+    +String id
+    +String name
+    +DateTime createdAt
+  }
+
+  class Membership {
+    +String id
+    +String userId
+    +String organizationId
+    +Role role
+    +Boolean isAvailable
+    +Int maxTicketsPerDay
+    +Int maxTicketsPerWeek
+    +DateTime createdAt
+  }
+
+  class Ticket {
+    +String id
+    +String title
+    +String description
+    +TicketStatus status
+    +Priority priority
+    +TicketSource source
+    +String organizationId
+    +String createdById
+    +String assignedToId
+    +DateTime createdAt
+    +DateTime updatedAt
+  }
+
+  class TicketComment {
+    +String id
+    +String ticketId
+    +String authorId
+    +String message
+    +Boolean isInternal
+    +DateTime createdAt
+  }
+
+  class TicketAttachment {
+    +String id
+    +String ticketId
+    +String uploadedBy
+    +String fileUrl
+    +String fileType
+    +Int fileSize
+    +DateTime createdAt
+  }
+
+  class Tag {
+    +String id
+    +String name
+    +String organizationId
+  }
+
+  class TicketTag {
+    +String ticketId
+    +String tagId
+  }
+
+  class TicketActivityLog {
+    +String id
+    +String ticketId
+    +String actorId
+    +TicketActivityAction action
+    +String oldValue
+    +String newValue
+    +DateTime createdAt
+  }
+
+  class AgentWorkload {
+    +String id
+    +String userId
+    +String organizationId
+    +Int assignedToday
+    +Int assignedThisWeek
+    +DateTime lastDailyReset
+    +DateTime lastWeeklyReset
+  }
+
+  class Role {
+    <<enumeration>>
+    OWNER
+    ADMIN
+    AGENT
+    MEMBER
+  }
+
+  class TicketStatus {
+    <<enumeration>>
+    OPEN
+    IN_PROGRESS
+    RESOLVED
+    CLOSED
+  }
+
+  class Priority {
+    <<enumeration>>
+    LOW
+    MEDIUM
+    HIGH
+    URGENT
+  }
+
+  class TicketSource {
+    <<enumeration>>
+    WEB
+    EMAIL
+    CHAT
+    API
+  }
+
+  class TicketActivityAction {
+    <<enumeration>>
+    TICKET_CREATED
+    TICKET_UPDATED
+    TICKET_ASSIGNED
+    TICKET_STATUS_UPDATED
+    COMMENT_ADDED
+    COMMENT_DELETED
+    ATTACHMENT_ADDED
+    ATTACHMENT_DELETED
+    TAG_ADDED
+    TAG_REMOVED
+  }
+
+  User "1" --> "*" Membership : memberOf
+  Organization "1" --> "*" Membership : hasMembers
+
+  Organization "1" --> "*" Ticket : owns
+  User "1" --> "*" Ticket : createdBy
+  User "1" --> "0..*" Ticket : assignedTo
+
+  Ticket "1" --> "*" TicketComment : hasComments
+  User "1" --> "*" TicketComment : authored
+
+  Ticket "1" --> "*" TicketAttachment : hasAttachments
+  User "1" --> "*" TicketAttachment : uploadedBy
+
+  Organization "1" --> "*" Tag : defines
+  Ticket "1" --> "*" TicketTag : taggedBy
+  Tag "1" --> "*" TicketTag : mapsTo
+
+  Ticket "1" --> "*" TicketActivityLog : activity
+  User "1" --> "*" TicketActivityLog : actor
+
+  User "1" --> "*" AgentWorkload : workload
+  Organization "1" --> "*" AgentWorkload : scopedWorkload
+
+  Membership --> Role : role
+  Ticket --> TicketStatus : status
+  Ticket --> Priority : priority
+  Ticket --> TicketSource : source
+  TicketActivityLog --> TicketActivityAction : action

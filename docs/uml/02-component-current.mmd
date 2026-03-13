@@ -1,0 +1,63 @@
+flowchart TB
+
+  Client[Client App]
+  API[API Gateway\nExpress Application]
+
+  subgraph CrossCutting[Cross-Cutting Components]
+    AuthMW[Auth Middleware]
+    ValidationMW[Validation Middleware]
+    ErrorHandler[Global Error Handler]
+    Config[Config + Environment]
+  end
+
+  subgraph Modules[Feature Modules]
+    AuthRoutes[Auth Routes]
+    OrgRoutes[Organization Routes]
+    TicketRoutes[Ticket Routes]
+    AgentRoutes[Agent Routes]
+
+    AuthController[Auth Controller]
+    OrgController[Organization Controller]
+    TicketController[Ticket Controller]
+
+    AuthService[Auth Service]
+    OrgService[Organization Service]
+    TicketService[Ticket Service]
+
+    AuthRepo[Auth Repo]
+    OrgRepo[Organization Repo]
+    TicketRepo[Ticket Repo]
+  end
+
+  Prisma[Prisma Client]
+  DB[(PostgreSQL)]
+
+  Client --> API
+  API --> AuthMW
+  API --> ValidationMW
+  API --> ErrorHandler
+  API --> Config
+
+  API --> AuthRoutes
+  API --> OrgRoutes
+  API --> TicketRoutes
+  API --> AgentRoutes
+
+  AuthRoutes --> AuthController
+  OrgRoutes --> OrgController
+  TicketRoutes --> TicketController
+  AgentRoutes --> TicketController
+
+  AuthController --> AuthService
+  OrgController --> OrgService
+  TicketController --> TicketService
+
+  AuthService --> AuthRepo
+  OrgService --> OrgRepo
+  TicketService --> TicketRepo
+
+  AuthRepo --> Prisma
+  OrgRepo --> Prisma
+  TicketRepo --> Prisma
+
+  Prisma --> DB

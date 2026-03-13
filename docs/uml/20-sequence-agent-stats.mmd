@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  actor A as Agent/Staff User
+  participant Auth as Auth Middleware
+  participant R as Agent Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  A->>Auth: GET /api/tickets/agents/me/stats?organizationId=...
+  Auth-->>R: req.user
+  R->>C: getMyAgentStats(request)
+  C->>S: getMyAgentStatsService(userId, organizationId)
+
+  S->>Repo: getStaffMemberships(userId)
+  Repo->>DB: Membership.findMany(userId, role in OWNER/ADMIN/AGENT)
+  DB-->>Repo: memberships
+  Repo-->>S: memberships
+
+  alt No staff membership in scope
+    S-->>C: throw 403
+    C-->>A: 403 response
+  else Allowed
+    S->>Repo: getAgentTickets(userId, organizationId)
+    Repo->>DB: Ticket.findMany(assignedToId=userId)
+    DB-->>Repo: assigned tickets
+    Repo-->>S: tickets
+
+    S->>S: aggregate by status and priority
+    S-->>C: stats summary
+    C-->>A: 200 OK
+  end

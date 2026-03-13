@@ -1,0 +1,72 @@
+flowchart LR
+
+  classDef actor fill:#fff,stroke:#333,stroke-width:1px;
+  classDef usecase fill:#eef7ff,stroke:#2b6cb0,stroke-width:1px;
+
+  Guest([Unauthenticated User]):::actor
+  Member([Member]):::actor
+  Agent([Agent]):::actor
+  Admin([Admin]):::actor
+  Owner([Owner]):::actor
+
+  U1((Register Account)):::usecase
+  U2((Login)):::usecase
+  U3((View My Profile)):::usecase
+  U4((Create Organization)):::usecase
+  U5((List Organizations)):::usecase
+  U6((Invite Member)):::usecase
+  U7((Update Member Role)):::usecase
+  U8((Create Ticket)):::usecase
+  U9((View Tickets)):::usecase
+  U10((Update Ticket)):::usecase
+  U11((Assign Ticket)):::usecase
+  U12((Update Ticket Status)):::usecase
+  U13((Add Internal Comment)):::usecase
+  U14((Manage Tags)):::usecase
+  U15((View Agent Workload)):::usecase
+  U16((Update Availability)):::usecase
+
+  Guest --> U1
+  Guest --> U2
+
+  Member --> U3
+  Member --> U5
+  Member --> U8
+  Member --> U9
+  Member --> U10
+
+  Agent --> U3
+  Agent --> U5
+  Agent --> U9
+  Agent --> U10
+  Agent --> U12
+  Agent --> U13
+  Agent --> U15
+  Agent --> U16
+
+  Admin --> U3
+  Admin --> U4
+  Admin --> U5
+  Admin --> U6
+  Admin --> U7
+  Admin --> U9
+  Admin --> U10
+  Admin --> U11
+  Admin --> U12
+  Admin --> U13
+  Admin --> U14
+  Admin --> U15
+
+  Owner --> U3
+  Owner --> U4
+  Owner --> U5
+  Owner --> U6
+  Owner --> U7
+  Owner --> U9
+  Owner --> U10
+  Owner --> U11
+  Owner --> U12
+  Owner --> U13
+  Owner --> U14
+  Owner --> U15
+  Owner --> U16

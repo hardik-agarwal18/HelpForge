@@ -1,0 +1,35 @@
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant R as Auth Route
+  participant C as Auth Controller
+  participant S as Auth Service
+  participant Repo as Auth Repo
+  participant DB as Prisma/PostgreSQL
+  participant B as bcrypt
+  participant J as JWT
+
+  U->>R: POST /api/auth/login
+  R->>C: login(request)
+  C->>S: loginUser(email, password)
+  S->>Repo: findUserByEmail(email)
+  Repo->>DB: User.findUnique(email)
+  DB-->>Repo: user or null
+  Repo-->>S: result
+
+  alt User not found
+    S-->>C: throw 401 unauthorized
+    C-->>U: 401 response
+  else User found
+    S->>B: compare(password, user.password)
+    B-->>S: isValid
+    alt Invalid password
+      S-->>C: throw 401 unauthorized
+      C-->>U: 401 response
+    else Valid password
+      S->>J: sign({ userId, email })
+      J-->>S: token
+      S-->>C: { user, token }
+      C-->>U: 200 OK
+    end
+  end

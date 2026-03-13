@@ -1,0 +1,51 @@
+sequenceDiagram
+  autonumber
+  actor M as Member/Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  M->>Auth: POST /api/tickets
+  Auth-->>R: req.user
+  R->>C: createTicket(request)
+  C->>S: createTicketService(userId, payload)
+
+  S->>Repo: getTicketOrganizationMembership(userId, orgId)
+  Repo->>DB: Membership.findUnique(userId_orgId)
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  S->>Repo: createTicket(ticketData)
+  Repo->>DB: Ticket.create + ActivityLog(TICKET_CREATED)
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  alt assignedToId not provided
+    par Load candidate data
+      S->>Repo: getOrganizationAvailableAgents(orgId)
+      Repo->>DB: Membership.findMany(role=AGENT, isAvailable=true)
+      DB-->>Repo: available agents
+      Repo-->>S: agents
+    and
+      S->>Repo: getOrganizationAgentWorkloads(orgId)
+      Repo->>DB: AgentWorkload.findMany(orgId)
+      DB-->>Repo: workloads
+      Repo-->>S: workloads
+    end
+
+    S->>S: filter eligible by daily/weekly limits
+    alt Eligible agent exists
+      S->>Repo: autoAssignTicket(ticketId, selectedAgentId)
+      Repo->>DB: transaction(update ticket, upsert workload, activity log)
+      DB-->>Repo: assigned ticket
+      Repo-->>S: assigned ticket
+    else No eligible agent
+      S->>S: keep ticket OPEN and unassigned
+    end
+  end
+
+  S-->>C: ticket response
+  C-->>M: 201 Created

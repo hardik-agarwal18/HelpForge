@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  actor A as Owner/Admin
+  participant Auth as Auth Middleware
+  participant OrgMW as Org Middleware
+  participant R as Org Route
+  participant C as Org Controller
+  participant S as Org Service
+  participant Repo as Org Repo
+  participant DB as Prisma/PostgreSQL
+
+  A->>Auth: PATCH /api/organizations/:orgId/members/:userId
+  Auth-->>OrgMW: req.user
+  OrgMW->>DB: Membership.findUnique(userId, orgId)
+  DB-->>OrgMW: requester membership
+  OrgMW-->>R: requester has access
+
+  R->>C: inviteMember(payload)
+  C->>S: inviteMemberInOrganizationService(...)
+  S->>S: normalizeRole(requestedRole)
+  S->>S: assertCanInviteRole(requesterRole, requestedRole)
+
+  alt Role not permitted
+    S-->>C: throw 403
+    C-->>A: 403 response
+  else Role permitted
+    S->>Repo: inviteMemberInOrganization(...)
+    Repo->>DB: Membership.create(userId, orgId, role)
+    DB-->>Repo: membership
+    Repo-->>S: membership
+    S-->>C: success
+    C-->>A: 200 OK
+  end

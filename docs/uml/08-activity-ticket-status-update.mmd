@@ -1,0 +1,17 @@
+flowchart TD
+  A([Start: Status Update Request]) --> B[Authenticate and validate payload]
+  B --> C[Load ticket by ticketId]
+  C --> D{Ticket exists?}
+  D -->|No| X[Return 404]
+  D -->|Yes| E[Verify requester membership in ticket organization]
+  E --> F{Can edit this ticket?}
+  F -->|No| Y[Return 403]
+  F -->|Yes| G{New status differs from current?}
+  G -->|No| Z[Return unchanged ticket]
+  G -->|Yes| H[Update ticket status]
+  H --> I[Create activity log with old/new status]
+  I --> J([End: Updated])
+
+  X --> J
+  Y --> J
+  Z --> J

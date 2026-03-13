@@ -1,0 +1,54 @@
+sequenceDiagram
+  autonumber
+  actor U as Member/Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  U->>Auth: POST /api/tickets/:ticketId/comments
+  Auth-->>R: req.user
+  R->>C: createTicketComment(request)
+  C->>S: createTicketCommentService(actorId, ticketId, message, isInternal)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(actorId, orgId)
+  Repo->>DB: Membership.findUnique(actor)
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  alt isInternal = true
+    S->>S: canCreateInternalComment(role)
+    alt Not allowed
+      S-->>C: throw 403
+      C-->>U: 403 response
+    else Allowed
+      S->>Repo: createTicketComment(...)
+      Repo->>DB: TicketComment.create
+      DB-->>Repo: comment
+      Repo-->>S: comment
+      S->>Repo: createTicketActivityLog(COMMENT_ADDED)
+      Repo->>DB: TicketActivityLog.create
+      DB-->>Repo: log
+      Repo-->>S: log
+      S-->>C: success
+      C-->>U: 201 Created
+    end
+  else isInternal = false
+    S->>Repo: createTicketComment(...)
+    Repo->>DB: TicketComment.create
+    DB-->>Repo: comment
+    Repo-->>S: comment
+    S->>Repo: createTicketActivityLog(COMMENT_ADDED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: log
+    Repo-->>S: log
+    S-->>C: success
+    C-->>U: 201 Created
+  end

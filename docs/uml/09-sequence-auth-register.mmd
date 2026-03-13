@@ -1,0 +1,34 @@
+sequenceDiagram
+  autonumber
+  actor U as Unauthenticated User
+  participant R as Auth Route
+  participant C as Auth Controller
+  participant S as Auth Service
+  participant Repo as Auth Repo
+  participant DB as Prisma/PostgreSQL
+  participant B as bcrypt
+  participant J as JWT
+
+  U->>R: POST /api/auth/register
+  R->>C: register(request)
+  C->>S: registerUser(payload)
+  S->>Repo: findUserByEmail(email)
+  Repo->>DB: User.findUnique(email)
+  DB-->>Repo: existing user or null
+  Repo-->>S: result
+
+  alt Email already exists
+    S-->>C: throw 409 conflict
+    C-->>U: 409 response
+  else New user
+    S->>B: hash(password)
+    B-->>S: hashedPassword
+    S->>Repo: createUser(email, hashedPassword, name)
+    Repo->>DB: User.create(...)
+    DB-->>Repo: persisted user
+    Repo-->>S: user
+    S->>J: sign({ userId, email })
+    J-->>S: access token
+    S-->>C: { user, token }
+    C-->>U: 201 Created
+  end
