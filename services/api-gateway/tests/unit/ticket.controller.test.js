@@ -11,6 +11,7 @@ const mockDeleteTicketAttachmentService = jest.fn();
 const mockDeleteTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
 const mockGetTicketAttachmentsService = jest.fn();
+const mockGetTicketActivitiesService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
 const mockGetTagsService = jest.fn();
@@ -28,6 +29,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   deleteTicketAttachmentService: mockDeleteTicketAttachmentService,
   deleteTicketCommentService: mockDeleteTicketCommentService,
   getTicketAttachmentsService: mockGetTicketAttachmentsService,
+  getTicketActivitiesService: mockGetTicketActivitiesService,
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
@@ -48,6 +50,7 @@ const {
   deleteTicketCommentController,
   getTicketByIdController,
   getTicketAttachmentsController,
+  getTicketActivitiesController,
   getTicketCommentsController,
   getTicketsController,
   getTagsController,
@@ -331,6 +334,34 @@ describe("Ticket Controller", () => {
     mockGetTicketCommentsService.mockRejectedValue(error);
 
     await getTicketCommentsController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should return activities and 200", async () => {
+    const activities = [{ id: "activity-1" }];
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketActivitiesService.mockResolvedValue(activities);
+
+    await getTicketActivitiesController(req, res, next);
+
+    expect(mockGetTicketActivitiesService).toHaveBeenCalledWith(
+      "ticket-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { activities },
+    });
+  });
+
+  it("should call next if get ticket activities service throws", async () => {
+    const error = new Error("Activity failed");
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketActivitiesService.mockRejectedValue(error);
+
+    await getTicketActivitiesController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

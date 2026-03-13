@@ -932,6 +932,97 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("GET /api/tickets/:ticketId/activity", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Activity ticket",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user4.id,
+          assignedToId: user2.id,
+        },
+      });
+
+      await prisma.ticketActivityLog.createMany({
+        data: [
+          {
+            ticketId: ticket.id,
+            actorId: user1.id,
+            action: "TICKET_CREATED",
+            newValue: "Activity ticket",
+          },
+          {
+            ticketId: ticket.id,
+            actorId: user2.id,
+            action: "TICKET_STATUS_UPDATED",
+            oldValue: "OPEN",
+            newValue: "RESOLVED",
+          },
+        ],
+      });
+    });
+
+    it("should return activity for elevated roles", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/activity`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.activities).toHaveLength(2);
+    });
+
+    it("should allow members to view activity on accessible tickets", async () => {
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/activity`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.activities).toHaveLength(2);
+    });
+
+    it("should reject unrelated members from viewing activity", async () => {
+      const unrelatedMember = await createTestUser({
+        email: `member7_${Date.now()}@example.com`,
+        name: "Seventh Member",
+      });
+      const unrelatedMemberToken = signToken(unrelatedMember);
+      await prisma.membership.create({
+        data: {
+          userId: unrelatedMember.id,
+          organizationId: organization.id,
+          role: "MEMBER",
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/tickets/${ticket.id}/activity`)
+        .set("Authorization", `Bearer ${unrelatedMemberToken}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view activity on this ticket",
+      );
+    });
+
+    it("should return 404 when ticket does not exist", async () => {
+      const response = await request(app)
+        .get("/api/tickets/non-existent-ticket-id/activity")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
+
   describe("DELETE /api/tickets/:ticketId/comments/:commentId", () => {
     let ticket;
     let ownMemberComment;

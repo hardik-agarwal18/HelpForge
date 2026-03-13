@@ -16,6 +16,7 @@ const mockGetTicketAttachmentById = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
 const mockGetTicketTagById = jest.fn();
+const mockGetTicketActivities = jest.fn();
 const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
@@ -39,6 +40,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   getTagByName: mockGetTagByName,
   getTicketAttachments: mockGetTicketAttachments,
   getTicketTagById: mockGetTicketTagById,
+  getTicketActivities: mockGetTicketActivities,
   getTicketAttachmentById: mockGetTicketAttachmentById,
   getTicketById: mockGetTicketById,
   getTicketCommentById: mockGetTicketCommentById,
@@ -62,6 +64,7 @@ const {
   deleteTicketCommentService,
   getTicketByIdService,
   getTicketAttachmentsService,
+  getTicketActivitiesService,
   getTicketCommentsService,
   getTicketsService,
   getTagsService,
@@ -875,6 +878,63 @@ describe("Ticket Service", () => {
       await expect(getTicketCommentsService("ticket-1", "user-1")).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view comments on this ticket",
+      });
+    });
+  });
+
+  describe("getTicketActivitiesService", () => {
+    it("should return activities for elevated roles", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockGetTicketActivities.mockResolvedValue([{ id: "activity-1" }]);
+
+      const result = await getTicketActivitiesService("ticket-1", "user-1");
+
+      expect(mockGetTicketActivities).toHaveBeenCalledWith("ticket-1");
+      expect(result).toEqual([{ id: "activity-1" }]);
+    });
+
+    it("should allow members to view activity on accessible tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTicketActivities.mockResolvedValue([{ id: "activity-1" }]);
+
+      const result = await getTicketActivitiesService("ticket-1", "user-1");
+
+      expect(result).toEqual([{ id: "activity-1" }]);
+    });
+
+    it("should reject unrelated members from viewing activity", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        getTicketActivitiesService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view activity on this ticket",
       });
     });
   });
