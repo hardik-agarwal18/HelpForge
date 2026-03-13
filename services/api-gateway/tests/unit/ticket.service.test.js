@@ -12,6 +12,7 @@ const mockDeleteTicketAttachment = jest.fn();
 const mockDeleteTicketComment = jest.fn();
 const mockGetTagById = jest.fn();
 const mockGetTagByName = jest.fn();
+const mockGetOrganizationAgentsWithLoad = jest.fn();
 const mockGetTicketAttachmentById = jest.fn();
 const mockGetTicketById = jest.fn();
 const mockGetTicketCommentById = jest.fn();
@@ -40,6 +41,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   deleteTicketComment: mockDeleteTicketComment,
   getTagById: mockGetTagById,
   getTagByName: mockGetTagByName,
+  getOrganizationAgentsWithLoad: mockGetOrganizationAgentsWithLoad,
   getTicketAttachments: mockGetTicketAttachments,
   getTicketTagById: mockGetTicketTagById,
   getTicketActivities: mockGetTicketActivities,
@@ -89,7 +91,11 @@ describe("Ticket Service", () => {
     mockGetTicketOrganizationMembership
       .mockResolvedValueOnce({ id: "membership-1", role: "MEMBER" })
       .mockResolvedValueOnce({ id: "membership-2", role: "AGENT" });
-    mockCreateTicket.mockResolvedValue({ id: "ticket-1", title: "Login issue" });
+    mockCreateTicket.mockResolvedValue({
+      id: "ticket-1",
+      title: "Login issue",
+      assignedToId: "user-2",
+    });
 
     const result = await createTicketService(
       {
@@ -106,7 +112,90 @@ describe("Ticket Service", () => {
       assignedToId: "user-2",
       createdById: "user-1",
     });
-    expect(result).toEqual({ id: "ticket-1", title: "Login issue" });
+    expect(result).toEqual({
+      id: "ticket-1",
+      title: "Login issue",
+      assignedToId: "user-2",
+    });
+  });
+
+  it("should auto-assign a newly created ticket to the least-loaded agent", async () => {
+    mockGetTicketOrganizationMembership.mockResolvedValue({
+      id: "membership-1",
+      role: "MEMBER",
+    });
+    mockCreateTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: null,
+    });
+    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+      {
+        userId: "agent-1",
+        user: { assignedTickets: [{ id: "t-1" }, { id: "t-2" }] },
+      },
+      {
+        userId: "agent-2",
+        user: { assignedTickets: [{ id: "t-3" }] },
+      },
+    ]);
+    mockAssignTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: "agent-2",
+    });
+
+    const result = await createTicketService(
+      {
+        organizationId: "org-1",
+        title: "Login issue",
+      },
+      "user-1",
+    );
+
+    expect(mockAssignTicket).toHaveBeenCalledWith(
+      "ticket-1",
+      "agent-2",
+      "user-1",
+      null,
+    );
+    expect(result.assignedToId).toBe("agent-2");
+  });
+
+  it("should leave the ticket unassigned when no agent has capacity", async () => {
+    mockGetTicketOrganizationMembership.mockResolvedValue({
+      id: "membership-1",
+      role: "MEMBER",
+    });
+    mockCreateTicket.mockResolvedValue({
+      id: "ticket-1",
+      organizationId: "org-1",
+      title: "Login issue",
+      assignedToId: null,
+    });
+    mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+      {
+        userId: "agent-1",
+        user: {
+          assignedTickets: Array.from({ length: 5 }, (_, index) => ({
+            id: `ticket-${index}`,
+          })),
+        },
+      },
+    ]);
+
+    const result = await createTicketService(
+      {
+        organizationId: "org-1",
+        title: "Login issue",
+      },
+      "user-1",
+    );
+
+    expect(mockAssignTicket).not.toHaveBeenCalled();
+    expect(result.assignedToId).toBeNull();
   });
 
   it("should reject users outside the organization", async () => {

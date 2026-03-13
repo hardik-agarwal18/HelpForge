@@ -19,6 +19,7 @@ import {
   getTicketActivities,
   getTicketComments,
   getTicketAttachments,
+  getOrganizationAgentsWithLoad,
   getTicketOrganizationMembership,
   getTicketMembershipsByUserId,
   getTickets,
@@ -28,6 +29,8 @@ import {
   updateTicket,
 } from "./ticket.repo.js";
 import {
+  AUTO_ASSIGNABLE_STATUSES,
+  AUTO_ASSIGNMENT_MAX_ACTIVE_TICKETS,
   TICKET_PRIORITIES,
   TICKET_ROLE_POLICIES,
   TICKET_SOURCES,
@@ -237,6 +240,30 @@ const validateTicketAssignee = async (organizationId, assignedToId) => {
   }
 };
 
+const findBestAutoAssignAgent = async (organizationId) => {
+  const agents = await getOrganizationAgentsWithLoad(
+    organizationId,
+    AUTO_ASSIGNABLE_STATUSES,
+  );
+
+  const availableAgents = agents.filter(
+    (membership) =>
+      membership.user &&
+      membership.user.assignedTickets.length < AUTO_ASSIGNMENT_MAX_ACTIVE_TICKETS,
+  );
+
+  if (availableAgents.length === 0) {
+    return null;
+  }
+
+  const [leastLoadedAgent] = availableAgents.sort(
+    (left, right) =>
+      left.user.assignedTickets.length - right.user.assignedTickets.length,
+  );
+
+  return leastLoadedAgent.userId;
+};
+
 export const createTicketService = async (ticketData, userId) => {
   const normalizedTicketData = normalizeTicketFields(ticketData);
   const membership = await getTicketOrganizationMembership(
@@ -265,7 +292,28 @@ export const createTicketService = async (ticketData, userId) => {
     throw new ApiError(500, "Failed to create ticket");
   }
 
-  return ticket;
+  if (ticket.assignedToId) {
+    return ticket;
+  }
+
+  const autoAssignedUserId = await findBestAutoAssignAgent(ticket.organizationId);
+
+  if (!autoAssignedUserId) {
+    return ticket;
+  }
+
+  const autoAssignedTicket = await assignTicket(
+    ticket.id,
+    autoAssignedUserId,
+    userId,
+    ticket.assignedToId ?? null,
+  );
+
+  if (!autoAssignedTicket || !autoAssignedTicket.id) {
+    throw new ApiError(500, "Failed to auto-assign ticket");
+  }
+
+  return autoAssignedTicket;
 };
 
 export const createTagService = async (tagData, userId) => {

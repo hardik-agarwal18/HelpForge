@@ -113,6 +113,55 @@ describe("Ticket API Integration Tests", () => {
       expect(ticket.activities[0].action).toBe("TICKET_CREATED");
     });
 
+    it("should auto-assign a new unassigned ticket to the least-loaded agent", async () => {
+      const secondAgent = await createTestUser({
+        email: `agent2_${Date.now()}@example.com`,
+        name: "Second Agent",
+      });
+      await prisma.membership.create({
+        data: {
+          userId: secondAgent.id,
+          organizationId: organization.id,
+          role: "AGENT",
+        },
+      });
+
+      await prisma.ticket.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            title: "Busy agent ticket 1",
+            priority: "MEDIUM",
+            status: "OPEN",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+          {
+            organizationId: organization.id,
+            title: "Busy agent ticket 2",
+            priority: "MEDIUM",
+            status: "IN_PROGRESS",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+        ],
+      });
+
+      const response = await request(app)
+        .post("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({
+          organizationId: organization.id,
+          title: "Auto assign me",
+        })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.assignedToId).toBe(secondAgent.id);
+    });
+
     it("should return 400 for invalid payload", async () => {
       const response = await request(app)
         .post("/api/tickets")
