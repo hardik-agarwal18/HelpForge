@@ -202,5 +202,113 @@ describe("Auth Service Unit Tests", () => {
         { expiresIn: "7d" },
       );
     });
+
+    it("should throw 500 error when user password is corrupted", async () => {
+      // Arrange - user exists but password field is null/undefined
+      mockFindUserByEmail.mockResolvedValue({
+        ...mockUser,
+        password: null,
+      });
+
+      // Act & Assert
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
+        ApiError,
+      );
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
+        "User password data is corrupted",
+      );
+      expect(mockBcryptCompare).not.toHaveBeenCalled();
+      expect(mockJwtSign).not.toHaveBeenCalled();
+    });
+
+    it("should throw 500 error when JWT generation fails", async () => {
+      // Arrange
+      mockFindUserByEmail.mockResolvedValue(mockUser);
+      mockBcryptCompare.mockResolvedValue(true);
+      mockJwtSign.mockReturnValue(null); // JWT generation fails
+
+      // Act & Assert
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
+        ApiError,
+      );
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
+        "Failed to generate authentication token",
+      );
+    });
+  });
+
+  describe("registerUser - Error Scenarios", () => {
+    const mockUserData = {
+      email: "test@example.com",
+      password: "Password123!",
+      name: "Test User",
+    };
+
+    it("should throw 500 error when password hashing fails", async () => {
+      // Arrange
+      mockFindUserByEmail.mockResolvedValue(null);
+      mockBcryptHash.mockResolvedValue(null); // Hash fails
+
+      // Act & Assert
+      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
+      await expect(registerUser(mockUserData)).rejects.toThrow(
+        "Failed to hash password",
+      );
+      expect(mockCreateUser).not.toHaveBeenCalled();
+      expect(mockJwtSign).not.toHaveBeenCalled();
+    });
+
+    it("should throw 500 error when user creation fails - no id", async () => {
+      // Arrange
+      mockFindUserByEmail.mockResolvedValue(null);
+      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockCreateUser.mockResolvedValue(null); // Creation fails
+
+      // Act & Assert
+      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
+      await expect(registerUser(mockUserData)).rejects.toThrow(
+        "Failed to create user",
+      );
+      expect(mockJwtSign).not.toHaveBeenCalled();
+    });
+
+    it("should throw 500 error when user creation returns no id", async () => {
+      // Arrange
+      mockFindUserByEmail.mockResolvedValue(null);
+      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockCreateUser.mockResolvedValue({
+        email: "test@example.com",
+        name: "Test User",
+        // Missing id field
+      });
+
+      // Act & Assert
+      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
+      await expect(registerUser(mockUserData)).rejects.toThrow(
+        "Failed to create user",
+      );
+      expect(mockJwtSign).not.toHaveBeenCalled();
+    });
+
+    it("should throw 500 error when JWT generation fails", async () => {
+      // Arrange
+      const mockCreatedUser = {
+        id: "user-123",
+        email: "test@example.com",
+        name: "Test User",
+        createdAt: new Date(),
+      };
+
+      mockFindUserByEmail.mockResolvedValue(null);
+      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockCreateUser.mockResolvedValue(mockCreatedUser);
+      mockJwtSign.mockReturnValue(null); // JWT generation fails
+
+      // Act & Assert
+      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
+      await expect(registerUser(mockUserData)).rejects.toThrow(
+        "Failed to generate authentication token",
+      );
+    });
   });
 });
