@@ -1,11 +1,46 @@
 import { ApiError } from "../../utils/errorHandler.js";
-import { createTicket, getTicketOrganizationMembership } from "./ticket.repo.js";
+import {
+  createTicket,
+  getTicketOrganizationMembership,
+  getTickets,
+} from "./ticket.repo.js";
+import {
+  TICKET_PRIORITIES,
+  TICKET_SOURCES,
+  TICKET_STATUSES,
+} from "./ticket.constants.js";
 
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
   priority: ticketData.priority?.toUpperCase(),
   source: ticketData.source?.toUpperCase(),
 });
+
+const normalizeTicketFilters = (filters) => ({
+  organizationId: filters.organizationId,
+  status: filters.status?.toUpperCase(),
+  priority: filters.priority?.toUpperCase(),
+  source: filters.source?.toUpperCase(),
+  assignedToId: filters.assignedToId,
+});
+
+const validateListFilters = (filters) => {
+  if (!filters.organizationId) {
+    throw new ApiError(400, "Organization ID is required");
+  }
+
+  if (filters.status && !TICKET_STATUSES.includes(filters.status)) {
+    throw new ApiError(400, "Invalid status");
+  }
+
+  if (filters.priority && !TICKET_PRIORITIES.includes(filters.priority)) {
+    throw new ApiError(400, "Invalid priority");
+  }
+
+  if (filters.source && !TICKET_SOURCES.includes(filters.source)) {
+    throw new ApiError(400, "Invalid source");
+  }
+};
 
 const validateTicketAssignee = async (organizationId, assignedToId) => {
   if (!assignedToId) {
@@ -51,4 +86,35 @@ export const createTicketService = async (ticketData, userId) => {
   }
 
   return ticket;
+};
+
+export const getTicketsService = async (query, userId) => {
+  const normalizedFilters = normalizeTicketFilters(query);
+  validateListFilters(normalizedFilters);
+
+  const membership = await getTicketOrganizationMembership(
+    normalizedFilters.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view tickets for this organization",
+    );
+  }
+
+  const tickets = await getTickets({
+    organizationId: normalizedFilters.organizationId,
+    ...(normalizedFilters.status ? { status: normalizedFilters.status } : {}),
+    ...(normalizedFilters.priority
+      ? { priority: normalizedFilters.priority }
+      : {}),
+    ...(normalizedFilters.source ? { source: normalizedFilters.source } : {}),
+    ...(normalizedFilters.assignedToId
+      ? { assignedToId: normalizedFilters.assignedToId }
+      : {}),
+  });
+
+  return tickets || [];
 };

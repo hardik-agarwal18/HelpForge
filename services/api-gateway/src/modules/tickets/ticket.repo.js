@@ -31,3 +31,18 @@ export const createTicket = async (ticketData) => {
     },
   });
 };
+
+export const getTickets = async (filters) => {
+  return await prisma.ticket.findMany({
+    where: filters,
+    include: {
+      organization: true,
+      createdBy: true,
+      assignedTo: true,
+      activities: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
