@@ -96,6 +96,7 @@ export const inviteMemberInOrganizationController = async (req, res, next) => {
       orgId,
       userId,
       role,
+      req.membership,
     );
 
     return res.status(201).json({
@@ -138,6 +139,7 @@ export const updateMemberFromOrganizationController = async (
       orgId,
       userId,
       role,
+      req.membership,
     );
 
     return res.status(200).json({

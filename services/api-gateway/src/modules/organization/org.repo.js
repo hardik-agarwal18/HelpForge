@@ -76,6 +76,17 @@ export const getOrganizationMembersById = async (orgId) => {
   });
 };
 
+export const getOrganizationMembershipByUserId = async (orgId, userId) => {
+  return await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId: orgId,
+      },
+    },
+  });
+};
+
 export const updateMembershipRole = (orgId, userId, role) => {
   return prisma.membership.update({
     where: {
