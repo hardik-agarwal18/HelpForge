@@ -20,7 +20,9 @@ const mockGetTicketActivities = jest.fn();
 const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
+const mockGetTicketMembershipsByUserId = jest.fn();
 const mockGetTickets = jest.fn();
+const mockGetAgentTickets = jest.fn();
 const mockGetTags = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
@@ -46,7 +48,9 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   getTicketCommentById: mockGetTicketCommentById,
   getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
+  getTicketMembershipsByUserId: mockGetTicketMembershipsByUserId,
   getTickets: mockGetTickets,
+  getAgentTickets: mockGetAgentTickets,
   getTags: mockGetTags,
   updateTicketStatus: mockUpdateTicketStatus,
   updateTicket: mockUpdateTicket,
@@ -68,6 +72,8 @@ const {
   getTicketCommentsService,
   getTicketsService,
   getTagsService,
+  getMyAgentStatsService,
+  getMyAgentTicketsService,
   updateTicketStatusService,
   updateTicketService,
 } = await import(
@@ -329,6 +335,70 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 400,
         message: "dateFrom cannot be after dateTo",
+      });
+    });
+  });
+
+  describe("getMyAgentTicketsService", () => {
+    it("should return assigned tickets for staff memberships", async () => {
+      mockGetTicketMembershipsByUserId.mockResolvedValue([
+        { organizationId: "org-1", role: "AGENT" },
+      ]);
+      mockGetAgentTickets.mockResolvedValue([{ id: "ticket-1" }]);
+
+      const result = await getMyAgentTicketsService(
+        { status: "open" },
+        "user-1",
+      );
+
+      expect(mockGetAgentTickets).toHaveBeenCalledWith({
+        organizationId: { in: ["org-1"] },
+        status: "OPEN",
+        assignedToId: "user-1",
+      });
+      expect(result).toEqual([{ id: "ticket-1" }]);
+    });
+
+    it("should reject users without staff memberships", async () => {
+      mockGetTicketMembershipsByUserId.mockResolvedValue([
+        { organizationId: "org-1", role: "MEMBER" },
+      ]);
+
+      await expect(
+        getMyAgentTicketsService({}, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view assigned agent tickets",
+      });
+    });
+  });
+
+  describe("getMyAgentStatsService", () => {
+    it("should return assigned ticket stats", async () => {
+      mockGetTicketMembershipsByUserId.mockResolvedValue([
+        { organizationId: "org-1", role: "AGENT" },
+      ]);
+      mockGetAgentTickets.mockResolvedValue([
+        { id: "ticket-1", status: "OPEN", priority: "HIGH" },
+        { id: "ticket-2", status: "RESOLVED", priority: "LOW" },
+      ]);
+
+      const result = await getMyAgentStatsService({}, "user-1");
+
+      expect(result).toEqual({
+        totalAssigned: 2,
+        byStatus: {
+          OPEN: 1,
+          IN_PROGRESS: 0,
+          RESOLVED: 1,
+          CLOSED: 0,
+        },
+        byPriority: {
+          LOW: 1,
+          MEDIUM: 0,
+          HIGH: 1,
+          URGENT: 0,
+        },
       });
     });
   });

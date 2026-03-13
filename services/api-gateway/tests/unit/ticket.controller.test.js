@@ -15,6 +15,8 @@ const mockGetTicketActivitiesService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
 const mockGetTagsService = jest.fn();
+const mockGetMyAgentStatsService = jest.fn();
+const mockGetMyAgentTicketsService = jest.fn();
 const mockUpdateTicketStatusService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
@@ -34,6 +36,8 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
   getTagsService: mockGetTagsService,
+  getMyAgentStatsService: mockGetMyAgentStatsService,
+  getMyAgentTicketsService: mockGetMyAgentTicketsService,
   updateTicketStatusService: mockUpdateTicketStatusService,
   updateTicketService: mockUpdateTicketService,
 }));
@@ -54,6 +58,8 @@ const {
   getTicketCommentsController,
   getTicketsController,
   getTagsController,
+  getMyAgentStatsController,
+  getMyAgentTicketsController,
   updateTicketStatusController,
   updateTicketController,
 } = await import(
@@ -161,6 +167,39 @@ describe("Ticket Controller", () => {
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: { tags },
+    });
+  });
+
+  it("should return my agent tickets and 200", async () => {
+    const tickets = [{ id: "ticket-1" }];
+    req.query = { status: "open" };
+    mockGetMyAgentTicketsService.mockResolvedValue(tickets);
+
+    await getMyAgentTicketsController(req, res, next);
+
+    expect(mockGetMyAgentTicketsService).toHaveBeenCalledWith(
+      { status: "open" },
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { tickets },
+    });
+  });
+
+  it("should return my agent stats and 200", async () => {
+    const stats = { totalAssigned: 1 };
+    req.query = {};
+    mockGetMyAgentStatsService.mockResolvedValue(stats);
+
+    await getMyAgentStatsController(req, res, next);
+
+    expect(mockGetMyAgentStatsService).toHaveBeenCalledWith({}, "user-1");
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { stats },
     });
   });
 

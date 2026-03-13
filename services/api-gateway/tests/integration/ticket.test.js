@@ -161,6 +161,95 @@ describe("Ticket API Integration Tests", () => {
     });
   });
 
+  describe("GET /api/agents/me/tickets", () => {
+    beforeEach(async () => {
+      await prisma.ticket.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            title: "Assigned to agent",
+            priority: "HIGH",
+            status: "OPEN",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+          {
+            organizationId: organization.id,
+            title: "Unassigned elsewhere",
+            priority: "LOW",
+            status: "RESOLVED",
+            source: "EMAIL",
+            createdById: user1.id,
+          },
+        ],
+      });
+    });
+
+    it("should return tickets assigned to the current agent", async () => {
+      const response = await request(app)
+        .get("/api/agents/me/tickets")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .query({ status: "OPEN" })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(1);
+      expect(response.body.data.tickets[0].assignedToId).toBe(user2.id);
+    });
+
+    it("should reject non-staff users", async () => {
+      const response = await request(app)
+        .get("/api/agents/me/tickets")
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view assigned agent tickets",
+      );
+    });
+  });
+
+  describe("GET /api/agents/me/stats", () => {
+    beforeEach(async () => {
+      await prisma.ticket.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            title: "Assigned open",
+            priority: "HIGH",
+            status: "OPEN",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+          {
+            organizationId: organization.id,
+            title: "Assigned resolved",
+            priority: "LOW",
+            status: "RESOLVED",
+            source: "EMAIL",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+        ],
+      });
+    });
+
+    it("should return stats for the current agent", async () => {
+      const response = await request(app)
+        .get("/api/agents/me/stats")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.stats.totalAssigned).toBe(2);
+      expect(response.body.data.stats.byStatus.OPEN).toBe(1);
+      expect(response.body.data.stats.byStatus.RESOLVED).toBe(1);
+    });
+  });
+
   describe("GET /api/tickets", () => {
     let ticket1;
     let ticket2;
