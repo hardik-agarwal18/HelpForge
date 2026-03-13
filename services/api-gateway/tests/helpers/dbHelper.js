@@ -21,6 +21,12 @@ export const cleanDatabase = async () => {
   const prisma = getTestPrisma();
 
   // Delete all records from all tables in reverse order of dependencies
+  await prisma.ticketActivityLog.deleteMany({});
+  await prisma.ticketTag.deleteMany({});
+  await prisma.ticketAttachment.deleteMany({});
+  await prisma.ticketComment.deleteMany({});
+  await prisma.ticket.deleteMany({});
+  await prisma.tag.deleteMany({});
   await prisma.membership.deleteMany({});
   await prisma.organization.deleteMany({});
   await prisma.user.deleteMany({});
