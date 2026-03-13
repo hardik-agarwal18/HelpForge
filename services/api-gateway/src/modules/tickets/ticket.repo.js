@@ -145,3 +145,16 @@ export const getTicketComments = async (ticketId) => {
     },
   });
 };
+
+export const createTicketAttachment = async (ticketId, attachmentData) => {
+  return await prisma.ticketAttachment.create({
+    data: {
+      ticketId,
+      ...attachmentData,
+    },
+    include: {
+      uploader: true,
+      ticket: true,
+    },
+  });
+};

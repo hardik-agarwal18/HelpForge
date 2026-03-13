@@ -1,4 +1,5 @@
 import {
+  createTicketAttachmentService,
   createTicketCommentService,
   createTicketService,
   getTicketByIdService,
@@ -90,6 +91,23 @@ export const getTicketCommentsController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { comments },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createTicketAttachmentController = async (req, res, next) => {
+  try {
+    const attachment = await createTicketAttachmentService(
+      req.params.ticketId,
+      req.body,
+      req.user.id,
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: { attachment },
     });
   } catch (error) {
     next(error);

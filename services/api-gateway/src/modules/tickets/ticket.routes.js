@@ -2,6 +2,7 @@ import express from "express";
 import { authenticate } from "../../middleware/auth.middleware.js";
 import { validate } from "../../middleware/validation.middleware.js";
 import {
+  createTicketAttachmentController,
   createTicketCommentController,
   createTicketController,
   getTicketByIdController,
@@ -10,6 +11,7 @@ import {
   updateTicketController,
 } from "./ticket.controller.js";
 import {
+  createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
   updateTicketSchema,
@@ -22,6 +24,12 @@ router.get("/", authenticate, getTicketsController);
 router.get("/:ticketId", authenticate, getTicketByIdController);
 router.patch("/:ticketId", authenticate, validate(updateTicketSchema), updateTicketController);
 router.get("/:ticketId/comments", authenticate, getTicketCommentsController);
+router.post(
+  "/:ticketId/attachments",
+  authenticate,
+  validate(createTicketAttachmentSchema),
+  createTicketAttachmentController,
+);
 router.post(
   "/:ticketId/comments",
   authenticate,

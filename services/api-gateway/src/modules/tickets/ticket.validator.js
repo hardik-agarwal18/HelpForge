@@ -50,3 +50,9 @@ export const createTicketCommentSchema = z.object({
   message: z.string().min(1, "Message is required"),
   isInternal: z.boolean().optional(),
 });
+
+export const createTicketAttachmentSchema = z.object({
+  fileUrl: z.string().url("Valid file URL is required"),
+  fileType: z.string().min(1, "File type is required"),
+  fileSize: z.number().int().positive("File size must be a positive integer"),
+});

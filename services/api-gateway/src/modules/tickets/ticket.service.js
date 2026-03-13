@@ -1,5 +1,6 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
+  createTicketAttachment,
   createTicketActivityLog,
   createTicketComment,
   createTicket,
@@ -347,4 +348,54 @@ export const getTicketCommentsService = async (ticketId, userId) => {
   const comments = await getTicketComments(ticketId);
 
   return filterCommentsForRole(comments || [], membership.role);
+};
+
+export const createTicketAttachmentService = async (
+  ticketId,
+  attachmentData,
+  userId,
+) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to add attachments to this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to add attachments to this ticket",
+    );
+  }
+
+  const attachment = await createTicketAttachment(ticketId, {
+    uploadedBy: userId,
+    fileUrl: attachmentData.fileUrl,
+    fileType: attachmentData.fileType,
+    fileSize: attachmentData.fileSize,
+  });
+
+  if (!attachment || !attachment.id) {
+    throw new ApiError(500, "Failed to create ticket attachment");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "ATTACHMENT_ADDED",
+    newValue: attachment.fileUrl,
+  });
+
+  return attachment;
 };
