@@ -45,3 +45,8 @@ export const updateTicketSchema = z
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",
   });
+
+export const createTicketCommentSchema = z.object({
+  message: z.string().min(1, "Message is required"),
+  isInternal: z.boolean().optional(),
+});

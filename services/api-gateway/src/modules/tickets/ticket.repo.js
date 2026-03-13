@@ -109,3 +109,39 @@ export const updateTicket = async (ticketId, ticketData, actorId) => {
     },
   });
 };
+
+export const createTicketComment = async (ticketId, commentData) => {
+  return await prisma.ticketComment.create({
+    data: {
+      ticketId,
+      ...commentData,
+    },
+    include: {
+      author: true,
+      ticket: true,
+    },
+  });
+};
+
+export const createTicketActivityLog = async (ticketId, activityData) => {
+  return await prisma.ticketActivityLog.create({
+    data: {
+      ticketId,
+      ...activityData,
+    },
+  });
+};
+
+export const getTicketComments = async (ticketId) => {
+  return await prisma.ticketComment.findMany({
+    where: {
+      ticketId,
+    },
+    include: {
+      author: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+};

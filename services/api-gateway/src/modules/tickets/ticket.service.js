@@ -1,7 +1,10 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
+  createTicketActivityLog,
+  createTicketComment,
   createTicket,
   getTicketById,
+  getTicketComments,
   getTicketOrganizationMembership,
   getTickets,
   updateTicket,
@@ -64,6 +67,16 @@ const filterInternalCommentsForRole = (ticket, role) => {
     comments: ticket.comments.filter((comment) => !comment.isInternal),
   };
 };
+
+const filterCommentsForRole = (comments, role) => {
+  if (canViewAllOrganizationTickets(role)) {
+    return comments;
+  }
+
+  return comments.filter((comment) => !comment.isInternal);
+};
+
+const canCreateInternalComment = (role) => canViewAllOrganizationTickets(role);
 
 const normalizeTicketFields = (ticketData) => ({
   ...ticketData,
@@ -242,4 +255,96 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
   }
 
   return filterInternalCommentsForRole(updatedTicket, membership.role);
+};
+
+export const createTicketCommentService = async (ticketId, commentData, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to comment on this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to comment on this ticket",
+    );
+  }
+
+  const isInternal = commentData.isInternal === true;
+
+  if (isInternal && !canCreateInternalComment(membership.role)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to create internal comments",
+    );
+  }
+
+  const comment = await createTicketComment(ticketId, {
+    authorId: userId,
+    message: commentData.message,
+    isInternal,
+  });
+
+  if (!comment || !comment.id) {
+    throw new ApiError(500, "Failed to create ticket comment");
+  }
+
+  await createTicketActivityLog(ticketId, {
+    actorId: userId,
+    action: "COMMENT_ADDED",
+    newValue: comment.message,
+  });
+
+  if (!canViewAllOrganizationTickets(membership.role) && comment.isInternal) {
+    return {
+      ...comment,
+      isInternal: false,
+    };
+  }
+
+  return comment;
+};
+
+export const getTicketCommentsService = async (ticketId, userId) => {
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view comments on this ticket",
+    );
+  }
+
+  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to view comments on this ticket",
+    );
+  }
+
+  const comments = await getTicketComments(ticketId);
+
+  return filterCommentsForRole(comments || [], membership.role);
 };
