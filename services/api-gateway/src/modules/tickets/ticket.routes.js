@@ -11,6 +11,7 @@ import {
   getTicketAttachmentsController,
   getTicketCommentsController,
   getTicketsController,
+  updateTicketStatusController,
   updateTicketController,
 } from "./ticket.controller.js";
 import {
@@ -18,6 +19,7 @@ import {
   createTicketAttachmentSchema,
   createTicketCommentSchema,
   createTicketSchema,
+  updateTicketStatusSchema,
   updateTicketSchema,
 } from "./ticket.validator.js";
 
@@ -31,6 +33,12 @@ router.patch(
   authenticate,
   validate(assignTicketSchema),
   assignTicketController,
+);
+router.patch(
+  "/:ticketId/status",
+  authenticate,
+  validate(updateTicketStatusSchema),
+  updateTicketStatusController,
 );
 router.patch("/:ticketId", authenticate, validate(updateTicketSchema), updateTicketController);
 router.get("/:ticketId/comments", authenticate, getTicketCommentsController);

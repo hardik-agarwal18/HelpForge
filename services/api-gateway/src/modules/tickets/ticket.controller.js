@@ -8,6 +8,7 @@ import {
   getTicketAttachmentsService,
   getTicketCommentsService,
   getTicketsService,
+  updateTicketStatusService,
   updateTicketService,
 } from "./ticket.service.js";
 
@@ -72,6 +73,23 @@ export const assignTicketController = async (req, res, next) => {
     const ticket = await assignTicketService(
       req.params.ticketId,
       req.body.assignedToId,
+      req.user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { ticket },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateTicketStatusController = async (req, res, next) => {
+  try {
+    const ticket = await updateTicketStatusService(
+      req.params.ticketId,
+      req.body.status,
       req.user.id,
     );
 

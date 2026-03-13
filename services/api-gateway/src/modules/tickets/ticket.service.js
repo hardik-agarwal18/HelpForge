@@ -12,6 +12,7 @@ import {
   getTicketAttachments,
   getTicketOrganizationMembership,
   getTickets,
+  updateTicketStatus,
   updateTicket,
 } from "./ticket.repo.js";
 import {
@@ -300,6 +301,40 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
 
   if (!updatedTicket || !updatedTicket.id) {
     throw new ApiError(500, "Failed to assign ticket");
+  }
+
+  return updatedTicket;
+};
+
+export const updateTicketStatusService = async (ticketId, status, userId) => {
+  const normalizedStatus = status?.toUpperCase();
+  const ticket = await getTicketById(ticketId);
+
+  if (!ticket || !ticket.id) {
+    throw new ApiError(404, "Ticket not found");
+  }
+
+  const membership = await getTicketOrganizationMembership(
+    ticket.organizationId,
+    userId,
+  );
+
+  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to update this ticket status",
+    );
+  }
+
+  const updatedTicket = await updateTicketStatus(
+    ticketId,
+    normalizedStatus,
+    userId,
+    ticket.status,
+  );
+
+  if (!updatedTicket || !updatedTicket.id) {
+    throw new ApiError(500, "Failed to update ticket status");
   }
 
   return updatedTicket;

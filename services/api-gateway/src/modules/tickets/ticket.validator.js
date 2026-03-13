@@ -60,3 +60,12 @@ export const createTicketAttachmentSchema = z.object({
 export const assignTicketSchema = z.object({
   assignedToId: z.string().min(1, "Assigned user ID is required"),
 });
+
+export const updateTicketStatusSchema = z.object({
+  status: z
+    .string()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"].includes(value), {
+      message: "Invalid status",
+    }),
+});
