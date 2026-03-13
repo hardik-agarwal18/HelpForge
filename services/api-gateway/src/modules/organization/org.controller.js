@@ -4,6 +4,7 @@ import {
   getOrganizationByUserIdService,
   inviteMemberInOrganizationService,
   updateOrganizationService,
+  viewAllMembersInOrganizationService,
 } from "./org.service.js";
 import { ApiError } from "../../utils/errorHandler.js";
 
@@ -99,6 +100,24 @@ export const inviteMemberInOrganizationController = async (req, res, next) => {
     return res.status(201).json({
       success: true,
       data: { membership },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const viewAllMembersInOrganizationController = async (
+  req,
+  res,
+  next,
+) => {
+  try {
+    const orgId = req.params.orgId;
+    const members = await viewAllMembersInOrganizationService(orgId);
+
+    return res.status(200).json({
+      success: true,
+      data: { members },
     });
   } catch (error) {
     next(error);

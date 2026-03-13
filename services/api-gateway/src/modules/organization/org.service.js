@@ -1,6 +1,7 @@
 import {
   createOrganization,
   deleteOrganization,
+  getOrganizationMembersById,
   getOrganizationsByUserId,
   inviteMemberInOrganization,
   patchOrganization,
@@ -55,4 +56,10 @@ export const inviteMemberInOrganizationService = async (
   }
 
   return membership;
+};
+
+export const viewAllMembersInOrganizationService = async (orgId) => {
+  const members = await getOrganizationMembersById(orgId);
+
+  return members || [];
 };

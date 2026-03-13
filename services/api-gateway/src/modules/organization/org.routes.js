@@ -6,6 +6,7 @@ import {
   getOrganizationsByUserIdController,
   inviteMemberInOrganizationController,
   updateOrganizationController,
+  viewAllMembersInOrganizationController,
 } from "./org.controller.js";
 import { validate } from "../../middleware/validation.middleware.js";
 import {
@@ -59,6 +60,13 @@ router.post(
   verifyOrganizationMembership,
   requireOwnerOrAdmin,
   inviteMemberInOrganizationController,
+);
+
+router.get(
+  "/:orgId/members",
+  authenticate,
+  verifyOrganizationMembership,
+  viewAllMembersInOrganizationController,
 );
 
 export default router;

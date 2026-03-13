@@ -64,3 +64,14 @@ export const inviteMemberInOrganization = async (orgId, userId, role) => {
     },
   });
 };
+
+export const getOrganizationMembersById = async (orgId) => {
+  return await prisma.membership.findMany({
+    where: {
+      organizationId: orgId,
+    },
+    include: {
+      user: true,
+    },
+  });
+};
