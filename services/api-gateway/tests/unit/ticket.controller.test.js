@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicketService = jest.fn();
+const mockGetTicketsService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   createTicketService: mockCreateTicketService,
+  getTicketsService: mockGetTicketsService,
 }));
 
-const { createTicketController } = await import(
+const { createTicketController, getTicketsController } = await import(
   "../../src/modules/tickets/ticket.controller.js"
 );
 
@@ -22,6 +24,7 @@ describe("Ticket Controller", () => {
         organizationId: "org-1",
         title: "Login issue",
       },
+      query: {},
       user: { id: "user-1" },
     };
     res = {
@@ -50,6 +53,34 @@ describe("Ticket Controller", () => {
     mockCreateTicketService.mockRejectedValue(error);
 
     await createTicketController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should return tickets and 200", async () => {
+    const tickets = [{ id: "ticket-1" }, { id: "ticket-2" }];
+    req.query = { organizationId: "org-1" };
+    mockGetTicketsService.mockResolvedValue(tickets);
+
+    await getTicketsController(req, res, next);
+
+    expect(mockGetTicketsService).toHaveBeenCalledWith(
+      { organizationId: "org-1" },
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { tickets },
+    });
+  });
+
+  it("should call next if get tickets service throws", async () => {
+    const error = new Error("List failed");
+    req.query = { organizationId: "org-1" };
+    mockGetTicketsService.mockRejectedValue(error);
+
+    await getTicketsController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

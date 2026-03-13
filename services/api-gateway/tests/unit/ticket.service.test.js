@@ -2,13 +2,15 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateTicket = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
+const mockGetTickets = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicket: mockCreateTicket,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
+  getTickets: mockGetTickets,
 }));
 
-const { createTicketService } = await import(
+const { createTicketService, getTicketsService } = await import(
   "../../src/modules/tickets/ticket.service.js"
 );
 
@@ -96,6 +98,88 @@ describe("Ticket Service", () => {
     ).rejects.toMatchObject({
       statusCode: 500,
       message: "Failed to create ticket",
+    });
+  });
+
+  describe("getTicketsService", () => {
+    it("should return tickets for an organization member", async () => {
+      const tickets = [{ id: "ticket-1" }, { id: "ticket-2" }];
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTickets.mockResolvedValue(tickets);
+
+      const result = await getTicketsService(
+        {
+          organizationId: "org-1",
+          status: "open",
+          priority: "high",
+        },
+        "user-1",
+      );
+
+      expect(mockGetTickets).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        status: "OPEN",
+        priority: "HIGH",
+      });
+      expect(result).toEqual(tickets);
+    });
+
+    it("should reject missing organizationId", async () => {
+      await expect(getTicketsService({}, "user-1")).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Organization ID is required",
+      });
+    });
+
+    it("should reject invalid status", async () => {
+      await expect(
+        getTicketsService(
+          {
+            organizationId: "org-1",
+            status: "pending",
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Invalid status",
+      });
+    });
+
+    it("should reject non-members from viewing tickets", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        getTicketsService(
+          {
+            organizationId: "org-1",
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view tickets for this organization",
+      });
+    });
+
+    it("should return an empty array when no tickets are found", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTickets.mockResolvedValue(null);
+
+      const result = await getTicketsService(
+        {
+          organizationId: "org-1",
+        },
+        "user-1",
+      );
+
+      expect(result).toEqual([]);
     });
   });
 });

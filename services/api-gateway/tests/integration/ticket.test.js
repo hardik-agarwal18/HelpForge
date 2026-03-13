@@ -149,4 +149,98 @@ describe("Ticket API Integration Tests", () => {
       );
     });
   });
+
+  describe("GET /api/tickets", () => {
+    let ticket1;
+    let ticket2;
+
+    beforeEach(async () => {
+      ticket1 = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Login issue",
+          priority: "HIGH",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+          assignedToId: user2.id,
+        },
+      });
+
+      ticket2 = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Billing bug",
+          priority: "LOW",
+          status: "RESOLVED",
+          source: "EMAIL",
+          createdById: user1.id,
+        },
+      });
+    });
+
+    it("should return tickets for an organization member", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .query({ organizationId: organization.id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(2);
+    });
+
+    it("should filter tickets by query params", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .query({
+          organizationId: organization.id,
+          status: "open",
+          priority: "high",
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.tickets).toHaveLength(1);
+      expect(response.body.data.tickets[0].id).toBe(ticket1.id);
+    });
+
+    it("should return 400 when organizationId is missing", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Organization ID is required");
+    });
+
+    it("should return 400 for invalid filters", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .query({
+          organizationId: organization.id,
+          status: "pending",
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Invalid status");
+    });
+
+    it("should return 403 for a user outside the organization", async () => {
+      const response = await request(app)
+        .get("/api/tickets")
+        .set("Authorization", `Bearer ${user3Token}`)
+        .query({ organizationId: organization.id })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to view tickets for this organization",
+      );
+    });
+  });
 });
