@@ -4,6 +4,7 @@ const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
 const mockGetTicketByIdService = jest.fn();
+const mockGetTicketAttachmentsService = jest.fn();
 const mockGetTicketCommentsService = jest.fn();
 const mockGetTicketsService = jest.fn();
 const mockUpdateTicketService = jest.fn();
@@ -12,6 +13,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   createTicketCommentService: mockCreateTicketCommentService,
   createTicketAttachmentService: mockCreateTicketAttachmentService,
   createTicketService: mockCreateTicketService,
+  getTicketAttachmentsService: mockGetTicketAttachmentsService,
   getTicketByIdService: mockGetTicketByIdService,
   getTicketCommentsService: mockGetTicketCommentsService,
   getTicketsService: mockGetTicketsService,
@@ -23,6 +25,7 @@ const {
   createTicketCommentController,
   createTicketController,
   getTicketByIdController,
+  getTicketAttachmentsController,
   getTicketCommentsController,
   getTicketsController,
   updateTicketController,
@@ -255,6 +258,34 @@ describe("Ticket Controller", () => {
     mockCreateTicketAttachmentService.mockRejectedValue(error);
 
     await createTicketAttachmentController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+  });
+
+  it("should return attachments and 200", async () => {
+    const attachments = [{ id: "attachment-1" }];
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketAttachmentsService.mockResolvedValue(attachments);
+
+    await getTicketAttachmentsController(req, res, next);
+
+    expect(mockGetTicketAttachmentsService).toHaveBeenCalledWith(
+      "ticket-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { attachments },
+    });
+  });
+
+  it("should call next if get ticket attachments service throws", async () => {
+    const error = new Error("Attachment list failed");
+    req.params = { ticketId: "ticket-1" };
+    mockGetTicketAttachmentsService.mockRejectedValue(error);
+
+    await getTicketAttachmentsController(req, res, next);
 
     expect(next).toHaveBeenCalledWith(error);
   });

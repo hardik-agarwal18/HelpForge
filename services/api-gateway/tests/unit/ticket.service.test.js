@@ -5,6 +5,7 @@ const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
 const mockCreateTicketComment = jest.fn();
 const mockGetTicketById = jest.fn();
+const mockGetTicketAttachments = jest.fn();
 const mockGetTicketComments = jest.fn();
 const mockGetTicketOrganizationMembership = jest.fn();
 const mockGetTickets = jest.fn();
@@ -15,6 +16,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketAttachment: mockCreateTicketAttachment,
   createTicketComment: mockCreateTicketComment,
   createTicket: mockCreateTicket,
+  getTicketAttachments: mockGetTicketAttachments,
   getTicketById: mockGetTicketById,
   getTicketComments: mockGetTicketComments,
   getTicketOrganizationMembership: mockGetTicketOrganizationMembership,
@@ -27,6 +29,7 @@ const {
   createTicketCommentService,
   createTicketService,
   getTicketByIdService,
+  getTicketAttachmentsService,
   getTicketCommentsService,
   getTicketsService,
   updateTicketService,
@@ -673,6 +676,60 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to add attachments to this ticket",
+      });
+    });
+  });
+
+  describe("getTicketAttachmentsService", () => {
+    it("should return attachments for elevated roles", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTicketAttachments.mockResolvedValue([{ id: "attachment-1" }]);
+
+      const result = await getTicketAttachmentsService("ticket-1", "user-1");
+
+      expect(result).toEqual([{ id: "attachment-1" }]);
+    });
+
+    it("should allow members to view attachments on accessible tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockGetTicketAttachments.mockResolvedValue([{ id: "attachment-1" }]);
+
+      const result = await getTicketAttachmentsService("ticket-1", "user-1");
+
+      expect(result).toEqual([{ id: "attachment-1" }]);
+    });
+
+    it("should reject unrelated members from viewing attachments", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-9",
+        assignedToId: "user-8",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(getTicketAttachmentsService("ticket-1", "user-1")).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view attachments on this ticket",
       });
     });
   });
