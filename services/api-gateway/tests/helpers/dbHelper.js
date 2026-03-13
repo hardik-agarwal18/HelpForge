@@ -27,6 +27,7 @@ export const cleanDatabase = async () => {
   await prisma.ticketComment.deleteMany({});
   await prisma.ticket.deleteMany({});
   await prisma.tag.deleteMany({});
+  await prisma.agentWorkload.deleteMany({});
   await prisma.membership.deleteMany({});
   await prisma.organization.deleteMany({});
   await prisma.user.deleteMany({});
