@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
+const mockAutoAssignTicketService = jest.fn();
 const mockAssignTicketService = jest.fn();
 const mockAddTicketTagService = jest.fn();
 const mockCreateTagService = jest.fn();
@@ -23,6 +24,7 @@ const mockUpdateTicketService = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
   addTicketTagService: mockAddTicketTagService,
+  autoAssignTicketService: mockAutoAssignTicketService,
   assignTicketService: mockAssignTicketService,
   createTagService: mockCreateTagService,
   createTicketCommentService: mockCreateTicketCommentService,
@@ -46,6 +48,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
 
 const {
   addTicketTagController,
+  autoAssignTicketController,
   assignTicketController,
   createTagController,
   createTicketAttachmentController,
@@ -315,6 +318,34 @@ describe("Ticket Controller", () => {
       success: true,
       data: { ticket },
     });
+  });
+
+  it("should auto-assign a ticket and return 200", async () => {
+    const ticket = { id: "ticket-1", assignedToId: "user-2" };
+    req.params = { ticketId: "ticket-1" };
+    mockAutoAssignTicketService.mockResolvedValue(ticket);
+
+    await autoAssignTicketController(req, res, next);
+
+    expect(mockAutoAssignTicketService).toHaveBeenCalledWith(
+      "ticket-1",
+      "user-1",
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { ticket },
+    });
+  });
+
+  it("should call next if auto-assign ticket service throws", async () => {
+    const error = new Error("Auto-assign failed");
+    req.params = { ticketId: "ticket-1" };
+    mockAutoAssignTicketService.mockRejectedValue(error);
+
+    await autoAssignTicketController(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
   });
 
   it("should call next if assign ticket service throws", async () => {

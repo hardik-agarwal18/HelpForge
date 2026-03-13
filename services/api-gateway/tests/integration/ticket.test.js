@@ -325,6 +325,28 @@ describe("Ticket API Integration Tests", () => {
       expect(membership.isAvailable).toBe(false);
     });
 
+    it("should reject users without membership in the provided organization", async () => {
+      const otherOrganization = await prisma.organization.create({
+        data: {
+          name: `Other_Org_${Date.now()}`,
+        },
+      });
+
+      const response = await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          organizationId: otherOrganization.id,
+          isAvailable: false,
+        })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to update agent availability for this organization",
+      );
+    });
+
     it("should reject non-agents from updating availability", async () => {
       const response = await request(app)
         .patch("/api/agents/me/availability")
@@ -350,6 +372,41 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe("Validation error");
+    });
+
+    it("should exclude unavailable agents from auto-assignment", async () => {
+      const secondAgent = await createTestUser({
+        email: `agent3_${Date.now()}@example.com`,
+        name: "Third Agent",
+      });
+      await prisma.membership.create({
+        data: {
+          userId: secondAgent.id,
+          organizationId: organization.id,
+          role: "AGENT",
+        },
+      });
+
+      await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          organizationId: organization.id,
+          isAvailable: false,
+        })
+        .expect(200);
+
+      const response = await request(app)
+        .post("/api/tickets")
+        .set("Authorization", `Bearer ${user1Token}`)
+        .send({
+          organizationId: organization.id,
+          title: "Availability aware auto assign",
+        })
+        .expect(201);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.assignedToId).toBe(secondAgent.id);
     });
   });
 
@@ -925,6 +982,111 @@ describe("Ticket API Integration Tests", () => {
         .patch("/api/tickets/non-existent-ticket-id/assign")
         .set("Authorization", `Bearer ${user1Token}`)
         .send({ assignedToId: user2.id })
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Ticket not found");
+    });
+  });
+
+  describe("POST /api/tickets/:ticketId/auto-assign", () => {
+    let ticket;
+
+    beforeEach(async () => {
+      ticket = await prisma.ticket.create({
+        data: {
+          organizationId: organization.id,
+          title: "Needs routing",
+          priority: "MEDIUM",
+          status: "OPEN",
+          source: "WEB",
+          createdById: user1.id,
+        },
+      });
+    });
+
+    it("should auto-assign the ticket to the least-loaded available agent", async () => {
+      const secondAgent = await createTestUser({
+        email: `agent_auto_${Date.now()}@example.com`,
+        name: "Auto Assign Agent",
+      });
+      await prisma.membership.create({
+        data: {
+          userId: secondAgent.id,
+          organizationId: organization.id,
+          role: "AGENT",
+        },
+      });
+
+      await prisma.ticket.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            title: "Busy 1",
+            priority: "MEDIUM",
+            status: "OPEN",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+          {
+            organizationId: organization.id,
+            title: "Busy 2",
+            priority: "MEDIUM",
+            status: "IN_PROGRESS",
+            source: "WEB",
+            createdById: user1.id,
+            assignedToId: user2.id,
+          },
+        ],
+      });
+
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/auto-assign`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.ticket.assignedToId).toBe(secondAgent.id);
+    });
+
+    it("should reject members from auto-assigning tickets", async () => {
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/auto-assign`)
+        .set("Authorization", `Bearer ${user4Token}`)
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "You do not have permission to auto-assign this ticket",
+      );
+    });
+
+    it("should return 409 when no available agent can take the ticket", async () => {
+      await request(app)
+        .patch("/api/agents/me/availability")
+        .set("Authorization", `Bearer ${user2Token}`)
+        .send({
+          organizationId: organization.id,
+          isAvailable: false,
+        })
+        .expect(200);
+
+      const response = await request(app)
+        .post(`/api/tickets/${ticket.id}/auto-assign`)
+        .set("Authorization", `Bearer ${user1Token}`)
+        .expect(409);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe(
+        "No available agent found for auto-assignment",
+      );
+    });
+
+    it("should return 404 when the ticket does not exist", async () => {
+      const response = await request(app)
+        .post("/api/tickets/non-existent-ticket-id/auto-assign")
+        .set("Authorization", `Bearer ${user1Token}`)
         .expect(404);
 
       expect(response.body.success).toBe(false);

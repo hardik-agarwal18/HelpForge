@@ -62,6 +62,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
 
 const {
   addTicketTagService,
+  autoAssignTicketService,
   createTicketAttachmentService,
   assignTicketService,
   createTagService,
@@ -964,6 +965,118 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 500,
         message: "Failed to assign ticket",
+      });
+    });
+  });
+
+  describe("autoAssignTicketService", () => {
+    it("should auto-assign a ticket for staff users", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "AGENT",
+      });
+      mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+        {
+          userId: "agent-1",
+          user: { assignedTickets: [{ id: "t-1" }] },
+        },
+        {
+          userId: "agent-2",
+          user: { assignedTickets: [] },
+        },
+      ]);
+      mockAssignTicket.mockResolvedValue({
+        id: "ticket-1",
+        assignedToId: "agent-2",
+      });
+
+      const result = await autoAssignTicketService("ticket-1", "user-1");
+
+      expect(mockAssignTicket).toHaveBeenCalledWith(
+        "ticket-1",
+        "agent-2",
+        "user-1",
+        null,
+      );
+      expect(result.assignedToId).toBe("agent-2");
+    });
+
+    it("should reject when the ticket does not exist", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        autoAssignTicketService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("should reject members from auto-assigning tickets", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        autoAssignTicketService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to auto-assign this ticket",
+      });
+    });
+
+    it("should reject when no available agent can take the ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetOrganizationAgentsWithLoad.mockResolvedValue([]);
+
+      await expect(
+        autoAssignTicketService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        message: "No available agent found for auto-assignment",
+      });
+    });
+
+    it("should throw when auto-assignment persistence fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        assignedToId: "agent-0",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "OWNER",
+      });
+      mockGetOrganizationAgentsWithLoad.mockResolvedValue([
+        {
+          userId: "agent-2",
+          user: { assignedTickets: [] },
+        },
+      ]);
+      mockAssignTicket.mockResolvedValue(null);
+
+      await expect(
+        autoAssignTicketService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to auto-assign ticket",
       });
     });
   });
