@@ -24,8 +24,10 @@
     "@prisma/client": "^5.15.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.3.1",
+    "eventemitter2": "^6.4.9",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "pino": "^10.3.1",
     "prisma": "^5.15.0",
     "zod": "^4.3.6"
   },
