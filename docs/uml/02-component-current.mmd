@@ -8,6 +8,9 @@ flowchart TB
     ValidationMW[Validation Middleware]
     ErrorHandler[Global Error Handler]
     Config[Config + Environment]
+    Logger[Pino Logger]
+    EventBus[Event Bus]
+    EventHandlers[Async Event Handlers]
   end
 
   subgraph Modules[Feature Modules]
@@ -37,6 +40,7 @@ flowchart TB
   API --> ValidationMW
   API --> ErrorHandler
   API --> Config
+  API --> EventHandlers
 
   API --> AuthRoutes
   API --> OrgRoutes
@@ -55,6 +59,10 @@ flowchart TB
   AuthService --> AuthRepo
   OrgService --> OrgRepo
   TicketService --> TicketRepo
+  TicketService --> EventBus
+  EventBus --> EventHandlers
+  EventHandlers --> TicketRepo
+  EventHandlers --> Logger
 
   AuthRepo --> Prisma
   OrgRepo --> Prisma

@@ -9,9 +9,12 @@ flowchart TD
   F -->|Yes| G{New status differs from current?}
   G -->|No| Z[Return unchanged ticket]
   G -->|Yes| H[Update ticket status]
-  H --> I[Create activity log with old/new status]
-  I --> J([End: Updated])
+  H --> I[Emit ticket.status.changed event]
+  I --> J[Return updated ticket]
+  I --> K[Async handler writes status activity log]
+  J --> L([End: Updated])
 
-  X --> J
-  Y --> J
-  Z --> J
+  X --> L
+  Y --> L
+  Z --> L
+  K --> L

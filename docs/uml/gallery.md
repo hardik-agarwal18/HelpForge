@@ -94,6 +94,9 @@ flowchart TB
     ValidationMW[Validation Middleware]
     ErrorHandler[Global Error Handler]
     Config[Config + Environment]
+    Logger[Pino Logger]
+    EventBus[Event Bus]
+    EventHandlers[Async Event Handlers]
   end
 
   subgraph Modules[Feature Modules]
@@ -123,6 +126,7 @@ flowchart TB
   API --> ValidationMW
   API --> ErrorHandler
   API --> Config
+  API --> EventHandlers
 
   API --> AuthRoutes
   API --> OrgRoutes
@@ -141,6 +145,10 @@ flowchart TB
   AuthService --> AuthRepo
   OrgService --> OrgRepo
   TicketService --> TicketRepo
+  TicketService --> EventBus
+  EventBus --> EventHandlers
+  EventHandlers --> TicketRepo
+  EventHandlers --> Logger
 
   AuthRepo --> Prisma
   OrgRepo --> Prisma
@@ -161,6 +169,7 @@ flowchart TB
     subgraph ConfigPkg[config]
       ConfigIndex[index.js]
       DbConfig[database.config.js]
+      LoggerConfig[logger.js]
     end
 
     subgraph MiddlewarePkg[middleware]
@@ -196,17 +205,28 @@ flowchart TB
       TicketConstants[ticket.constants.js]
     end
 
+    subgraph EventsPkg[events]
+      EventBus[eventBus.js]
+      EventTypes[eventTypes.js]
+      RegisterHandlers[registerHandlers.js]
+      TicketHandlers[handlers/ticket.handlers.js]
+      NotificationHandlers[handlers/notification.handlers.js]
+      AnalyticsHandlers[handlers/analytics.handlers.js]
+    end
+
     subgraph UtilsPkg[utils]
       ErrorHandler[errorHandler.js]
     end
   end
 
   Server --> App
+  Server --> LoggerConfig
   App --> AuthRoutes
   App --> OrgRoutes
   App --> TicketRoutes
   App --> AgentRoutes
   App --> ErrorHandler
+  App --> RegisterHandlers
 
   AuthRoutes --> ValidationMW
   AuthRoutes --> AuthMW
@@ -235,9 +255,22 @@ flowchart TB
   TicketController --> TicketService
   TicketService --> TicketRepo
   TicketService --> TicketConstants
+  TicketService --> EventBus
+  TicketService --> EventTypes
   TicketRepo --> DbConfig
   TicketRoutes --> TicketValidator
   AgentRoutes --> TicketValidator
+
+  RegisterHandlers --> TicketHandlers
+  RegisterHandlers --> NotificationHandlers
+  RegisterHandlers --> AnalyticsHandlers
+  TicketHandlers --> EventBus
+  NotificationHandlers --> EventBus
+  AnalyticsHandlers --> EventBus
+  TicketHandlers --> TicketRepo
+  TicketHandlers --> LoggerConfig
+  NotificationHandlers --> LoggerConfig
+  AnalyticsHandlers --> LoggerConfig
 ~~~
 
 ### 04-class-domain-prisma
@@ -441,24 +474,27 @@ flowchart TD
   C --> D{Valid assignee?}
   D -->|No| X[Return validation error]
   D -->|Yes| E[Persist ticket with assignedToId]
+  E --> P[Emit ticket.created event]
+  P --> Q[Async handler writes TICKET_CREATED log]
 
-  B -->|No| F[Load available AGENT memberships]
-  F --> G[Load agent workloads in parallel]
-  G --> H[Reset stale daily/weekly counters]
-  H --> I[Filter by capacity and availability]
-  I --> J{Eligible agents found?}
-  J -->|No| K[Persist unassigned ticket in OPEN status]
-  J -->|Yes| L[Select least-loaded eligible agent]
-  L --> M[Create assignment transaction]
-  M --> N[Increment workload counters]
-  N --> O[Update ticket assignedTo and status IN_PROGRESS]
+  B -->|No| F[Persist initial ticket in OPEN status]
+  F --> P
+  F --> G[Load available AGENT memberships]
+  G --> H[Load agent workloads in parallel]
+  H --> I[Reset stale daily/weekly counters]
+  I --> J[Filter by capacity and availability]
+  J --> K{Eligible agents found?}
+  K -->|No| L[Return unassigned ticket in OPEN status]
+  K -->|Yes| M[Select least-loaded eligible agent]
+  M --> N[Create assignment transaction]
+  N --> O[Increment workload counters]
+  O --> R[Update ticket assignedTo and status IN_PROGRESS]
+  R --> S[Create activity log: TICKET_ASSIGNED in transaction]
 
-  E --> P[Create activity log: TICKET_CREATED]
-  K --> P
-  O --> Q[Create activity log: TICKET_ASSIGNED]
-  P --> R([End])
-  Q --> R
-  X --> R
+  Q --> T([End])
+  L --> T
+  S --> T
+  X --> T
 ~~~
 
 ### 07-activity-role-management
@@ -501,12 +537,15 @@ flowchart TD
   F -->|Yes| G{New status differs from current?}
   G -->|No| Z[Return unchanged ticket]
   G -->|Yes| H[Update ticket status]
-  H --> I[Create activity log with old/new status]
-  I --> J([End: Updated])
+  H --> I[Emit ticket.status.changed event]
+  I --> J[Return updated ticket]
+  I --> K[Async handler writes status activity log]
+  J --> L([End: Updated])
 
-  X --> J
-  Y --> J
-  Z --> J
+  X --> L
+  Y --> L
+  Z --> L
+  K --> L
 ~~~
 
 ## Sequence
@@ -704,6 +743,8 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -718,9 +759,15 @@ sequenceDiagram
   Repo-->>S: membership
 
   S->>Repo: createTicket(ticketData)
-  Repo->>DB: Ticket.create + ActivityLog(TICKET_CREATED)
+  Repo->>DB: Ticket.create
   DB-->>Repo: ticket
   Repo-->>S: ticket
+  S-->>Bus: emit(ticket.created, payload)
+  Bus-)TH: async handle ticket.created
+  TH->>Repo: createTicketActivityLog(ticketId, TICKET_CREATED)
+  Repo->>DB: TicketActivityLog.create
+  DB-->>Repo: activity log
+  Repo-->>TH: activity log
 
   alt assignedToId not provided
     par Load candidate data
@@ -760,6 +807,9 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
+  participant NH as Notification Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -789,9 +839,16 @@ sequenceDiagram
     Repo-->>S: assignee membership
 
     S->>Repo: assignTicket(ticketId, assigneeId, actorId)
-    Repo->>DB: Ticket.update + ActivityLog(TICKET_ASSIGNED)
+    Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket
+    S-->>Bus: emit(ticket.assigned, payload)
+    Bus-)TH: async create TICKET_ASSIGNED activity
+    TH->>Repo: createTicketActivityLog(ticketId, TICKET_ASSIGNED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: activity log
+    Repo-->>TH: activity log
+    Bus-)NH: async log assignment notification
     S-->>C: success
     C-->>SUser: 200 OK
   end
@@ -807,6 +864,8 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -831,9 +890,15 @@ sequenceDiagram
     C-->>U: 403 response
   else Allowed
     S->>Repo: updateTicketStatus(ticketId, newStatus, oldStatus, actorId)
-    Repo->>DB: Ticket.update + ActivityLog(TICKET_STATUS_UPDATED)
+    Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket
+    S-->>Bus: emit(ticket.status.changed, payload)
+    Bus-)TH: async create TICKET_STATUS_UPDATED activity
+    TH->>Repo: createTicketActivityLog(ticketId, TICKET_STATUS_UPDATED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: activity log
+    Repo-->>TH: activity log
     S-->>C: success
     C-->>U: 200 OK
   end

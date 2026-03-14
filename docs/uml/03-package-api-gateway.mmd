@@ -7,6 +7,7 @@ flowchart TB
     subgraph ConfigPkg[config]
       ConfigIndex[index.js]
       DbConfig[database.config.js]
+      LoggerConfig[logger.js]
     end
 
     subgraph MiddlewarePkg[middleware]
@@ -42,17 +43,28 @@ flowchart TB
       TicketConstants[ticket.constants.js]
     end
 
+    subgraph EventsPkg[events]
+      EventBus[eventBus.js]
+      EventTypes[eventTypes.js]
+      RegisterHandlers[registerHandlers.js]
+      TicketHandlers[handlers/ticket.handlers.js]
+      NotificationHandlers[handlers/notification.handlers.js]
+      AnalyticsHandlers[handlers/analytics.handlers.js]
+    end
+
     subgraph UtilsPkg[utils]
       ErrorHandler[errorHandler.js]
     end
   end
 
   Server --> App
+  Server --> LoggerConfig
   App --> AuthRoutes
   App --> OrgRoutes
   App --> TicketRoutes
   App --> AgentRoutes
   App --> ErrorHandler
+  App --> RegisterHandlers
 
   AuthRoutes --> ValidationMW
   AuthRoutes --> AuthMW
@@ -81,6 +93,19 @@ flowchart TB
   TicketController --> TicketService
   TicketService --> TicketRepo
   TicketService --> TicketConstants
+  TicketService --> EventBus
+  TicketService --> EventTypes
   TicketRepo --> DbConfig
   TicketRoutes --> TicketValidator
   AgentRoutes --> TicketValidator
+
+  RegisterHandlers --> TicketHandlers
+  RegisterHandlers --> NotificationHandlers
+  RegisterHandlers --> AnalyticsHandlers
+  TicketHandlers --> EventBus
+  NotificationHandlers --> EventBus
+  AnalyticsHandlers --> EventBus
+  TicketHandlers --> TicketRepo
+  TicketHandlers --> LoggerConfig
+  NotificationHandlers --> LoggerConfig
+  AnalyticsHandlers --> LoggerConfig

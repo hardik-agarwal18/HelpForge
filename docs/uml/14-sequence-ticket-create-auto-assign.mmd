@@ -5,6 +5,8 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -19,9 +21,15 @@ sequenceDiagram
   Repo-->>S: membership
 
   S->>Repo: createTicket(ticketData)
-  Repo->>DB: Ticket.create + ActivityLog(TICKET_CREATED)
+  Repo->>DB: Ticket.create
   DB-->>Repo: ticket
   Repo-->>S: ticket
+  S-->>Bus: emit(ticket.created, payload)
+  Bus-)TH: async handle ticket.created
+  TH->>Repo: createTicketActivityLog(ticketId, TICKET_CREATED)
+  Repo->>DB: TicketActivityLog.create
+  DB-->>Repo: activity log
+  Repo-->>TH: activity log
 
   alt assignedToId not provided
     par Load candidate data

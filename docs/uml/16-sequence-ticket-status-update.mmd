@@ -5,6 +5,8 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -29,9 +31,15 @@ sequenceDiagram
     C-->>U: 403 response
   else Allowed
     S->>Repo: updateTicketStatus(ticketId, newStatus, oldStatus, actorId)
-    Repo->>DB: Ticket.update + ActivityLog(TICKET_STATUS_UPDATED)
+    Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket
+    S-->>Bus: emit(ticket.status.changed, payload)
+    Bus-)TH: async create TICKET_STATUS_UPDATED activity
+    TH->>Repo: createTicketActivityLog(ticketId, TICKET_STATUS_UPDATED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: activity log
+    Repo-->>TH: activity log
     S-->>C: success
     C-->>U: 200 OK
   end

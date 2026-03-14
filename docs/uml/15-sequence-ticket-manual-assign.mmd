@@ -5,6 +5,9 @@ sequenceDiagram
   participant R as Ticket Route
   participant C as Ticket Controller
   participant S as Ticket Service
+  participant Bus as Event Bus
+  participant TH as Ticket Event Handler
+  participant NH as Notification Handler
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
@@ -34,9 +37,16 @@ sequenceDiagram
     Repo-->>S: assignee membership
 
     S->>Repo: assignTicket(ticketId, assigneeId, actorId)
-    Repo->>DB: Ticket.update + ActivityLog(TICKET_ASSIGNED)
+    Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket
+    S-->>Bus: emit(ticket.assigned, payload)
+    Bus-)TH: async create TICKET_ASSIGNED activity
+    TH->>Repo: createTicketActivityLog(ticketId, TICKET_ASSIGNED)
+    Repo->>DB: TicketActivityLog.create
+    DB-->>Repo: activity log
+    Repo-->>TH: activity log
+    Bus-)NH: async log assignment notification
     S-->>C: success
     C-->>SUser: 200 OK
   end
