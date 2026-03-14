@@ -12,6 +12,27 @@ import {
 
 const prisma = getTestPrisma();
 
+const waitFor = async (
+  assertion,
+  { timeoutMs = 1500, intervalMs = 25 } = {},
+) => {
+  const startedAt = Date.now();
+  let lastError;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      return await assertion();
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => {
+        setTimeout(resolve, intervalMs);
+      });
+    }
+  }
+
+  throw lastError;
+};
+
 describe("Ticket API Integration Tests", () => {
   let user1;
   let user2;
@@ -101,16 +122,18 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.data.ticket.priority).toBe("HIGH");
       expect(response.body.data.ticket.source).toBe("WEB");
 
-      const ticket = await prisma.ticket.findUnique({
-        where: { id: response.body.data.ticket.id },
-        include: { activities: true },
-      });
+      await waitFor(async () => {
+        const ticket = await prisma.ticket.findUnique({
+          where: { id: response.body.data.ticket.id },
+          include: { activities: true },
+        });
 
-      expect(ticket).not.toBeNull();
-      expect(ticket.createdById).toBe(user1.id);
-      expect(ticket.assignedToId).toBe(user2.id);
-      expect(ticket.activities).toHaveLength(1);
-      expect(ticket.activities[0].action).toBe("TICKET_CREATED");
+        expect(ticket).not.toBeNull();
+        expect(ticket.createdById).toBe(user1.id);
+        expect(ticket.assignedToId).toBe(user2.id);
+        expect(ticket.activities).toHaveLength(1);
+        expect(ticket.activities[0].action).toBe("TICKET_CREATED");
+      });
     });
 
     it("should auto-assign a new unassigned ticket to the least-loaded agent", async () => {
@@ -936,16 +959,19 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.ticket.assignedToId).toBe(user1.id);
 
-      const updatedTicket = await prisma.ticket.findUnique({
-        where: { id: ticket.id },
-        include: { activities: true },
+      await waitFor(async () => {
+        const updatedTicket = await prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: { activities: true },
+        });
+
+        expect(updatedTicket.assignedToId).toBe(user1.id);
+        expect(
+          updatedTicket.activities.some(
+            (activity) => activity.action === "TICKET_ASSIGNED",
+          ),
+        ).toBe(true);
       });
-      expect(updatedTicket.assignedToId).toBe(user1.id);
-      expect(
-        updatedTicket.activities.some(
-          (activity) => activity.action === "TICKET_ASSIGNED",
-        ),
-      ).toBe(true);
     });
 
     it("should reject members from assigning tickets", async () => {
@@ -1126,16 +1152,19 @@ describe("Ticket API Integration Tests", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.ticket.status).toBe("RESOLVED");
 
-      const updatedTicket = await prisma.ticket.findUnique({
-        where: { id: ticket.id },
-        include: { activities: true },
+      await waitFor(async () => {
+        const updatedTicket = await prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: { activities: true },
+        });
+
+        expect(updatedTicket.status).toBe("RESOLVED");
+        expect(
+          updatedTicket.activities.some(
+            (activity) => activity.action === "TICKET_STATUS_UPDATED",
+          ),
+        ).toBe(true);
       });
-      expect(updatedTicket.status).toBe("RESOLVED");
-      expect(
-        updatedTicket.activities.some(
-          (activity) => activity.action === "TICKET_STATUS_UPDATED",
-        ),
-      ).toBe(true);
     });
 
     it("should reject members from updating ticket status", async () => {

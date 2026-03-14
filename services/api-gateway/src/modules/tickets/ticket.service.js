@@ -1,4 +1,10 @@
 import { ApiError } from "../../utils/errorHandler.js";
+import eventBus from "../../events/eventBus.js";
+import {
+  TICKET_ASSIGNED_EVENT,
+  TICKET_CREATED_EVENT,
+  TICKET_STATUS_CHANGED_EVENT,
+} from "../../events/eventTypes.js";
 import {
   assignTicket,
   addTagToTicket,
@@ -137,6 +143,10 @@ const normalizeTicketFilters = (filters) => ({
   dateTo: filters.dateTo,
   organizationId: filters.organizationId,
 });
+
+const emitTicketEvent = (eventName, payload) => {
+  eventBus.emit(eventName, payload);
+};
 
 const buildCommonTicketFilters = (filters, userId) => {
   const resolvedAssignedToId =
@@ -393,6 +403,15 @@ export const createTicketService = async (ticketData, userId) => {
   if (!ticket || !ticket.id) {
     throw new ApiError(500, "Failed to create ticket");
   }
+
+  emitTicketEvent(TICKET_CREATED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
+    actorId: userId,
+    metadata: {
+      title: ticket.title,
+    },
+  });
 
   if (ticket.assignedToId) {
     return ticket;
@@ -680,6 +699,16 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
     throw new ApiError(500, "Failed to assign ticket");
   }
 
+  emitTicketEvent(TICKET_ASSIGNED_EVENT, {
+    ticketId: updatedTicket.id,
+    organizationId: updatedTicket.organizationId,
+    actorId: userId,
+    metadata: {
+      previousAssignedToId: ticket.assignedToId ?? null,
+      assignedToId: updatedTicket.assignedToId ?? null,
+    },
+  });
+
   return updatedTicket;
 };
 
@@ -713,6 +742,16 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
   if (!updatedTicket || !updatedTicket.id) {
     throw new ApiError(500, "Failed to update ticket status");
   }
+
+  emitTicketEvent(TICKET_STATUS_CHANGED_EVENT, {
+    ticketId: updatedTicket.id,
+    organizationId: updatedTicket.organizationId,
+    actorId: userId,
+    metadata: {
+      previousStatus: ticket.status,
+      status: updatedTicket.status,
+    },
+  });
 
   return updatedTicket;
 };

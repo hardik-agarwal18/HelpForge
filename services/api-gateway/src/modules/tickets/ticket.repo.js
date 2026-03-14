@@ -97,16 +97,7 @@ export const getTagByName = async (organizationId, name) => {
 
 export const createTicket = async (ticketData) => {
   return await prisma.ticket.create({
-    data: {
-      ...ticketData,
-      activities: {
-        create: {
-          actorId: ticketData.createdById,
-          action: "TICKET_CREATED",
-          newValue: ticketData.title,
-        },
-      },
-    },
+    data: ticketData,
     include: {
       organization: true,
       createdBy: true,
@@ -224,14 +215,6 @@ export const assignTicket = async (
     where: { id: ticketId },
     data: {
       assignedToId,
-      activities: {
-        create: {
-          actorId,
-          action: "TICKET_ASSIGNED",
-          oldValue: previousAssignedToId,
-          newValue: assignedToId,
-        },
-      },
     },
     include: {
       organization: true,
@@ -336,14 +319,6 @@ export const updateTicketStatus = async (
     where: { id: ticketId },
     data: {
       status,
-      activities: {
-        create: {
-          actorId,
-          action: "TICKET_STATUS_UPDATED",
-          oldValue: previousStatus,
-          newValue: status,
-        },
-      },
     },
     include: {
       organization: true,

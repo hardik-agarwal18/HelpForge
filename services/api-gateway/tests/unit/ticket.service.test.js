@@ -30,6 +30,7 @@ const mockUpdateAgentAvailability = jest.fn();
 const mockAutoAssignTicket = jest.fn();
 const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
+const mockEventBusEmit = jest.fn();
 
 jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   addTagToTicket: mockAddTagToTicket,
@@ -62,6 +63,12 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   updateAgentAvailability: mockUpdateAgentAvailability,
   updateTicketStatus: mockUpdateTicketStatus,
   updateTicket: mockUpdateTicket,
+}));
+
+jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
+  default: {
+    emit: mockEventBusEmit,
+  },
 }));
 
 const {
@@ -119,6 +126,14 @@ describe("Ticket Service", () => {
       title: "Login issue",
       assignedToId: "user-2",
       createdById: "user-1",
+    });
+    expect(mockEventBusEmit).toHaveBeenCalledWith("ticket.created", {
+      ticketId: "ticket-1",
+      organizationId: undefined,
+      actorId: "user-1",
+      metadata: {
+        title: "Login issue",
+      },
     });
     expect(result).toEqual({
       id: "ticket-1",
@@ -997,6 +1012,15 @@ describe("Ticket Service", () => {
         "user-1",
         "user-2",
       );
+      expect(mockEventBusEmit).toHaveBeenCalledWith("ticket.assigned", {
+        ticketId: "ticket-1",
+        organizationId: undefined,
+        actorId: "user-1",
+        metadata: {
+          previousAssignedToId: "user-2",
+          assignedToId: "user-3",
+        },
+      });
       expect(result).toEqual({
         id: "ticket-1",
         assignedToId: "user-3",
@@ -1230,6 +1254,15 @@ describe("Ticket Service", () => {
         "user-1",
         "OPEN",
       );
+      expect(mockEventBusEmit).toHaveBeenCalledWith("ticket.status.changed", {
+        ticketId: "ticket-1",
+        organizationId: undefined,
+        actorId: "user-1",
+        metadata: {
+          previousStatus: "OPEN",
+          status: "RESOLVED",
+        },
+      });
       expect(result).toEqual({
         id: "ticket-1",
         status: "RESOLVED",
