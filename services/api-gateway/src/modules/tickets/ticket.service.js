@@ -1,5 +1,5 @@
 import { ApiError } from "../../utils/errorHandler.js";
-import eventBus from "../../events/eventBus.js";
+import { emitTicketEvent } from "../../events/ticket.events.js";
 import {
   TICKET_ASSIGNED_EVENT,
   TICKET_CREATED_EVENT,
@@ -8,7 +8,6 @@ import {
 import {
   assignTicket,
   addTagToTicket,
-  autoAssignTicket,
   createTag,
   createTicketAttachment,
   createTicketActivityLog,
@@ -26,8 +25,6 @@ import {
   getTicketActivities,
   getTicketComments,
   getTicketAttachments,
-  getOrganizationAvailableAgents,
-  getOrganizationAgentWorkloads,
   getTicketOrganizationMembership,
   getTicketMembershipsByUserId,
   getTickets,
@@ -37,62 +34,31 @@ import {
   updateTicketStatus,
   updateTicket,
 } from "./ticket.repo.js";
+import { TICKET_PRIORITIES, TICKET_STATUSES } from "./ticket.constants.js";
 import {
-  TICKET_PRIORITIES,
-  TICKET_ROLE_POLICIES,
-  TICKET_SOURCES,
-  TICKET_STATUSES,
-} from "./ticket.constants.js";
-
-const getTicketRolePolicy = (role) =>
-  TICKET_ROLE_POLICIES[role] ?? TICKET_ROLE_POLICIES.MEMBER;
-
-const canViewAllOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canViewAll;
-
-const canEditAllOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canEditAll;
-
-const canAssignOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canAssign;
+  assertCanUpdateTicket,
+  canAssignOrganizationTickets,
+  canCreateInternalComment,
+  canDeleteAnyTicketAttachment,
+  canDeleteAnyTicketComment,
+  canEditAllOrganizationTickets,
+  canMemberViewTicket,
+  canViewAllOrganizationTickets,
+} from "./ticket.policy.js";
+import {
+  getProvidedUpdateFields,
+  normalizeTagName,
+  normalizeTicketFields,
+  normalizeTicketFilters,
+  normalizeTicketUpdateFields,
+} from "./ticket.utils.js";
+import {
+  buildCommonTicketFilters,
+  validateListFilters,
+} from "./ticket.filters.js";
+import { autoAssignTicketForOrganization } from "./ticket.autoAssign.js";
 
 const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
-
-const canMemberViewTicket = (ticket, userId) =>
-  ticket.createdById === userId || ticket.assignedToId === userId;
-
-const normalizeTicketUpdateFields = (ticketData) => ({
-  title: ticketData.title,
-  description: ticketData.description,
-  priority: ticketData.priority?.toUpperCase(),
-  status: ticketData.status?.toUpperCase(),
-  assignedToId: ticketData.assignedToId,
-});
-
-const getProvidedUpdateFields = (ticketData) =>
-  Object.fromEntries(
-    Object.entries(ticketData).filter(([, value]) => value !== undefined),
-  );
-
-const assertCanUpdateTicket = (membership, ticket, userId, updateData) => {
-  if (canEditAllOrganizationTickets(membership.role)) {
-    return;
-  }
-
-  if (membership.role !== "MEMBER" || ticket.createdById !== userId) {
-    throw new ApiError(403, "You do not have permission to update this ticket");
-  }
-
-  const allowedFields = ["title", "description", "priority"];
-  const attemptedFields = Object.keys(updateData);
-
-  if (!attemptedFields.every((field) => allowedFields.includes(field))) {
-    throw new ApiError(
-      403,
-      "Members can only update title, description, and priority on their own tickets",
-    );
-  }
-};
 
 const filterInternalCommentsForRole = (ticket, role) => {
   if (canViewAllOrganizationTickets(role) || !ticket.comments) {
@@ -113,127 +79,11 @@ const filterCommentsForRole = (comments, role) => {
   return comments.filter((comment) => !comment.isInternal);
 };
 
-const canCreateInternalComment = (role) =>
-  getTicketRolePolicy(role).canCreateInternalComment;
-
-const canDeleteAnyTicketComment = (role) =>
-  getTicketRolePolicy(role).canDeleteAnyComment;
-
-const canDeleteAnyTicketAttachment = (role) =>
-  getTicketRolePolicy(role).canDeleteAnyComment;
-
-const normalizeTagName = (name) => name.trim();
-
-const normalizeTicketFields = (ticketData) => ({
-  ...ticketData,
-  priority: ticketData.priority?.toUpperCase(),
-  source: ticketData.source?.toUpperCase(),
-});
-
-const normalizeTicketFilters = (filters) => ({
-  organizationId: filters.organizationId,
-  status: filters.status?.toUpperCase(),
-  priority: filters.priority?.toUpperCase(),
-  source: filters.source?.toUpperCase(),
-  assignedTo: filters.assignedTo,
-  assignedToId: filters.assignedToId,
-  tag: filters.tag?.trim(),
-  tagId: filters.tagId,
-  dateFrom: filters.dateFrom,
-  dateTo: filters.dateTo,
-  organizationId: filters.organizationId,
-});
-
-const emitTicketEvent = (eventName, payload) => {
-  eventBus.emit(eventName, payload);
-};
-
-const buildCommonTicketFilters = (filters, userId) => {
-  const resolvedAssignedToId =
-    filters.assignedTo === "me"
-      ? userId
-      : filters.assignedToId ?? filters.assignedTo;
-
-  const createdAtFilter = {};
-  const parsedDateFrom = parseDateFilter(filters.dateFrom, "dateFrom");
-  const parsedDateTo = parseDateFilter(filters.dateTo, "dateTo");
-  const tagFilter = {};
-
-  if (parsedDateFrom) {
-    createdAtFilter.gte = parsedDateFrom;
-  }
-
-  if (parsedDateTo) {
-    createdAtFilter.lte = parsedDateTo;
-  }
-
-  if (filters.tagId) {
-    tagFilter.tagId = filters.tagId;
-  }
-
-  if (filters.tag) {
-    tagFilter.tag = { name: filters.tag };
-  }
-
-  return {
-    ...(filters.organizationId ? { organizationId: filters.organizationId } : {}),
-    ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.priority ? { priority: filters.priority } : {}),
-    ...(filters.source ? { source: filters.source } : {}),
-    ...(resolvedAssignedToId ? { assignedToId: resolvedAssignedToId } : {}),
-    ...(Object.keys(tagFilter).length > 0
-      ? { tags: { some: tagFilter } }
-      : {}),
-    ...(Object.keys(createdAtFilter).length > 0
-      ? { createdAt: createdAtFilter }
-      : {}),
-  };
-};
-
 const getStaffMemberships = async (userId) => {
   const memberships = await getTicketMembershipsByUserId(userId);
-  return memberships.filter((membership) => STAFF_ROLES.includes(membership.role));
-};
-
-const parseDateFilter = (value, fieldName) => {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    throw new ApiError(400, `Invalid ${fieldName}`);
-  }
-
-  return parsedDate;
-};
-
-const validateListFilters = (filters, options = {}) => {
-  const { requireOrganizationId = true } = options;
-
-  if (requireOrganizationId && !filters.organizationId) {
-    throw new ApiError(400, "Organization ID is required");
-  }
-
-  if (filters.status && !TICKET_STATUSES.includes(filters.status)) {
-    throw new ApiError(400, "Invalid status");
-  }
-
-  if (filters.priority && !TICKET_PRIORITIES.includes(filters.priority)) {
-    throw new ApiError(400, "Invalid priority");
-  }
-
-  if (filters.source && !TICKET_SOURCES.includes(filters.source)) {
-    throw new ApiError(400, "Invalid source");
-  }
-
-  const dateFrom = parseDateFilter(filters.dateFrom, "dateFrom");
-  const dateTo = parseDateFilter(filters.dateTo, "dateTo");
-
-  if (dateFrom && dateTo && dateFrom > dateTo) {
-    throw new ApiError(400, "dateFrom cannot be after dateTo");
-  }
+  return memberships.filter((membership) =>
+    STAFF_ROLES.includes(membership.role),
+  );
 };
 
 const validateTicketAssignee = async (organizationId, assignedToId) => {
@@ -247,133 +97,11 @@ const validateTicketAssignee = async (organizationId, assignedToId) => {
   );
 
   if (!assignedMembership || !assignedMembership.id) {
-    throw new ApiError(400, "Assigned user must be a member of the organization");
-  }
-};
-
-const getWorkloadMap = (workloads) =>
-  new Map(workloads.map((workload) => [workload.userId, workload]));
-
-const startOfDay = (date) => {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-};
-
-const startOfWeek = (date) => {
-  const normalized = startOfDay(date);
-  const day = normalized.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  normalized.setDate(normalized.getDate() - diff);
-  return normalized;
-};
-
-const getEffectiveWorkload = (workload, now) => {
-  if (!workload) {
-    return {
-      assignedToday: 0,
-      assignedThisWeek: 0,
-    };
-  }
-
-  const dayStart = startOfDay(now);
-  const weekStart = startOfWeek(now);
-  const lastDailyReset = workload.lastDailyReset
-    ? new Date(workload.lastDailyReset)
-    : null;
-  const lastWeeklyReset = workload.lastWeeklyReset
-    ? new Date(workload.lastWeeklyReset)
-    : null;
-
-  return {
-    assignedToday:
-      lastDailyReset && lastDailyReset >= dayStart ? workload.assignedToday : 0,
-    assignedThisWeek:
-      lastWeeklyReset && lastWeeklyReset >= weekStart
-        ? workload.assignedThisWeek
-        : 0,
-  };
-};
-
-const isEligibleForAutoAssignment = (membership, workload, now) => {
-  const effectiveWorkload = getEffectiveWorkload(workload, now);
-
-  if (
-    membership.maxTicketsPerDay !== null &&
-    membership.maxTicketsPerDay !== undefined &&
-    effectiveWorkload.assignedToday >= membership.maxTicketsPerDay
-  ) {
-    return false;
-  }
-
-  if (
-    membership.maxTicketsPerWeek !== null &&
-    membership.maxTicketsPerWeek !== undefined &&
-    effectiveWorkload.assignedThisWeek >= membership.maxTicketsPerWeek
-  ) {
-    return false;
-  }
-
-  return true;
-};
-
-const findBestAutoAssignAgent = async (organizationId) => {
-  const [agents, workloads] = await Promise.all([
-    getOrganizationAvailableAgents(organizationId),
-    getOrganizationAgentWorkloads(organizationId),
-  ]);
-  const now = new Date();
-  const workloadMap = getWorkloadMap(workloads);
-  const eligibleAgents = agents.filter((membership) =>
-    isEligibleForAutoAssignment(
-      membership,
-      workloadMap.get(membership.userId),
-      now,
-    ),
-  );
-
-  if (eligibleAgents.length === 0) {
-    return null;
-  }
-
-  const [leastLoadedAgent] = eligibleAgents.sort((left, right) => {
-    const leftWorkload = getEffectiveWorkload(
-      workloadMap.get(left.userId),
-      now,
+    throw new ApiError(
+      400,
+      "Assigned user must be a member of the organization",
     );
-    const rightWorkload = getEffectiveWorkload(
-      workloadMap.get(right.userId),
-      now,
-    );
-
-    if (leftWorkload.assignedToday !== rightWorkload.assignedToday) {
-      return leftWorkload.assignedToday - rightWorkload.assignedToday;
-    }
-
-    return leftWorkload.assignedThisWeek - rightWorkload.assignedThisWeek;
-  });
-
-  return leastLoadedAgent.userId;
-};
-
-const autoAssignTicketForOrganization = async (ticket, actorId) => {
-  const autoAssignedUserId = await findBestAutoAssignAgent(ticket.organizationId);
-
-  if (!autoAssignedUserId) {
-    throw new ApiError(409, "No available agent found for auto-assignment");
   }
-
-  const autoAssignedTicket = await autoAssignTicket(
-    ticket.id,
-    ticket.organizationId,
-    autoAssignedUserId,
-  );
-
-  if (!autoAssignedTicket || !autoAssignedTicket.id) {
-    throw new ApiError(500, "Failed to auto-assign ticket");
-  }
-
-  return autoAssignedTicket;
 };
 
 export const createTicketService = async (ticketData, userId) => {
@@ -418,7 +146,7 @@ export const createTicketService = async (ticketData, userId) => {
   }
 
   try {
-    return await autoAssignTicketForOrganization(ticket, userId);
+    return await autoAssignTicketForOrganization(ticket);
   } catch (error) {
     if (error.statusCode === 409) {
       return ticket;
@@ -440,11 +168,18 @@ export const autoAssignTicketService = async (ticketId, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canAssignOrganizationTickets(membership.role)) {
-    throw new ApiError(403, "You do not have permission to auto-assign this ticket");
+  if (
+    !membership ||
+    !membership.id ||
+    !canAssignOrganizationTickets(membership.role)
+  ) {
+    throw new ApiError(
+      403,
+      "You do not have permission to auto-assign this ticket",
+    );
   }
 
-  return await autoAssignTicketForOrganization(ticket, userId);
+  return await autoAssignTicketForOrganization(ticket);
 };
 
 export const createTagService = async (tagData, userId) => {
@@ -453,12 +188,19 @@ export const createTagService = async (tagData, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+  if (
+    !membership ||
+    !membership.id ||
+    !canEditAllOrganizationTickets(membership.role)
+  ) {
     throw new ApiError(403, "You do not have permission to create tags");
   }
 
   const normalizedName = normalizeTagName(tagData.name);
-  const existingTag = await getTagByName(tagData.organizationId, normalizedName);
+  const existingTag = await getTagByName(
+    tagData.organizationId,
+    normalizedName,
+  );
 
   if (existingTag && existingTag.id) {
     throw new ApiError(409, "Tag already exists in this organization");
@@ -532,16 +274,24 @@ export const getMyAgentTicketsService = async (query, userId) => {
   const staffMemberships = await getStaffMemberships(userId);
 
   if (staffMemberships.length === 0) {
-    throw new ApiError(403, "You do not have permission to view assigned agent tickets");
+    throw new ApiError(
+      403,
+      "You do not have permission to view assigned agent tickets",
+    );
   }
 
-  const organizationIds = staffMemberships.map((membership) => membership.organizationId);
+  const organizationIds = staffMemberships.map(
+    (membership) => membership.organizationId,
+  );
 
   if (
     normalizedFilters.organizationId &&
     !organizationIds.includes(normalizedFilters.organizationId)
   ) {
-    throw new ApiError(403, "You do not have permission to view assigned agent tickets");
+    throw new ApiError(
+      403,
+      "You do not have permission to view assigned agent tickets",
+    );
   }
 
   const tickets = await getAgentTickets({
@@ -563,8 +313,12 @@ export const getMyAgentTicketsService = async (query, userId) => {
 export const getMyAgentStatsService = async (query, userId) => {
   const tickets = await getMyAgentTicketsService(query, userId);
 
-  const byStatus = Object.fromEntries(TICKET_STATUSES.map((status) => [status, 0]));
-  const byPriority = Object.fromEntries(TICKET_PRIORITIES.map((priority) => [priority, 0]));
+  const byStatus = Object.fromEntries(
+    TICKET_STATUSES.map((status) => [status, 0]),
+  );
+  const byPriority = Object.fromEntries(
+    TICKET_PRIORITIES.map((priority) => [priority, 0]),
+  );
 
   tickets.forEach((ticket) => {
     byStatus[ticket.status] += 1;
@@ -583,7 +337,10 @@ export const updateMyAgentAvailabilityService = async (
   isAvailable,
   userId,
 ) => {
-  const membership = await getTicketOrganizationMembership(organizationId, userId);
+  const membership = await getTicketOrganizationMembership(
+    organizationId,
+    userId,
+  );
 
   if (!membership || !membership.id) {
     throw new ApiError(
@@ -622,17 +379,14 @@ export const getTicketByIdService = async (ticketId, userId) => {
   );
 
   if (!membership || !membership.id) {
-    throw new ApiError(
-      403,
-      "You do not have permission to view this ticket",
-    );
+    throw new ApiError(403, "You do not have permission to view this ticket");
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
-    throw new ApiError(
-      403,
-      "You do not have permission to view this ticket",
-    );
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
+    throw new ApiError(403, "You do not have permission to view this ticket");
   }
 
   return filterInternalCommentsForRole(ticket, membership.role);
@@ -659,9 +413,16 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
 
   assertCanUpdateTicket(membership, ticket, userId, normalizedUpdateData);
 
-  await validateTicketAssignee(ticket.organizationId, normalizedUpdateData.assignedToId);
+  await validateTicketAssignee(
+    ticket.organizationId,
+    normalizedUpdateData.assignedToId,
+  );
 
-  const updatedTicket = await updateTicket(ticketId, normalizedUpdateData, userId);
+  const updatedTicket = await updateTicket(
+    ticketId,
+    normalizedUpdateData,
+    userId,
+  );
 
   if (!updatedTicket || !updatedTicket.id) {
     throw new ApiError(500, "Failed to update ticket");
@@ -682,7 +443,11 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canAssignOrganizationTickets(membership.role)) {
+  if (
+    !membership ||
+    !membership.id ||
+    !canAssignOrganizationTickets(membership.role)
+  ) {
     throw new ApiError(403, "You do not have permission to assign this ticket");
   }
 
@@ -725,7 +490,11 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+  if (
+    !membership ||
+    !membership.id ||
+    !canEditAllOrganizationTickets(membership.role)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to update this ticket status",
@@ -756,7 +525,11 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
   return updatedTicket;
 };
 
-export const createTicketCommentService = async (ticketId, commentData, userId) => {
+export const createTicketCommentService = async (
+  ticketId,
+  commentData,
+  userId,
+) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
@@ -775,7 +548,10 @@ export const createTicketCommentService = async (ticketId, commentData, userId) 
     );
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to comment on this ticket",
@@ -836,7 +612,10 @@ export const getTicketCommentsService = async (ticketId, userId) => {
     );
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to view comments on this ticket",
@@ -867,7 +646,10 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
     );
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to view activity on this ticket",
@@ -879,7 +661,11 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
   return activities || [];
 };
 
-export const deleteTicketCommentService = async (ticketId, commentId, userId) => {
+export const deleteTicketCommentService = async (
+  ticketId,
+  commentId,
+  userId,
+) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
@@ -952,7 +738,10 @@ export const createTicketAttachmentService = async (
     );
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to add attachments to this ticket",
@@ -998,7 +787,10 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
     );
   }
 
-  if (!canViewAllOrganizationTickets(membership.role) && !canMemberViewTicket(ticket, userId)) {
+  if (
+    !canViewAllOrganizationTickets(membership.role) &&
+    !canMemberViewTicket(ticket, userId)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to view attachments on this ticket",
@@ -1076,7 +868,11 @@ export const addTicketTagService = async (ticketId, tagId, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+  if (
+    !membership ||
+    !membership.id ||
+    !canEditAllOrganizationTickets(membership.role)
+  ) {
     throw new ApiError(403, "You do not have permission to tag this ticket");
   }
 
@@ -1119,7 +915,11 @@ export const deleteTicketTagService = async (ticketId, tagId, userId) => {
     userId,
   );
 
-  if (!membership || !membership.id || !canEditAllOrganizationTickets(membership.role)) {
+  if (
+    !membership ||
+    !membership.id ||
+    !canEditAllOrganizationTickets(membership.role)
+  ) {
     throw new ApiError(
       403,
       "You do not have permission to remove tags from this ticket",
