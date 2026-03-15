@@ -2,7 +2,7 @@ import express from "express";
 import "./events/registerHandlers.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
-import agentRoutes from "./modules/tickets/agent.routes.js";
+import agentRoutes from "./modules/tickets/ticket.agent.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 
