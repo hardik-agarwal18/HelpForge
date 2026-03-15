@@ -1,6 +1,6 @@
 sequenceDiagram
   autonumber
-  actor U as Member/Staff User
+  actor U as Staff User
   participant Auth as Auth Middleware
   participant R as Ticket Route
   participant C as Ticket Controller
@@ -13,24 +13,24 @@ sequenceDiagram
   U->>Auth: PATCH /api/tickets/:ticketId/status
   Auth-->>R: req.user
   R->>C: updateTicketStatus(request)
-  C->>S: updateTicketStatusService(actorId, ticketId, newStatus)
+  C->>S: updateTicketStatusService(ticketId, newStatus, actorId)
 
   S->>Repo: getTicketById(ticketId)
   Repo->>DB: Ticket.findUnique
   DB-->>Repo: ticket
   Repo-->>S: ticket
 
-  S->>Repo: getTicketOrganizationMembership(actorId, organizationId)
+  S->>Repo: getTicketOrganizationMembership(organizationId, actorId)
   Repo->>DB: Membership.findUnique(actor)
   DB-->>Repo: membership
   Repo-->>S: membership
 
   S->>S: canEditAllOrganizationTickets(role)
-  alt Not allowed and not ticket owner
+  alt Not allowed
     S-->>C: throw 403
     C-->>U: 403 response
   else Allowed
-    S->>Repo: updateTicketStatus(ticketId, newStatus, oldStatus, actorId)
+    S->>Repo: updateTicketStatus(ticketId, newStatus, actorId, oldStatus)
     Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket

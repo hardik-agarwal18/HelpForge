@@ -1,6 +1,6 @@
 sequenceDiagram
   autonumber
-  actor A as Agent/Staff User
+  actor A as Staff User
   participant Auth as Auth Middleware
   participant R as Agent Route
   participant C as Ticket Controller
@@ -8,13 +8,15 @@ sequenceDiagram
   participant Repo as Ticket Repo
   participant DB as Prisma/PostgreSQL
 
-  A->>Auth: GET /api/tickets/agents/me/stats?organizationId=...
+  A->>Auth: GET /api/agents/me/stats?organizationId=...
   Auth-->>R: req.user
   R->>C: getMyAgentStats(request)
-  C->>S: getMyAgentStatsService(userId, organizationId)
+  C->>S: getMyAgentStatsService(query, userId)
 
-  S->>Repo: getStaffMemberships(userId)
-  Repo->>DB: Membership.findMany(userId, role in OWNER/ADMIN/AGENT)
+  S->>S: getMyAgentTicketsService(query, userId)
+
+  S->>Repo: getTicketMembershipsByUserId(userId)
+  Repo->>DB: Membership.findMany(userId)
   DB-->>Repo: memberships
   Repo-->>S: memberships
 
@@ -22,7 +24,7 @@ sequenceDiagram
     S-->>C: throw 403
     C-->>A: 403 response
   else Allowed
-    S->>Repo: getAgentTickets(userId, organizationId)
+    S->>Repo: getAgentTickets(filters)
     Repo->>DB: Ticket.findMany(assignedToId=userId)
     DB-->>Repo: assigned tickets
     Repo-->>S: tickets

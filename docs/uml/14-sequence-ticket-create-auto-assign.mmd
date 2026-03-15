@@ -13,12 +13,19 @@ sequenceDiagram
   M->>Auth: POST /api/tickets
   Auth-->>R: req.user
   R->>C: createTicket(request)
-  C->>S: createTicketService(userId, payload)
+  C->>S: createTicketService(payload, userId)
 
-  S->>Repo: getTicketOrganizationMembership(userId, orgId)
+  S->>Repo: getTicketOrganizationMembership(orgId, userId)
   Repo->>DB: Membership.findUnique(userId_orgId)
   DB-->>Repo: membership
   Repo-->>S: membership
+
+  opt assignedToId provided
+    S->>Repo: getTicketOrganizationMembership(orgId, assignedToId)
+    Repo->>DB: Membership.findUnique(assigned userId_orgId)
+    DB-->>Repo: assignee membership
+    Repo-->>S: assignee membership
+  end
 
   S->>Repo: createTicket(ticketData)
   Repo->>DB: Ticket.create
@@ -47,7 +54,7 @@ sequenceDiagram
     S->>S: filter eligible by daily/weekly limits
     alt Eligible agent exists
       S->>Repo: autoAssignTicket(ticketId, selectedAgentId)
-      Repo->>DB: transaction(update ticket, upsert workload, activity log)
+      Repo->>DB: transaction(upsert workload, activity log, update ticket)
       DB-->>Repo: assigned ticket
       Repo-->>S: assigned ticket
     else No eligible agent

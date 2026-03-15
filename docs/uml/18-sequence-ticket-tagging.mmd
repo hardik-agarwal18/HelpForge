@@ -10,15 +10,15 @@ sequenceDiagram
 
   SUser->>Auth: POST /api/tickets/:ticketId/tags
   Auth-->>R: req.user
-  R->>C: addTagToTicket(request)
-  C->>S: addTagToTicketService(actorId, ticketId, tagId)
+  R->>C: addTicketTag(request)
+  C->>S: addTicketTagService(ticketId, tagId, actorId)
 
   S->>Repo: getTicketById(ticketId)
   Repo->>DB: Ticket.findUnique
   DB-->>Repo: ticket
   Repo-->>S: ticket
 
-  S->>Repo: getTicketOrganizationMembership(actorId, organizationId)
+  S->>Repo: getTicketOrganizationMembership(organizationId, actorId)
   Repo->>DB: Membership.findUnique
   DB-->>Repo: membership
   Repo-->>S: membership
@@ -28,6 +28,16 @@ sequenceDiagram
     S-->>C: throw 403
     C-->>SUser: 403 response
   else Allowed
+    S->>Repo: getTagById(tagId)
+    Repo->>DB: Tag.findUnique
+    DB-->>Repo: tag
+    Repo-->>S: tag
+
+    S->>Repo: getTicketTagById(ticketId, tagId)
+    Repo->>DB: TicketTag.findUnique
+    DB-->>Repo: existing mapping?
+    Repo-->>S: existing mapping?
+
     S->>Repo: addTagToTicket(ticketId, tagId)
     Repo->>DB: TicketTag.create
     DB-->>Repo: mapping
@@ -37,5 +47,5 @@ sequenceDiagram
     DB-->>Repo: log
     Repo-->>S: log
     S-->>C: success
-    C-->>SUser: 200 OK
+    C-->>SUser: 201 Created
   end

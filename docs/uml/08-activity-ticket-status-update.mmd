@@ -4,11 +4,9 @@ flowchart TD
   C --> D{Ticket exists?}
   D -->|No| X[Return 404]
   D -->|Yes| E[Verify requester membership in ticket organization]
-  E --> F{Can edit this ticket?}
+  E --> F{Can edit all organization tickets?}
   F -->|No| Y[Return 403]
-  F -->|Yes| G{New status differs from current?}
-  G -->|No| Z[Return unchanged ticket]
-  G -->|Yes| H[Update ticket status]
+  F -->|Yes| H[Update ticket status]
   H --> I[Emit ticket.status.changed event]
   I --> J[Return updated ticket]
   I --> K[Async handler writes status activity log]
@@ -16,5 +14,4 @@ flowchart TD
 
   X --> L
   Y --> L
-  Z --> L
   K --> L

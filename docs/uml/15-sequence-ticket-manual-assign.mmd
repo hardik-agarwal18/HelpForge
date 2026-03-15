@@ -14,14 +14,14 @@ sequenceDiagram
   SUser->>Auth: PATCH /api/tickets/:ticketId/assign
   Auth-->>R: req.user
   R->>C: assignTicket(request)
-  C->>S: assignTicketService(actorId, ticketId, assigneeId)
+  C->>S: assignTicketService(ticketId, assigneeId, actorId)
 
   S->>Repo: getTicketById(ticketId)
   Repo->>DB: Ticket.findUnique
   DB-->>Repo: ticket
   Repo-->>S: ticket
 
-  S->>Repo: getTicketOrganizationMembership(actorId, orgId)
+  S->>Repo: getTicketOrganizationMembership(orgId, actorId)
   Repo->>DB: Membership.findUnique(actor)
   DB-->>Repo: actor membership
   Repo-->>S: actor membership
@@ -31,12 +31,12 @@ sequenceDiagram
     S-->>C: throw 403
     C-->>SUser: 403 response
   else Allowed
-    S->>Repo: validateTicketAssignee(orgId, assigneeId)
-    Repo->>DB: Membership.findUnique(assignee)
+    S->>Repo: getTicketOrganizationMembership(orgId, assigneeId)
+    Repo->>DB: Membership.findUnique(assignee userId_orgId)
     DB-->>Repo: assignee membership
     Repo-->>S: assignee membership
 
-    S->>Repo: assignTicket(ticketId, assigneeId, actorId)
+    S->>Repo: assignTicket(ticketId, assigneeId, actorId, previousAssignedToId)
     Repo->>DB: Ticket.update
     DB-->>Repo: updated ticket
     Repo-->>S: updated ticket
