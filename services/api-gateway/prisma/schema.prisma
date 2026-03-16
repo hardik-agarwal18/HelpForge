@@ -82,6 +82,7 @@ model Membership {
   createdAt DateTime @default(now())
 
   @@unique([userId, organizationId])
+  @@index([organizationId, role, isAvailable, createdAt])
 }
 
 model Ticket {
@@ -206,6 +207,7 @@ model AgentWorkload {
 
   @@unique([userId, organizationId])
   @@index([organizationId])
+  @@index([organizationId, assignedToday, assignedThisWeek, userId])
 }
 
 enum TicketActivityAction {
