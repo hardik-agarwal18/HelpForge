@@ -67,6 +67,26 @@ describe("notification.repo", () => {
   });
 
   describe("getNotificationsByRecipient", () => {
+    it("uses defaults when options are omitted", async () => {
+      mockNotificationFindMany.mockResolvedValue([
+        { id: "notification-default" },
+      ]);
+
+      const result = await getNotificationsByRecipient("user-default");
+
+      expect(mockNotificationFindMany).toHaveBeenCalledWith({
+        where: {
+          recipientId: "user-default",
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip: 0,
+        take: 20,
+      });
+      expect(result).toEqual([{ id: "notification-default" }]);
+    });
+
     it("uses defaults and excludes isRead filter when not boolean", async () => {
       mockNotificationFindMany.mockResolvedValue([{ id: "notification-1" }]);
 

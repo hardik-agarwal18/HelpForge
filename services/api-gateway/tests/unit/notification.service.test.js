@@ -111,6 +111,18 @@ describe("notification.service", () => {
       expect(result).toEqual({ count: 0 });
     });
 
+    it("handles undefined recipientIds as empty list", async () => {
+      const result = await createInAppNotificationsService({
+        organizationId: "org-1",
+        type: "TICKET_COMMENT_ADDED",
+        title: "Comment added",
+        message: "A comment was added.",
+      });
+
+      expect(mockCreateNotifications).not.toHaveBeenCalled();
+      expect(result).toEqual({ count: 0 });
+    });
+
     it("throws when organizationId is missing", async () => {
       await expect(
         createInAppNotificationsService({
@@ -266,7 +278,9 @@ describe("notification.service", () => {
 
   describe("markNotificationAsReadService", () => {
     it("throws when required parameters are missing", async () => {
-      await expect(markNotificationAsReadService("notification-1")).rejects.toMatchObject({
+      await expect(
+        markNotificationAsReadService("notification-1"),
+      ).rejects.toMatchObject({
         statusCode: 400,
         message: "Notification ID and recipient ID are required",
       });
