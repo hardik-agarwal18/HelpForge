@@ -1435,6 +1435,36 @@ describe("Ticket Service", () => {
         message: "You do not have permission to comment on this ticket",
       });
     });
+
+    it("masks internal flag when member receives internal comment payload", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+        assignedToId: null,
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicketComment.mockResolvedValue({
+        id: "comment-1",
+        message: "Public reply",
+        isInternal: true,
+      });
+
+      const result = await createTicketCommentService(
+        "ticket-1",
+        { message: "Public reply", isInternal: false },
+        "user-1",
+      );
+
+      expect(result).toEqual({
+        id: "comment-1",
+        message: "Public reply",
+        isInternal: false,
+      });
+    });
   });
 
   describe("getTicketCommentsService", () => {
@@ -2168,6 +2198,404 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 404,
         message: "Tag not found on this ticket",
+      });
+    });
+  });
+
+  describe("coverage branches", () => {
+    it("rethrows non-409 auto-assign errors during ticket creation", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicket.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        title: "Login issue",
+        assignedToId: null,
+      });
+      mockGetOrganizationAvailableAgents.mockRejectedValue(
+        new Error("auto-assign crashed"),
+      );
+
+      await expect(
+        createTicketService(
+          {
+            organizationId: "org-1",
+            title: "Login issue",
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        message: "auto-assign crashed",
+      });
+    });
+
+    it("throws when createTag repository call fails", async () => {
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTagByName.mockResolvedValue(null);
+      mockCreateTag.mockResolvedValue(null);
+
+      await expect(
+        createTagService({ organizationId: "org-1", name: "Bug" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to create tag",
+      });
+    });
+
+    it("throws when organizationId is missing for getTags", async () => {
+      await expect(getTagsService(undefined, "user-1")).rejects.toMatchObject({
+        statusCode: 400,
+        message: "Organization ID is required",
+      });
+    });
+
+    it("rejects agent ticket lookup for unauthorized organization scope", async () => {
+      mockGetTicketMembershipsByUserId.mockResolvedValue([
+        { organizationId: "org-1", role: "AGENT" },
+      ]);
+
+      await expect(
+        getMyAgentTicketsService({ organizationId: "org-2" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view assigned agent tickets",
+      });
+    });
+
+    it("throws when updateTicket membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        updateTicketService("ticket-1", { title: "Updated" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to update this ticket",
+      });
+    });
+
+    it("throws when updateTicket repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockUpdateTicket.mockResolvedValue(null);
+
+      await expect(
+        updateTicketService("ticket-1", { title: "Updated" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to update ticket",
+      });
+    });
+
+    it("throws when create comment membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        createTicketCommentService("ticket-1", { message: "Hi" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to comment on this ticket",
+      });
+    });
+
+    it("throws when create comment repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicketComment.mockResolvedValue(null);
+
+      await expect(
+        createTicketCommentService("ticket-1", { message: "Hi" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to create ticket comment",
+      });
+    });
+
+    it("throws when get comments membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        getTicketCommentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view comments on this ticket",
+      });
+    });
+
+    it("throws when get activities membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        getTicketActivitiesService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to view activity on this ticket",
+      });
+    });
+
+    it("throws when delete comment repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketCommentById.mockResolvedValue({
+        id: "comment-1",
+        ticketId: "ticket-1",
+        authorId: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockDeleteTicketComment.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketCommentService("ticket-1", "comment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to delete ticket comment",
+      });
+    });
+
+    it("throws when create attachment membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        createTicketAttachmentService(
+          "ticket-1",
+          {
+            fileUrl: "https://example.com/file.pdf",
+            fileType: "application/pdf",
+            fileSize: 100,
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to add attachments to this ticket",
+      });
+    });
+
+    it("throws when create attachment repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockCreateTicketAttachment.mockResolvedValue(null);
+
+      await expect(
+        createTicketAttachmentService(
+          "ticket-1",
+          {
+            fileUrl: "https://example.com/file.pdf",
+            fileType: "application/pdf",
+            fileSize: 100,
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to create ticket attachment",
+      });
+    });
+
+    it("throws when get attachments membership is missing", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue(null);
+
+      await expect(
+        getTicketAttachmentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message:
+          "You do not have permission to view attachments on this ticket",
+      });
+    });
+
+    it("throws when delete attachment repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+        createdById: "user-1",
+      });
+      mockGetTicketAttachmentById.mockResolvedValue({
+        id: "attachment-1",
+        ticketId: "ticket-1",
+        uploadedBy: "user-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+      mockDeleteTicketAttachment.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to delete ticket attachment",
+      });
+    });
+
+    it("throws when add tag ticket is missing", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        addTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("throws when tag already exists on ticket", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTagById.mockResolvedValue({
+        id: "tag-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketTagById.mockResolvedValue({
+        ticketId: "ticket-1",
+        tagId: "tag-1",
+      });
+
+      await expect(
+        addTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        message: "Tag already added to this ticket",
+      });
+    });
+
+    it("throws when add tag repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTagById.mockResolvedValue({
+        id: "tag-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketTagById.mockResolvedValue(null);
+      mockAddTagToTicket.mockResolvedValue(null);
+
+      await expect(
+        addTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to add tag to ticket",
+      });
+    });
+
+    it("throws when delete tag ticket is missing", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
+    it("throws when delete tag membership is unauthorized", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+      });
+
+      await expect(
+        deleteTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: "You do not have permission to remove tags from this ticket",
+      });
+    });
+
+    it("throws when delete tag repository call fails", async () => {
+      mockGetTicketById.mockResolvedValue({
+        id: "ticket-1",
+        organizationId: "org-1",
+      });
+      mockGetTicketOrganizationMembership.mockResolvedValue({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+      mockGetTicketTagById.mockResolvedValue({
+        ticketId: "ticket-1",
+        tagId: "tag-1",
+        tag: { name: "Bug" },
+      });
+      mockDeleteTicketTag.mockResolvedValue(null);
+
+      await expect(
+        deleteTicketTagService("ticket-1", "tag-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: "Failed to remove tag from ticket",
       });
     });
   });
