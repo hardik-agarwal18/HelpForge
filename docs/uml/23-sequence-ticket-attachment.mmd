@@ -1,0 +1,55 @@
+sequenceDiagram
+  autonumber
+  actor U as Member/Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant EB as Event Bus
+  participant EH as Ticket Event Handler
+  participant NH as Notification Handler
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  U->>Auth: POST /api/tickets/:ticketId/attachments
+  Auth-->>R: req.user
+  R->>C: createTicketAttachment(request)
+  C->>S: createTicketAttachmentService(ticketId, fileData, actorId)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(orgId, actorId)
+  Repo->>DB: Membership.findUnique(actor)
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  S->>S: permission check (staff OR ticket member)
+  alt Not allowed
+    S-->>C: throw 403
+    C-->>U: 403 response
+  else Allowed
+    S->>Repo: createTicketAttachment(ticketId, fileData)
+    Repo->>DB: TicketAttachment.create
+    DB-->>Repo: attachment
+    Repo-->>S: attachment
+
+    S->>EB: emit ticket.attachment.added
+    par Async activity logging
+      EB->>EH: handle ticket.attachment.added
+      EH->>Repo: createTicketActivityLog(ATTACHMENT_ADDED)
+      Repo->>DB: TicketActivityLog.create
+      DB-->>Repo: log
+      Repo-->>EH: log
+    and Async notifications
+      EB->>NH: handle ticket.attachment.added
+      NH->>NH: send notifications
+    end
+
+    S-->>C: success
+    C-->>U: 201 Created
+  end
+
+  Note over U,DB: Delete attachment follows same pattern with ticket.attachment.deleted event

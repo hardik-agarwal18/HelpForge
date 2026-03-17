@@ -35,6 +35,7 @@ Quick preview page: `gallery.md` (renders all diagrams in one markdown file).
 10. `18-sequence-ticket-tagging.mmd`
 11. `19-sequence-agent-availability-update.mmd`
 12. `20-sequence-agent-stats.mmd`
+13. `23-sequence-ticket-attachment.mmd`
 
 ## Deployment Diagrams
 

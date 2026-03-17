@@ -6,7 +6,7 @@ Rendered preview page for all UML diagrams using Mermaid blocks.
 
 ### 01-use-case
 
-~~~mermaid
+```mermaid
 flowchart LR
 
   classDef actor fill:#fff,stroke:#333,stroke-width:1px;
@@ -79,11 +79,11 @@ flowchart LR
   Owner --> U14
   Owner --> U15
   Owner --> U16
-~~~
+```
 
 ### 02-component-current
 
-~~~mermaid
+```mermaid
 flowchart TB
 
   Client[Client App]
@@ -155,11 +155,11 @@ flowchart TB
   TicketRepo --> Prisma
 
   Prisma --> DB
-~~~
+```
 
 ### 03-package-api-gateway
 
-~~~mermaid
+```mermaid
 flowchart TB
 
   subgraph API[api-gateway/src]
@@ -271,11 +271,11 @@ flowchart TB
   TicketHandlers --> LoggerConfig
   NotificationHandlers --> LoggerConfig
   AnalyticsHandlers --> LoggerConfig
-~~~
+```
 
 ### 04-class-domain-prisma
 
-~~~mermaid
+```mermaid
 classDiagram
 
   class User {
@@ -441,13 +441,13 @@ classDiagram
   Ticket --> Priority : priority
   Ticket --> TicketSource : source
   TicketActivityLog --> TicketActivityAction : action
-~~~
+```
 
 ## State
 
 ### 05-state-ticket-lifecycle
 
-~~~mermaid
+```mermaid
 stateDiagram-v2
   [*] --> OPEN : ticket created
   OPEN --> IN_PROGRESS : assigned to agent
@@ -461,13 +461,13 @@ stateDiagram-v2
 
   CLOSED --> OPEN : reopened by staff
   CLOSED --> [*]
-~~~
+```
 
 ## Activity
 
 ### 06-activity-auto-assignment
 
-~~~mermaid
+```mermaid
 flowchart TD
   A([Start: Ticket Created]) --> B{Assigned agent provided?}
   B -->|Yes| C[Validate assignee in organization]
@@ -495,11 +495,11 @@ flowchart TD
   L --> T
   S --> T
   X --> T
-~~~
+```
 
 ### 07-activity-role-management
 
-~~~mermaid
+```mermaid
 flowchart TD
   A([Start: Role Update Request]) --> B[Authenticate JWT]
   B --> C[Verify organization membership]
@@ -521,11 +521,11 @@ flowchart TD
   Y --> L
   Z --> L
   W --> L
-~~~
+```
 
 ### 08-activity-ticket-status-update
 
-~~~mermaid
+```mermaid
 flowchart TD
   A([Start: Status Update Request]) --> B[Authenticate and validate payload]
   B --> C[Load ticket by ticketId]
@@ -546,13 +546,13 @@ flowchart TD
   Y --> L
   Z --> L
   K --> L
-~~~
+```
 
 ## Sequence
 
 ### 09-sequence-auth-register
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor U as Unauthenticated User
@@ -587,11 +587,11 @@ sequenceDiagram
     S-->>C: { user, token }
     C-->>U: 201 Created
   end
-~~~
+```
 
 ### 10-sequence-auth-login
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor U as User
@@ -627,11 +627,11 @@ sequenceDiagram
       C-->>U: 200 OK
     end
   end
-~~~
+```
 
 ### 11-sequence-org-create
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor U as Authenticated User
@@ -652,11 +652,11 @@ sequenceDiagram
   Repo-->>S: created organization aggregate
   S-->>C: result
   C-->>U: 201 Created
-~~~
+```
 
 ### 12-sequence-org-invite-member
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor A as Owner/Admin
@@ -690,11 +690,11 @@ sequenceDiagram
     S-->>C: success
     C-->>A: 200 OK
   end
-~~~
+```
 
 ### 13-sequence-org-update-member-role
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor A as Owner/Admin
@@ -731,11 +731,11 @@ sequenceDiagram
     S-->>C: success
     C-->>A: 200 OK
   end
-~~~
+```
 
 ### 14-sequence-ticket-create-auto-assign
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor M as Member/Staff User
@@ -795,11 +795,11 @@ sequenceDiagram
 
   S-->>C: ticket response
   C-->>M: 201 Created
-~~~
+```
 
 ### 15-sequence-ticket-manual-assign
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor SUser as Staff User
@@ -852,11 +852,11 @@ sequenceDiagram
     S-->>C: success
     C-->>SUser: 200 OK
   end
-~~~
+```
 
 ### 16-sequence-ticket-status-update
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor U as Member/Staff User
@@ -902,11 +902,11 @@ sequenceDiagram
     S-->>C: success
     C-->>U: 200 OK
   end
-~~~
+```
 
 ### 17-sequence-ticket-internal-comment
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor U as Member/Staff User
@@ -961,11 +961,11 @@ sequenceDiagram
     S-->>C: success
     C-->>U: 201 Created
   end
-~~~
+```
 
 ### 18-sequence-ticket-tagging
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor SUser as Staff User
@@ -1007,11 +1007,11 @@ sequenceDiagram
     S-->>C: success
     C-->>SUser: 200 OK
   end
-~~~
+```
 
 ### 19-sequence-agent-availability-update
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor A as Agent/Staff User
@@ -1044,11 +1044,11 @@ sequenceDiagram
     S-->>C: success
     C-->>A: 200 OK
   end
-~~~
+```
 
 ### 20-sequence-agent-stats
 
-~~~mermaid
+```mermaid
 sequenceDiagram
   autonumber
   actor A as Agent/Staff User
@@ -1082,13 +1082,73 @@ sequenceDiagram
     S-->>C: stats summary
     C-->>A: 200 OK
   end
-~~~
+```
+
+### 23-sequence-ticket-attachment
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Member/Staff User
+  participant Auth as Auth Middleware
+  participant R as Ticket Route
+  participant C as Ticket Controller
+  participant S as Ticket Service
+  participant EB as Event Bus
+  participant EH as Ticket Event Handler
+  participant NH as Notification Handler
+  participant Repo as Ticket Repo
+  participant DB as Prisma/PostgreSQL
+
+  U->>Auth: POST /api/tickets/:ticketId/attachments
+  Auth-->>R: req.user
+  R->>C: createTicketAttachment(request)
+  C->>S: createTicketAttachmentService(ticketId, fileData, actorId)
+
+  S->>Repo: getTicketById(ticketId)
+  Repo->>DB: Ticket.findUnique
+  DB-->>Repo: ticket
+  Repo-->>S: ticket
+
+  S->>Repo: getTicketOrganizationMembership(orgId, actorId)
+  Repo->>DB: Membership.findUnique(actor)
+  DB-->>Repo: membership
+  Repo-->>S: membership
+
+  S->>S: permission check (staff OR ticket member)
+  alt Not allowed
+    S-->>C: throw 403
+    C-->>U: 403 response
+  else Allowed
+    S->>Repo: createTicketAttachment(ticketId, fileData)
+    Repo->>DB: TicketAttachment.create
+    DB-->>Repo: attachment
+    Repo-->>S: attachment
+
+    S->>EB: emit ticket.attachment.added
+    par Async activity logging
+      EB->>EH: handle ticket.attachment.added
+      EH->>Repo: createTicketActivityLog(ATTACHMENT_ADDED)
+      Repo->>DB: TicketActivityLog.create
+      DB-->>Repo: log
+      Repo-->>EH: log
+    and Async notifications
+      EB->>NH: handle ticket.attachment.added
+      NH->>NH: send notifications
+    end
+
+    S-->>C: success
+    C-->>U: 201 Created
+  end
+
+  Note over U,DB: Delete attachment follows same pattern with ticket.attachment.deleted event
+```
 
 ## Deployment
 
 ### 21-deployment-as-is
 
-~~~mermaid
+```mermaid
 flowchart TB
   subgraph ClientLayer[Client Layer]
     Web[Web/Frontend Client]
@@ -1107,11 +1167,11 @@ flowchart TB
 
   Note1[Current implemented deployment view]
   Note1 -.-> APIGW
-~~~
+```
 
 ### 22-deployment-to-be
 
-~~~mermaid
+```mermaid
 flowchart TB
   subgraph Edge[Edge]
     Nginx[Nginx Reverse Proxy]
@@ -1187,4 +1247,4 @@ flowchart TB
   Planned -.-> Services
   Planned -.-> Async
   Planned -.-> Storage
-~~~
+```
