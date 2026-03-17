@@ -10,7 +10,7 @@ import {
   updateAgentAvailabilitySchema,
   updateTicketStatusSchema,
   updateTicketSchema,
-} from "../../src/modules/tickets/ticket.validator.js";
+} from "../../../src/modules/tickets/ticket.validator.js";
 
 describe("Ticket Validator", () => {
   describe("createTicketSchema", () => {

@@ -22,7 +22,7 @@ const mockUpdateMyAgentAvailabilityService = jest.fn();
 const mockUpdateTicketStatusService = jest.fn();
 const mockUpdateTicketService = jest.fn();
 
-jest.unstable_mockModule("../../src/modules/tickets/ticket.service.js", () => ({
+jest.unstable_mockModule("../../../src/modules/tickets/ticket.service.js", () => ({
   addTicketTagService: mockAddTicketTagService,
   autoAssignTicketService: mockAutoAssignTicketService,
   assignTicketService: mockAssignTicketService,
@@ -69,7 +69,7 @@ const {
   updateTicketStatusController,
   updateTicketController,
 } = await import(
-  "../../src/modules/tickets/ticket.controller.js"
+  "../../../src/modules/tickets/ticket.controller.js"
 );
 
 describe("Ticket Controller", () => {

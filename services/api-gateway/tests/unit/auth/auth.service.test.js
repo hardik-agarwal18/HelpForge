@@ -8,7 +8,7 @@ const mockBcryptHash = jest.fn();
 const mockBcryptCompare = jest.fn();
 const mockJwtSign = jest.fn();
 
-jest.unstable_mockModule("../../src/modules/auth/auth.repo.js", () => ({
+jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserByEmail: mockFindUserByEmail,
   createUser: mockCreateUser,
   findUserById: mockFindUserById,
@@ -29,8 +29,8 @@ jest.unstable_mockModule("jsonwebtoken", () => ({
 
 // Import after mocking
 const { registerUser, loginUser } =
-  await import("../../src/modules/auth/auth.service.js");
-const { ApiError } = await import("../../src/utils/errorHandler.js");
+  await import("../../../src/modules/auth/auth.service.js");
+const { ApiError } = await import("../../../src/utils/errorHandler.js");
 
 describe("Auth Service Unit Tests", () => {
   beforeEach(() => {

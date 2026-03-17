@@ -4,23 +4,23 @@ const mockCreateTicketActivityLog = jest.fn();
 const mockLoggerDebug = jest.fn();
 const registeredHandlers = new Map();
 
-jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
+jest.unstable_mockModule("../../../src/modules/tickets/ticket.repo.js", () => ({
   createTicketActivityLog: mockCreateTicketActivityLog,
 }));
 
-jest.unstable_mockModule("../../src/config/logger.js", () => ({
+jest.unstable_mockModule("../../../src/config/logger.js", () => ({
   default: {
     debug: mockLoggerDebug,
   },
 }));
 
-jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
+jest.unstable_mockModule("../../../src/events/eventBus.js", () => ({
   registerAsyncHandler: (eventName, handler) => {
     registeredHandlers.set(eventName, handler);
   },
 }));
 
-await import("../../src/events/handlers/ticket.handlers.js");
+await import("../../../src/events/handlers/ticket.handlers.js");
 
 describe("ticket.handlers", () => {
   beforeEach(() => {

@@ -11,7 +11,7 @@ const mockMembershipUpdate = jest.fn();
 const mockMembershipDeleteMany = jest.fn();
 const mockTransaction = jest.fn();
 
-jest.unstable_mockModule("../../src/config/database.config.js", () => ({
+jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
     organization: {
       create: mockOrganizationCreate,
@@ -39,7 +39,7 @@ const {
   inviteMemberInOrganization,
   patchOrganization,
   updateMembershipRole,
-} = await import("../../src/modules/organization/org.repo.js");
+} = await import("../../../src/modules/organization/org.repo.js");
 
 describe("Organization Repo", () => {
   beforeEach(() => {

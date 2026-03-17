@@ -5,7 +5,7 @@ import { z } from "zod";
 const mockFindUserById = jest.fn();
 const mockJwtVerify = jest.fn();
 
-jest.unstable_mockModule("../../src/modules/auth/auth.repo.js", () => ({
+jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserById: mockFindUserById,
 }));
 
@@ -23,9 +23,9 @@ jest.unstable_mockModule("jsonwebtoken", () => ({
 
 // Import after mocking
 const { authenticate } =
-  await import("../../src/middleware/auth.middleware.js");
+  await import("../../../src/middleware/auth.middleware.js");
 const { validate } =
-  await import("../../src/middleware/validation.middleware.js");
+  await import("../../../src/middleware/validation.middleware.js");
 
 describe("Middleware Unit Tests", () => {
   beforeEach(() => {

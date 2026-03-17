@@ -9,7 +9,7 @@ const mockTicketUpdate = jest.fn();
 const mockTicketActivityLogCreate = jest.fn();
 const mockTransaction = jest.fn();
 
-jest.unstable_mockModule("../../src/config/database.config.js", () => ({
+jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
     membership: {
       findMany: mockMembershipFindMany,
@@ -62,7 +62,7 @@ const {
   getOrganizationAgentWorkloads,
   getOrganizationAvailableAgents,
   updateAgentAvailability,
-} = await import("../../src/modules/tickets/ticket.repo.js");
+} = await import("../../../src/modules/tickets/ticket.repo.js");
 
 describe("Ticket Repo", () => {
   beforeEach(() => {

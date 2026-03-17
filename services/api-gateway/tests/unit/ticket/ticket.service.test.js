@@ -32,7 +32,7 @@ const mockUpdateTicketStatus = jest.fn();
 const mockUpdateTicket = jest.fn();
 const mockEventBusEmit = jest.fn();
 
-jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
+jest.unstable_mockModule("../../../src/modules/tickets/ticket.repo.js", () => ({
   addTagToTicket: mockAddTagToTicket,
   createTicketActivityLog: mockCreateTicketActivityLog,
   createTicketAttachment: mockCreateTicketAttachment,
@@ -65,7 +65,7 @@ jest.unstable_mockModule("../../src/modules/tickets/ticket.repo.js", () => ({
   updateTicket: mockUpdateTicket,
 }));
 
-jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
+jest.unstable_mockModule("../../../src/events/eventBus.js", () => ({
   default: {
     emit: mockEventBusEmit,
   },
@@ -93,7 +93,7 @@ const {
   updateMyAgentAvailabilityService,
   updateTicketStatusService,
   updateTicketService,
-} = await import("../../src/modules/tickets/ticket.service.js");
+} = await import("../../../src/modules/tickets/ticket.service.js");
 
 describe("Ticket Service", () => {
   beforeEach(() => {

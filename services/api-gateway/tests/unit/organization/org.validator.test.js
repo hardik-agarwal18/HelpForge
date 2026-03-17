@@ -5,7 +5,7 @@ import {
   inviteMemberSchema,
   updateMemberRoleSchema,
   updateOrganizationSchema,
-} from "../../src/modules/organization/org.validator.js";
+} from "../../../src/modules/organization/org.validator.js";
 
 describe("Organization Validator", () => {
   describe("createOrganizationSchema", () => {

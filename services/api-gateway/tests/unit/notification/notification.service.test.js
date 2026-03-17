@@ -8,8 +8,23 @@ const mockSendNotification = jest.fn();
 const mockResolveRecipientsForTicketEvent = jest.fn();
 const mockApplyRecipientPreferences = jest.fn();
 
+const basePayload = {
+  ticketId: "ticket-1",
+  organizationId: "org-1",
+  actorId: "user-actor",
+};
+
+const buildPayload = (overrides = {}) => ({
+  ...basePayload,
+  ...overrides,
+});
+
+const expectApiError = async (promise, statusCode, message) => {
+  await expect(promise).rejects.toMatchObject({ statusCode, message });
+};
+
 jest.unstable_mockModule(
-  "../../src/modules/notifications/notification.repo.js",
+  "../../../src/modules/notifications/notification.repo.js",
   () => ({
     createNotifications: mockCreateNotifications,
     getNotificationsByRecipient: mockGetNotificationsByRecipient,
@@ -19,21 +34,21 @@ jest.unstable_mockModule(
 );
 
 jest.unstable_mockModule(
-  "../../src/modules/notifications/notification.provider.js",
+  "../../../src/modules/notifications/notification.provider.js",
   () => ({
     sendNotification: mockSendNotification,
   }),
 );
 
 jest.unstable_mockModule(
-  "../../src/modules/notifications/strategies/recipient.strategy.js",
+  "../../../src/modules/notifications/strategies/recipient.strategy.js",
   () => ({
     resolveRecipientsForTicketEvent: mockResolveRecipientsForTicketEvent,
   }),
 );
 
 jest.unstable_mockModule(
-  "../../src/modules/notifications/strategies/preference.strategy.js",
+  "../../../src/modules/notifications/strategies/preference.strategy.js",
   () => ({
     applyRecipientPreferences: mockApplyRecipientPreferences,
   }),
@@ -46,7 +61,7 @@ const {
   markAllNotificationsAsReadService,
   markNotificationAsReadService,
   sendForTicketEventService,
-} = await import("../../src/modules/notifications/notification.service.js");
+} = await import("../../../src/modules/notifications/notification.service.js");
 
 describe("notification.service", () => {
   beforeEach(() => {
@@ -124,44 +139,39 @@ describe("notification.service", () => {
     });
 
     it("throws when organizationId is missing", async () => {
-      await expect(
+      await expectApiError(
         createInAppNotificationsService({
           recipientIds: ["user-1"],
           type: "TICKET_COMMENT_ADDED",
           title: "Comment added",
           message: "A comment was added.",
         }),
-      ).rejects.toMatchObject({
-        statusCode: 400,
-        message: "Organization ID is required",
-      });
+        400,
+        "Organization ID is required",
+      );
     });
 
     it("throws when required notification fields are missing", async () => {
-      await expect(
+      await expectApiError(
         createInAppNotificationsService({
           organizationId: "org-1",
           recipientIds: ["user-1"],
           title: "Missing type",
           message: "Missing type should fail",
         }),
-      ).rejects.toMatchObject({
-        statusCode: 400,
-        message: "Notification type, title, and message are required",
-      });
+        400,
+        "Notification type, title, and message are required",
+      );
     });
   });
 
   describe("createTicketEventNotificationService", () => {
     it("uses strategy resolution and preference filtering before persistence", async () => {
-      const payload = {
-        ticketId: "ticket-1",
-        organizationId: "org-1",
-        actorId: "user-actor",
+      const payload = buildPayload({
         metadata: {
           assignedToId: "user-2",
         },
-      };
+      });
 
       await createTicketEventNotificationService({
         payload,
@@ -213,11 +223,7 @@ describe("notification.service", () => {
     });
 
     it("returns 0 notifications when preference filtering removes everyone", async () => {
-      const payload = {
-        ticketId: "ticket-3",
-        organizationId: "org-1",
-        actorId: "user-actor",
-      };
+      const payload = buildPayload({ ticketId: "ticket-3" });
 
       mockApplyRecipientPreferences.mockResolvedValue([]);
 
@@ -252,10 +258,11 @@ describe("notification.service", () => {
 
   describe("listMyNotificationsService", () => {
     it("throws when recipientId is missing", async () => {
-      await expect(listMyNotificationsService()).rejects.toMatchObject({
-        statusCode: 400,
-        message: "Recipient ID is required",
-      });
+      await expectApiError(
+        listMyNotificationsService(),
+        400,
+        "Recipient ID is required",
+      );
     });
 
     it("returns notifications from repository", async () => {
@@ -278,23 +285,21 @@ describe("notification.service", () => {
 
   describe("markNotificationAsReadService", () => {
     it("throws when required parameters are missing", async () => {
-      await expect(
+      await expectApiError(
         markNotificationAsReadService("notification-1"),
-      ).rejects.toMatchObject({
-        statusCode: 400,
-        message: "Notification ID and recipient ID are required",
-      });
+        400,
+        "Notification ID and recipient ID are required",
+      );
     });
 
     it("throws not found when no row is updated", async () => {
       mockMarkNotificationAsRead.mockResolvedValue({ count: 0 });
 
-      await expect(
+      await expectApiError(
         markNotificationAsReadService("notification-1", "user-1"),
-      ).rejects.toMatchObject({
-        statusCode: 404,
-        message: "Notification not found",
-      });
+        404,
+        "Notification not found",
+      );
     });
 
     it("returns update result when row is updated", async () => {
@@ -315,10 +320,11 @@ describe("notification.service", () => {
 
   describe("markAllNotificationsAsReadService", () => {
     it("throws when recipientId is missing", async () => {
-      await expect(markAllNotificationsAsReadService()).rejects.toMatchObject({
-        statusCode: 400,
-        message: "Recipient ID is required",
-      });
+      await expectApiError(
+        markAllNotificationsAsReadService(),
+        400,
+        "Recipient ID is required",
+      );
     });
 
     it("returns repository update result", async () => {

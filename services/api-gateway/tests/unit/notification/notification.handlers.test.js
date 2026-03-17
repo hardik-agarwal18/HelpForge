@@ -4,26 +4,26 @@ const mockLoggerInfo = jest.fn();
 const mockHandleTicketNotificationEvent = jest.fn();
 const registeredHandlers = new Map();
 
-jest.unstable_mockModule("../../src/config/logger.js", () => ({
+jest.unstable_mockModule("../../../src/config/logger.js", () => ({
   default: {
     info: mockLoggerInfo,
   },
 }));
 
-jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
+jest.unstable_mockModule("../../../src/events/eventBus.js", () => ({
   registerAsyncHandler: (eventName, handler) => {
     registeredHandlers.set(eventName, handler);
   },
 }));
 
 jest.unstable_mockModule(
-  "../../src/modules/notifications/handlers/ticketNotification.handler.js",
+  "../../../src/modules/notifications/handlers/ticketNotification.handler.js",
   () => ({
     handleTicketNotificationEvent: mockHandleTicketNotificationEvent,
   }),
 );
 
-await import("../../src/events/handlers/notification.handlers.js");
+await import("../../../src/events/handlers/notification.handlers.js");
 
 describe("notification.handlers", () => {
   beforeEach(() => {

@@ -4,7 +4,7 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 const mockFindUnique = jest.fn();
 
 // Mock prisma properly for ES modules
-jest.unstable_mockModule("../../src/config/database.config.js", () => ({
+jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
     membership: {
       findUnique: mockFindUnique,
@@ -18,7 +18,7 @@ const {
   requireRole,
   requireOwnerOrAdmin,
   requireOwner,
-} = await import("../../src/modules/organization/org.middleware.js");
+} = await import("../../../src/modules/organization/org.middleware.js");
 
 describe("Organization Middleware", () => {
   let mockReq;

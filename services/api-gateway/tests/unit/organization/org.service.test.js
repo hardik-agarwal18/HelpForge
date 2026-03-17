@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import { ApiError } from "../../src/utils/errorHandler.js";
+import { ApiError } from "../../../src/utils/errorHandler.js";
 
 const mockCreateOrganization = jest.fn();
 const mockGetOrganizationsByUserId = jest.fn();
@@ -11,7 +11,7 @@ const mockGetOrganizationMembershipByUserId = jest.fn();
 const mockUpdateMembershipRole = jest.fn();
 
 // Mock the repository
-jest.unstable_mockModule("../../src/modules/organization/org.repo.js", () => ({
+jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => ({
   createOrganization: mockCreateOrganization,
   getOrganizationsByUserId: mockGetOrganizationsByUserId,
   patchOrganization: mockPatchOrganization,
@@ -31,7 +31,7 @@ const {
   deleteOrganizationService,
   viewAllMembersInOrganizationService,
   updateMemberFromOrganizationService,
-} = await import("../../src/modules/organization/org.service.js");
+} = await import("../../../src/modules/organization/org.service.js");
 
 describe("Organization Service", () => {
   beforeEach(() => {

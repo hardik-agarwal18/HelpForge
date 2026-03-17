@@ -6,7 +6,26 @@ const mockNotificationUpdateMany = jest.fn();
 const mockTicketFindUnique = jest.fn();
 const mockMembershipFindMany = jest.fn();
 
-jest.unstable_mockModule("../../src/config/database.config.js", () => ({
+const expectNotificationFindManyCalledWith = ({
+  recipientId,
+  skip,
+  take,
+  isRead,
+}) => {
+  expect(mockNotificationFindMany).toHaveBeenCalledWith({
+    where: {
+      recipientId,
+      ...(typeof isRead === "boolean" ? { isRead } : {}),
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    skip,
+    take,
+  });
+};
+
+jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
     notification: {
       createMany: mockNotificationCreateMany,
@@ -29,7 +48,7 @@ const {
   markNotificationAsRead,
   getTicketNotificationContext,
   getOrganizationStaffRecipientIds,
-} = await import("../../src/modules/notifications/notification.repo.js");
+} = await import("../../../src/modules/notifications/notification.repo.js");
 
 describe("notification.repo", () => {
   beforeEach(() => {
@@ -74,13 +93,8 @@ describe("notification.repo", () => {
 
       const result = await getNotificationsByRecipient("user-default");
 
-      expect(mockNotificationFindMany).toHaveBeenCalledWith({
-        where: {
-          recipientId: "user-default",
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
+      expectNotificationFindManyCalledWith({
+        recipientId: "user-default",
         skip: 0,
         take: 20,
       });
@@ -95,13 +109,8 @@ describe("notification.repo", () => {
         pageSize: -5,
       });
 
-      expect(mockNotificationFindMany).toHaveBeenCalledWith({
-        where: {
-          recipientId: "user-1",
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
+      expectNotificationFindManyCalledWith({
+        recipientId: "user-1",
         skip: 0,
         take: 20,
       });
@@ -117,14 +126,9 @@ describe("notification.repo", () => {
         isRead: true,
       });
 
-      expect(mockNotificationFindMany).toHaveBeenCalledWith({
-        where: {
-          recipientId: "user-2",
-          isRead: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
+      expectNotificationFindManyCalledWith({
+        recipientId: "user-2",
+        isRead: true,
         skip: 10,
         take: 5,
       });

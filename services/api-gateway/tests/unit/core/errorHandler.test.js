@@ -6,7 +6,7 @@ import {
   afterEach,
   jest,
 } from "@jest/globals";
-import { ApiError, errorHandler } from "../../src/utils/errorHandler.js";
+import { ApiError, errorHandler } from "../../../src/utils/errorHandler.js";
 
 describe("Error Handler Unit Tests", () => {
   let req, res, next;
