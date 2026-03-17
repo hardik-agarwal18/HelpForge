@@ -1,13 +1,16 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import {
   createNotifications,
+  getNotificationPreferenceByUserId,
   getNotificationsByRecipient,
   markAllNotificationsAsRead,
   markNotificationAsRead,
+  upsertNotificationPreferenceByUserId,
 } from "./notification.repo.js";
-import { sendNotification } from "./notification.provider.js";
+import { enqueueNotification } from "./queue/notification.queue.js";
 import { resolveRecipientsForTicketEvent } from "./strategies/recipient.strategy.js";
 import { applyRecipientPreferences } from "./strategies/preference.strategy.js";
+import DEFAULT_NOTIFICATION_PREFERENCES from "./notification.constants.js";
 
 const dedupeRecipients = (recipientIds = []) => {
   return [...new Set(recipientIds.filter(Boolean))];
@@ -53,7 +56,7 @@ export const createInAppNotificationsService = async ({
 };
 
 export const sendForTicketEventService = async (notification) => {
-  await sendNotification(notification);
+  await enqueueNotification(notification);
 };
 
 export const createTicketEventNotificationService = async ({
@@ -72,6 +75,7 @@ export const createTicketEventNotificationService = async ({
   const filteredRecipientIds = await applyRecipientPreferences({
     recipientIds: dedupeRecipients(recipientIds),
     actorId: payload.actorId,
+    type,
   });
 
   const notificationResult = await createInAppNotificationsService({
@@ -126,4 +130,32 @@ export const markAllNotificationsAsReadService = async (recipientId) => {
   }
 
   return await markAllNotificationsAsRead(recipientId);
+};
+
+export const getMyNotificationPreferencesService = async (userId) => {
+  if (!userId) {
+    throw new ApiError(400, "User ID is required");
+  }
+
+  const preference = await getNotificationPreferenceByUserId(userId);
+
+  if (!preference) {
+    return {
+      userId,
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+    };
+  }
+
+  return preference;
+};
+
+export const updateMyNotificationPreferencesService = async (
+  userId,
+  preferenceData,
+) => {
+  if (!userId) {
+    throw new ApiError(400, "User ID is required");
+  }
+
+  return await upsertNotificationPreferenceByUserId(userId, preferenceData);
 };

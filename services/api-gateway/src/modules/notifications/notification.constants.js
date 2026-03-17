@@ -8,4 +8,13 @@ export const NOTIFICATION_TYPES = {
   TICKET_ATTACHMENT_DELETED: "TICKET_ATTACHMENT_DELETED",
 };
 
-export default NOTIFICATION_TYPES;
+export const DEFAULT_NOTIFICATION_PREFERENCES = {
+  inAppEnabled: true,
+  emailEnabled: false,
+  pushEnabled: false,
+  websocketEnabled: true,
+  suppressSelfNotifications: true,
+  disabledTypes: [],
+};
+
+export default { NOTIFICATION_TYPES, DEFAULT_NOTIFICATION_PREFERENCES };
