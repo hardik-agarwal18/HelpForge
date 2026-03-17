@@ -32,6 +32,7 @@ export const cleanDatabase = async () => {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       // Delete all records from all tables in reverse order of dependencies.
+      await prisma.notification.deleteMany({});
       await prisma.ticketActivityLog.deleteMany({});
       await prisma.ticketTag.deleteMany({});
       await prisma.ticketAttachment.deleteMany({});
