@@ -10,3 +10,5 @@ coverage/
 # Test reports
 test-results/
 junit.xml
+
+/perf

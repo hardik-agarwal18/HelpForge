@@ -206,6 +206,56 @@ npm run db:migrate
 npm run dev
 ```
 
+## 12) Performance Testing (k6)
+
+HelpForge now includes baseline k6 scripts in `services/api-gateway/perf`:
+
+- `smoke.js`: lightweight health path (login, profile, ticket list, optional ticket create)
+- `load-ticket-list.js`: ramping load test for `GET /api/tickets`
+
+### Prerequisites
+
+- Install k6: https://k6.io/docs/get-started/installation/
+
+### Run smoke test
+
+```bash
+cd services/api-gateway
+BASE_URL=http://localhost:3000 \
+EMAIL=your-user@example.com \
+PASSWORD='YourPassword123!' \
+ORG_ID=your-org-id \
+npm run perf:smoke
+```
+
+Optional smoke write path:
+
+```bash
+CREATE_SMOKE_TICKET=true npm run perf:smoke
+```
+
+### Run load test (ticket list)
+
+```bash
+cd services/api-gateway
+BASE_URL=http://localhost:3000 \
+EMAIL=your-user@example.com \
+PASSWORD='YourPassword123!' \
+ORG_ID=your-org-id \
+START_VUS=1 \
+PEAK_VUS=20 \
+RAMP_SECONDS=60 \
+HOLD_SECONDS=120 \
+COOLDOWN_SECONDS=30 \
+npm run perf:load
+```
+
+### Default thresholds
+
+- `http_req_failed < 1%`
+- `checks > 99%`
+- `http_req_duration p(95) < 500ms` (load script)
+
 ## 10) Documentation Index
 
 - docs/PROJECT_ROADMAP.md
