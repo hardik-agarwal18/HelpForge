@@ -51,6 +51,7 @@ model User {
   attachments    TicketAttachment[]
   activities     TicketActivityLog[]
   agentWorkloads AgentWorkload[]
+  notifications  Notification[]
 }
 
 model Organization {
@@ -62,6 +63,7 @@ model Organization {
   tickets        Ticket[]
   tags           Tag[]
   agentWorkloads AgentWorkload[]
+  notifications  Notification[]
 }
 
 model Membership {
@@ -103,10 +105,11 @@ model Ticket {
   assignedToId String?
   assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
 
-  comments    TicketComment[]
-  attachments TicketAttachment[]
-  tags        TicketTag[]
-  activities  TicketActivityLog[]
+  comments      TicketComment[]
+  attachments   TicketAttachment[]
+  tags          TicketTag[]
+  activities    TicketActivityLog[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -210,6 +213,34 @@ model AgentWorkload {
   @@index([organizationId, assignedToday, assignedThisWeek, userId])
 }
 
+model Notification {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  type NotificationType
+
+  title    String
+  message  String
+  metadata Json?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([recipientId, isRead, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([ticketId, createdAt])
+}
+
 enum TicketActivityAction {
   TICKET_CREATED
   TICKET_UPDATED
@@ -221,4 +252,14 @@ enum TicketActivityAction {
   ATTACHMENT_DELETED
   TAG_ADDED
   TAG_REMOVED
+}
+
+enum NotificationType {
+  TICKET_ASSIGNED
+  TICKET_COMMENT_ADDED
+  TICKET_COMMENT_DELETED
+  TICKET_TAG_ADDED
+  TICKET_TAG_REMOVED
+  TICKET_ATTACHMENT_ADDED
+  TICKET_ATTACHMENT_DELETED
 }
