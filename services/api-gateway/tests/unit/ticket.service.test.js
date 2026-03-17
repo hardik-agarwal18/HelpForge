@@ -93,9 +93,7 @@ const {
   updateMyAgentAvailabilityService,
   updateTicketStatusService,
   updateTicketService,
-} = await import(
-  "../../src/modules/tickets/ticket.service.js"
-);
+} = await import("../../src/modules/tickets/ticket.service.js");
 
 describe("Ticket Service", () => {
   beforeEach(() => {
@@ -370,7 +368,8 @@ describe("Ticket Service", () => {
       ),
     ).rejects.toMatchObject({
       statusCode: 403,
-      message: "You do not have permission to create tickets for this organization",
+      message:
+        "You do not have permission to create tickets for this organization",
     });
   });
 
@@ -549,7 +548,8 @@ describe("Ticket Service", () => {
         ),
       ).rejects.toMatchObject({
         statusCode: 403,
-        message: "You do not have permission to view tickets for this organization",
+        message:
+          "You do not have permission to view tickets for this organization",
       });
     });
 
@@ -825,7 +825,9 @@ describe("Ticket Service", () => {
     it("should reject when the ticket is not found", async () => {
       mockGetTicketById.mockResolvedValue(null);
 
-      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+      await expect(
+        getTicketByIdService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
         statusCode: 404,
         message: "Ticket not found",
       });
@@ -838,7 +840,9 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue(null);
 
-      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+      await expect(
+        getTicketByIdService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view this ticket",
       });
@@ -856,7 +860,9 @@ describe("Ticket Service", () => {
         role: "MEMBER",
       });
 
-      await expect(getTicketByIdService("ticket-1", "user-1")).rejects.toMatchObject({
+      await expect(
+        getTicketByIdService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view this ticket",
       });
@@ -1484,7 +1490,9 @@ describe("Ticket Service", () => {
         role: "MEMBER",
       });
 
-      await expect(getTicketCommentsService("ticket-1", "user-1")).rejects.toMatchObject({
+      await expect(
+        getTicketCommentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view comments on this ticket",
       });
@@ -1677,10 +1685,13 @@ describe("Ticket Service", () => {
       );
 
       expect(mockDeleteTicketComment).toHaveBeenCalledWith("comment-1");
-      expect(mockCreateTicketActivityLog).toHaveBeenCalledWith("ticket-1", {
+      expect(mockEventBusEmit).toHaveBeenCalledWith("ticket.comment.deleted", {
+        ticketId: "ticket-1",
+        organizationId: "org-1",
         actorId: "user-1",
-        action: "COMMENT_DELETED",
-        oldValue: "Internal note",
+        metadata: {
+          message: "Internal note",
+        },
       });
       expect(result.id).toBe("comment-1");
     });
@@ -1870,9 +1881,12 @@ describe("Ticket Service", () => {
         role: "MEMBER",
       });
 
-      await expect(getTicketAttachmentsService("ticket-1", "user-1")).rejects.toMatchObject({
+      await expect(
+        getTicketAttachmentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
         statusCode: 403,
-        message: "You do not have permission to view attachments on this ticket",
+        message:
+          "You do not have permission to view attachments on this ticket",
       });
     });
   });
@@ -1910,11 +1924,17 @@ describe("Ticket Service", () => {
       );
 
       expect(mockDeleteTicketAttachment).toHaveBeenCalledWith("attachment-1");
-      expect(mockCreateTicketActivityLog).toHaveBeenCalledWith("ticket-1", {
-        actorId: "user-1",
-        action: "ATTACHMENT_DELETED",
-        oldValue: "https://example.com/file.pdf",
-      });
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        "ticket.attachment.deleted",
+        {
+          ticketId: "ticket-1",
+          organizationId: "org-1",
+          actorId: "user-1",
+          metadata: {
+            fileUrl: "https://example.com/file.pdf",
+          },
+        },
+      );
       expect(result.id).toBe("attachment-1");
     });
 
@@ -1999,7 +2019,8 @@ describe("Ticket Service", () => {
         deleteTicketAttachmentService("ticket-1", "attachment-1", "user-1"),
       ).rejects.toMatchObject({
         statusCode: 403,
-        message: "You do not have permission to delete attachments on this ticket",
+        message:
+          "You do not have permission to delete attachments on this ticket",
       });
     });
 
@@ -2121,7 +2142,11 @@ describe("Ticket Service", () => {
       });
       mockCreateTicketActivityLog.mockResolvedValue({ id: "activity-1" });
 
-      const result = await deleteTicketTagService("ticket-1", "tag-1", "user-1");
+      const result = await deleteTicketTagService(
+        "ticket-1",
+        "tag-1",
+        "user-1",
+      );
 
       expect(mockDeleteTicketTag).toHaveBeenCalledWith("ticket-1", "tag-1");
       expect(result.tagId).toBe("tag-1");
