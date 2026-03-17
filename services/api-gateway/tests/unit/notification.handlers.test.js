@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockLoggerInfo = jest.fn();
+const mockCreateTicketEventNotificationService = jest.fn();
 const registeredHandlers = new Map();
 
 jest.unstable_mockModule("../../src/config/logger.js", () => ({
@@ -15,11 +16,20 @@ jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
   },
 }));
 
+jest.unstable_mockModule(
+  "../../src/modules/notifications/notification.service.js",
+  () => ({
+    createTicketEventNotificationService:
+      mockCreateTicketEventNotificationService,
+  }),
+);
+
 await import("../../src/events/handlers/notification.handlers.js");
 
 describe("notification.handlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreateTicketEventNotificationService.mockResolvedValue({ count: 2 });
   });
 
   it("registers handlers for all notification-worthy ticket events", () => {
@@ -32,7 +42,7 @@ describe("notification.handlers", () => {
     expect(registeredHandlers.has("ticket.attachment.deleted")).toBe(true);
   });
 
-  it("logs notification payloads when metadata is present", async () => {
+  it("dispatches notification events with expected config", async () => {
     const scenarios = [
       {
         eventName: "ticket.assigned",
@@ -42,12 +52,11 @@ describe("notification.handlers", () => {
           actorId: "user-1",
           metadata: { assignedToId: "agent-1" },
         },
-        message: "Notification should be sent to the assigned agent",
-        expectedContext: {
-          ticketId: "ticket-1",
-          organizationId: "org-1",
-          actorId: "user-1",
-          assignedToId: "agent-1",
+        expectedConfig: {
+          type: "TICKET_ASSIGNED",
+          title: "Ticket assigned",
+          message: "A ticket has been assigned.",
+          recipientMode: "assigned-agent",
         },
       },
       {
@@ -58,12 +67,10 @@ describe("notification.handlers", () => {
           actorId: "user-2",
           metadata: { message: "hello" },
         },
-        message: "Notification should be sent for ticket comment added",
-        expectedContext: {
-          ticketId: "ticket-2",
-          organizationId: "org-1",
-          actorId: "user-2",
-          message: "hello",
+        expectedConfig: {
+          type: "TICKET_COMMENT_ADDED",
+          title: "Comment added",
+          message: "A comment was added to the ticket.",
         },
       },
       {
@@ -74,12 +81,10 @@ describe("notification.handlers", () => {
           actorId: "user-3",
           metadata: { message: "bye" },
         },
-        message: "Notification should be sent for ticket comment deleted",
-        expectedContext: {
-          ticketId: "ticket-3",
-          organizationId: "org-1",
-          actorId: "user-3",
-          message: "bye",
+        expectedConfig: {
+          type: "TICKET_COMMENT_DELETED",
+          title: "Comment deleted",
+          message: "A comment was deleted from the ticket.",
         },
       },
       {
@@ -90,12 +95,10 @@ describe("notification.handlers", () => {
           actorId: "user-4",
           metadata: { tagName: "Bug" },
         },
-        message: "Notification should be sent for ticket tag added",
-        expectedContext: {
-          ticketId: "ticket-4",
-          organizationId: "org-1",
-          actorId: "user-4",
-          tagName: "Bug",
+        expectedConfig: {
+          type: "TICKET_TAG_ADDED",
+          title: "Tag added",
+          message: "A tag was added to the ticket.",
         },
       },
       {
@@ -106,12 +109,10 @@ describe("notification.handlers", () => {
           actorId: "user-5",
           metadata: { tagName: "Bug" },
         },
-        message: "Notification should be sent for ticket tag removed",
-        expectedContext: {
-          ticketId: "ticket-5",
-          organizationId: "org-1",
-          actorId: "user-5",
-          tagName: "Bug",
+        expectedConfig: {
+          type: "TICKET_TAG_REMOVED",
+          title: "Tag removed",
+          message: "A tag was removed from the ticket.",
         },
       },
       {
@@ -122,12 +123,10 @@ describe("notification.handlers", () => {
           actorId: "user-6",
           metadata: { fileUrl: "https://example.com/a.pdf" },
         },
-        message: "Notification should be sent for ticket attachment added",
-        expectedContext: {
-          ticketId: "ticket-6",
-          organizationId: "org-1",
-          actorId: "user-6",
-          fileUrl: "https://example.com/a.pdf",
+        expectedConfig: {
+          type: "TICKET_ATTACHMENT_ADDED",
+          title: "Attachment added",
+          message: "An attachment was added to the ticket.",
         },
       },
       {
@@ -138,12 +137,10 @@ describe("notification.handlers", () => {
           actorId: "user-7",
           metadata: { fileUrl: "https://example.com/a.pdf" },
         },
-        message: "Notification should be sent for ticket attachment deleted",
-        expectedContext: {
-          ticketId: "ticket-7",
-          organizationId: "org-1",
-          actorId: "user-7",
-          fileUrl: "https://example.com/a.pdf",
+        expectedConfig: {
+          type: "TICKET_ATTACHMENT_DELETED",
+          title: "Attachment deleted",
+          message: "An attachment was removed from the ticket.",
         },
       },
     ];
@@ -153,131 +150,42 @@ describe("notification.handlers", () => {
 
       await handler(scenario.payload);
 
+      expect(mockCreateTicketEventNotificationService).toHaveBeenCalledWith({
+        payload: scenario.payload,
+        ...scenario.expectedConfig,
+      });
+
       expect(mockLoggerInfo).toHaveBeenCalledWith(
-        scenario.expectedContext,
-        scenario.message,
+        {
+          eventName: scenario.eventName,
+          ticketId: scenario.payload.ticketId,
+          organizationId: scenario.payload.organizationId,
+          actorId: scenario.payload.actorId,
+          notificationCount: 2,
+        },
+        "Ticket notifications processed",
       );
     }
   });
 
-  it("falls back to null when metadata fields are missing", async () => {
-    const scenarios = [
-      {
-        eventName: "ticket.assigned",
-        payload: {
-          ticketId: "ticket-11",
-          organizationId: "org-1",
-          actorId: "user-1",
-        },
-        message: "Notification should be sent to the assigned agent",
-        expectedContext: {
-          ticketId: "ticket-11",
-          organizationId: "org-1",
-          actorId: "user-1",
-          assignedToId: null,
-        },
-      },
-      {
-        eventName: "ticket.comment.added",
-        payload: {
-          ticketId: "ticket-12",
-          organizationId: "org-1",
-          actorId: "user-2",
-        },
-        message: "Notification should be sent for ticket comment added",
-        expectedContext: {
-          ticketId: "ticket-12",
-          organizationId: "org-1",
-          actorId: "user-2",
-          message: null,
-        },
-      },
-      {
-        eventName: "ticket.comment.deleted",
-        payload: {
-          ticketId: "ticket-13",
-          organizationId: "org-1",
-          actorId: "user-3",
-        },
-        message: "Notification should be sent for ticket comment deleted",
-        expectedContext: {
-          ticketId: "ticket-13",
-          organizationId: "org-1",
-          actorId: "user-3",
-          message: null,
-        },
-      },
-      {
-        eventName: "ticket.tag.added",
-        payload: {
-          ticketId: "ticket-14",
-          organizationId: "org-1",
-          actorId: "user-4",
-        },
-        message: "Notification should be sent for ticket tag added",
-        expectedContext: {
-          ticketId: "ticket-14",
-          organizationId: "org-1",
-          actorId: "user-4",
-          tagName: null,
-        },
-      },
-      {
-        eventName: "ticket.tag.removed",
-        payload: {
-          ticketId: "ticket-15",
-          organizationId: "org-1",
-          actorId: "user-5",
-        },
-        message: "Notification should be sent for ticket tag removed",
-        expectedContext: {
-          ticketId: "ticket-15",
-          organizationId: "org-1",
-          actorId: "user-5",
-          tagName: null,
-        },
-      },
-      {
-        eventName: "ticket.attachment.added",
-        payload: {
-          ticketId: "ticket-16",
-          organizationId: "org-1",
-          actorId: "user-6",
-        },
-        message: "Notification should be sent for ticket attachment added",
-        expectedContext: {
-          ticketId: "ticket-16",
-          organizationId: "org-1",
-          actorId: "user-6",
-          fileUrl: null,
-        },
-      },
-      {
-        eventName: "ticket.attachment.deleted",
-        payload: {
-          ticketId: "ticket-17",
-          organizationId: "org-1",
-          actorId: "user-7",
-        },
-        message: "Notification should be sent for ticket attachment deleted",
-        expectedContext: {
-          ticketId: "ticket-17",
-          organizationId: "org-1",
-          actorId: "user-7",
-          fileUrl: null,
-        },
-      },
-    ];
+  it("continues to process events when metadata is missing", async () => {
+    const handler = registeredHandlers.get("ticket.comment.added");
 
-    for (const scenario of scenarios) {
-      const handler = registeredHandlers.get(scenario.eventName);
+    await handler({
+      ticketId: "ticket-20",
+      organizationId: "org-1",
+      actorId: "user-9",
+    });
 
-      await handler(scenario.payload);
-
-      expect(mockLoggerInfo).toHaveBeenCalledWith(
-        scenario.expectedContext,
-        scenario.message,
-      );
-    }
+    expect(mockCreateTicketEventNotificationService).toHaveBeenCalledWith({
+      payload: {
+        ticketId: "ticket-20",
+        organizationId: "org-1",
+        actorId: "user-9",
+      },
+      type: "TICKET_COMMENT_ADDED",
+      title: "Comment added",
+      message: "A comment was added to the ticket.",
+    });
   });
 });
