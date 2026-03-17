@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockLoggerInfo = jest.fn();
-const mockCreateTicketEventNotificationService = jest.fn();
+const mockHandleTicketNotificationEvent = jest.fn();
 const registeredHandlers = new Map();
 
 jest.unstable_mockModule("../../src/config/logger.js", () => ({
@@ -17,10 +17,9 @@ jest.unstable_mockModule("../../src/events/eventBus.js", () => ({
 }));
 
 jest.unstable_mockModule(
-  "../../src/modules/notifications/notification.service.js",
+  "../../src/modules/notifications/handlers/ticketNotification.handler.js",
   () => ({
-    createTicketEventNotificationService:
-      mockCreateTicketEventNotificationService,
+    handleTicketNotificationEvent: mockHandleTicketNotificationEvent,
   }),
 );
 
@@ -29,7 +28,7 @@ await import("../../src/events/handlers/notification.handlers.js");
 describe("notification.handlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCreateTicketEventNotificationService.mockResolvedValue({ count: 2 });
+    mockHandleTicketNotificationEvent.mockResolvedValue({ count: 2 });
   });
 
   it("registers handlers for all notification-worthy ticket events", () => {
@@ -150,7 +149,7 @@ describe("notification.handlers", () => {
 
       await handler(scenario.payload);
 
-      expect(mockCreateTicketEventNotificationService).toHaveBeenCalledWith({
+      expect(mockHandleTicketNotificationEvent).toHaveBeenCalledWith({
         payload: scenario.payload,
         ...scenario.expectedConfig,
       });
@@ -177,7 +176,7 @@ describe("notification.handlers", () => {
       actorId: "user-9",
     });
 
-    expect(mockCreateTicketEventNotificationService).toHaveBeenCalledWith({
+    expect(mockHandleTicketNotificationEvent).toHaveBeenCalledWith({
       payload: {
         ticketId: "ticket-20",
         organizationId: "org-1",

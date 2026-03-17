@@ -1,6 +1,6 @@
 import logger from "../../config/logger.js";
 import { NOTIFICATION_TYPES } from "../../modules/notifications/notification.constants.js";
-import { createTicketEventNotificationService } from "../../modules/notifications/notification.service.js";
+import { handleTicketNotificationEvent } from "../../modules/notifications/handlers/ticketNotification.handler.js";
 import { registerAsyncHandler } from "../eventBus.js";
 import {
   TICKET_ASSIGNED_EVENT,
@@ -14,7 +14,7 @@ import {
 
 const registerTicketNotificationHandler = (eventName, config) => {
   registerAsyncHandler(eventName, async (payload) => {
-    const result = await createTicketEventNotificationService({
+    const result = await handleTicketNotificationEvent({
       payload,
       ...config,
     });
