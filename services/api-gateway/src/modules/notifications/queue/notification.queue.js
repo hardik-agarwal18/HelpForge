@@ -1,30 +1,14 @@
-import IORedis from "ioredis";
 import { Queue } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
+import { getSharedBullmqConnection } from "../../../config/redis.config.js";
 
 const NOTIFICATION_QUEUE_NAME = "notification-delivery";
 
-let connection;
 let queue;
 
-const getRedisConnection = () => {
-  if (!config.redis.url) {
-    return null;
-  }
-
-  if (!connection) {
-    connection = new IORedis(config.redis.url, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
-  }
-
-  return connection;
-};
-
 const getQueue = () => {
-  const redisConnection = getRedisConnection();
+  const redisConnection = getSharedBullmqConnection();
 
   if (!redisConnection) {
     return null;
