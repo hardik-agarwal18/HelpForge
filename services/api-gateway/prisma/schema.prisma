@@ -52,6 +52,8 @@ model User {
   activities     TicketActivityLog[]
   agentWorkloads AgentWorkload[]
   notifications  Notification[]
+
+  notificationPreference NotificationPreference?
 }
 
 model Organization {
@@ -239,6 +241,23 @@ model Notification {
   @@index([recipientId, isRead, createdAt])
   @@index([organizationId, createdAt])
   @@index([ticketId, createdAt])
+}
+
+model NotificationPreference {
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  inAppEnabled              Boolean            @default(true)
+  emailEnabled              Boolean            @default(false)
+  pushEnabled               Boolean            @default(false)
+  websocketEnabled          Boolean            @default(true)
+  suppressSelfNotifications Boolean            @default(true)
+  disabledTypes             NotificationType[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum TicketActivityAction {
