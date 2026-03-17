@@ -1,6 +1,7 @@
 import express from "express";
 import "./events/registerHandlers.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import notificationRoutes from "./modules/notifications/notification.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
 import agentRoutes from "./modules/tickets/ticket.agent.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
@@ -19,6 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/organizations", organizationRoutes);
 app.use("/api/agents", agentRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Error handler middleware (must be last)
 app.use(errorHandler);
