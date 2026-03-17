@@ -97,3 +97,51 @@ export const getOrganizationStaffRecipientIds = async (organizationId) => {
 
   return memberships.map((membership) => membership.userId);
 };
+
+export const getNotificationPreferencesForUsers = async (userIds = []) => {
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return [];
+  }
+
+  return await prisma.notificationPreference.findMany({
+    where: {
+      userId: {
+        in: userIds,
+      },
+    },
+    select: {
+      userId: true,
+      inAppEnabled: true,
+      emailEnabled: true,
+      pushEnabled: true,
+      websocketEnabled: true,
+      suppressSelfNotifications: true,
+      disabledTypes: true,
+    },
+  });
+};
+
+export const getNotificationPreferenceByUserId = async (userId) => {
+  if (!userId) {
+    return null;
+  }
+
+  return await prisma.notificationPreference.findUnique({
+    where: {
+      userId,
+    },
+  });
+};
+
+export const upsertNotificationPreferenceByUserId = async (userId, data) => {
+  return await prisma.notificationPreference.upsert({
+    where: {
+      userId,
+    },
+    create: {
+      userId,
+      ...data,
+    },
+    update: data,
+  });
+};
