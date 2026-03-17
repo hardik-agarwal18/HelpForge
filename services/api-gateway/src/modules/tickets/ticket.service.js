@@ -1,16 +1,21 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import { emitTicketEvent } from "../../events/ticket.events.js";
 import {
+  TICKET_ATTACHMENT_ADDED_EVENT,
+  TICKET_ATTACHMENT_DELETED_EVENT,
   TICKET_ASSIGNED_EVENT,
+  TICKET_COMMENT_ADDED_EVENT,
+  TICKET_COMMENT_DELETED_EVENT,
   TICKET_CREATED_EVENT,
   TICKET_STATUS_CHANGED_EVENT,
+  TICKET_TAG_ADDED_EVENT,
+  TICKET_TAG_REMOVED_EVENT,
 } from "../../events/eventTypes.js";
 import {
   assignTicket,
   addTagToTicket,
   createTag,
   createTicketAttachment,
-  createTicketActivityLog,
   createTicketComment,
   createTicket,
   deleteTicketTag,
@@ -577,10 +582,13 @@ export const createTicketCommentService = async (
     throw new ApiError(500, "Failed to create ticket comment");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_COMMENT_ADDED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "COMMENT_ADDED",
-    newValue: comment.message,
+    metadata: {
+      message: comment.message,
+    },
   });
 
   if (!canViewAllOrganizationTickets(membership.role) && comment.isInternal) {
@@ -706,10 +714,13 @@ export const deleteTicketCommentService = async (
     throw new ApiError(500, "Failed to delete ticket comment");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_COMMENT_DELETED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "COMMENT_DELETED",
-    oldValue: deletedComment.message,
+    metadata: {
+      message: deletedComment.message,
+    },
   });
 
   return deletedComment;
@@ -759,10 +770,13 @@ export const createTicketAttachmentService = async (
     throw new ApiError(500, "Failed to create ticket attachment");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_ATTACHMENT_ADDED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "ATTACHMENT_ADDED",
-    newValue: attachment.fileUrl,
+    metadata: {
+      fileUrl: attachment.fileUrl,
+    },
   });
 
   return attachment;
@@ -847,10 +861,13 @@ export const deleteTicketAttachmentService = async (
     throw new ApiError(500, "Failed to delete ticket attachment");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_ATTACHMENT_DELETED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "ATTACHMENT_DELETED",
-    oldValue: deletedAttachment.fileUrl,
+    metadata: {
+      fileUrl: deletedAttachment.fileUrl,
+    },
   });
 
   return deletedAttachment;
@@ -894,10 +911,13 @@ export const addTicketTagService = async (ticketId, tagId, userId) => {
     throw new ApiError(500, "Failed to add tag to ticket");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_TAG_ADDED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "TAG_ADDED",
-    newValue: ticketTag.tag.name,
+    metadata: {
+      tagName: ticketTag.tag.name,
+    },
   });
 
   return ticketTag;
@@ -938,10 +958,13 @@ export const deleteTicketTagService = async (ticketId, tagId, userId) => {
     throw new ApiError(500, "Failed to remove tag from ticket");
   }
 
-  await createTicketActivityLog(ticketId, {
+  emitTicketEvent(TICKET_TAG_REMOVED_EVENT, {
+    ticketId: ticket.id,
+    organizationId: ticket.organizationId,
     actorId: userId,
-    action: "TAG_REMOVED",
-    oldValue: deletedTicketTag.tag.name,
+    metadata: {
+      tagName: deletedTicketTag.tag.name,
+    },
   });
 
   return deletedTicketTag;
