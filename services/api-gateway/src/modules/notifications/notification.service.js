@@ -10,7 +10,7 @@ import {
 import { enqueueNotification } from "./queue/notification.queue.js";
 import { resolveRecipientsForTicketEvent } from "./strategies/recipient.strategy.js";
 import { applyRecipientPreferences } from "./strategies/preference.strategy.js";
-import DEFAULT_NOTIFICATION_PREFERENCES from "./notification.constants.js";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "./notification.constants.js";
 
 const dedupeRecipients = (recipientIds = []) => {
   return [...new Set(recipientIds.filter(Boolean))];
