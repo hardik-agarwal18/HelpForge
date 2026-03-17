@@ -1,5 +1,7 @@
 import prisma from "../../config/database.config.js";
 
+const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
+
 export const createNotifications = async (notifications) => {
   if (!Array.isArray(notifications) || notifications.length === 0) {
     return { count: 0 };
@@ -56,4 +58,42 @@ export const markAllNotificationsAsRead = async (recipientId) => {
       readAt: new Date(),
     },
   });
+};
+
+export const getTicketNotificationContext = async (ticketId) => {
+  if (!ticketId) {
+    return null;
+  }
+
+  return await prisma.ticket.findUnique({
+    where: {
+      id: ticketId,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      createdById: true,
+      assignedToId: true,
+    },
+  });
+};
+
+export const getOrganizationStaffRecipientIds = async (organizationId) => {
+  if (!organizationId) {
+    return [];
+  }
+
+  const memberships = await prisma.membership.findMany({
+    where: {
+      organizationId,
+      role: {
+        in: STAFF_ROLES,
+      },
+    },
+    select: {
+      userId: true,
+    },
+  });
+
+  return memberships.map((membership) => membership.userId);
 };
