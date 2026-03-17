@@ -1436,6 +1436,17 @@ describe("Ticket Service", () => {
       });
     });
 
+    it("should reject when ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        createTicketCommentService("ticket-1", { message: "Hi" }, "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
+
     it("masks internal flag when member receives internal comment payload", async () => {
       mockGetTicketById.mockResolvedValue({
         id: "ticket-1",
@@ -1527,6 +1538,17 @@ describe("Ticket Service", () => {
         message: "You do not have permission to view comments on this ticket",
       });
     });
+
+    it("should reject when ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        getTicketCommentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
+      });
+    });
   });
 
   describe("getTicketActivitiesService", () => {
@@ -1582,6 +1604,17 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to view activity on this ticket",
+      });
+    });
+
+    it("should reject when ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        getTicketActivitiesService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
       });
     });
   });
@@ -1678,6 +1711,25 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message: "You do not have permission to add attachments to this ticket",
+      });
+    });
+
+    it("should reject when ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        createTicketAttachmentService(
+          "ticket-1",
+          {
+            fileUrl: "https://example.com/file.pdf",
+            fileType: "application/pdf",
+            fileSize: 1024,
+          },
+          "user-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
       });
     });
   });
@@ -1917,6 +1969,17 @@ describe("Ticket Service", () => {
         statusCode: 403,
         message:
           "You do not have permission to view attachments on this ticket",
+      });
+    });
+
+    it("should reject when ticket is not found", async () => {
+      mockGetTicketById.mockResolvedValue(null);
+
+      await expect(
+        getTicketAttachmentsService("ticket-1", "user-1"),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Ticket not found",
       });
     });
   });
