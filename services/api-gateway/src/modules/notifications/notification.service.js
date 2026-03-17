@@ -6,6 +6,8 @@ import {
   markNotificationAsRead,
 } from "./notification.repo.js";
 import { sendNotification } from "./notification.provider.js";
+import { resolveRecipientsForTicketEvent } from "./strategies/recipient.strategy.js";
+import { applyRecipientPreferences } from "./strategies/preference.strategy.js";
 
 const dedupeRecipients = (recipientIds = []) => {
   return [...new Set(recipientIds.filter(Boolean))];
@@ -52,6 +54,45 @@ export const createInAppNotificationsService = async ({
 
 export const sendForTicketEventService = async (notification) => {
   await sendNotification(notification);
+};
+
+export const createTicketEventNotificationService = async ({
+  payload,
+  type,
+  title,
+  message,
+  recipientMode = "ticket-watchers",
+}) => {
+  const { organizationId, recipientIds } =
+    await resolveRecipientsForTicketEvent({
+      payload,
+      recipientMode,
+    });
+
+  const filteredRecipientIds = await applyRecipientPreferences({
+    recipientIds: dedupeRecipients(recipientIds),
+    actorId: payload.actorId,
+  });
+
+  const notificationResult = await createInAppNotificationsService({
+    organizationId,
+    ticketId: payload.ticketId,
+    recipientIds: filteredRecipientIds,
+    type,
+    title,
+    message,
+    metadata: payload.metadata ?? null,
+  });
+
+  await sendForTicketEventService({
+    type,
+    ticketId: payload.ticketId,
+    organizationId,
+    actorId: payload.actorId,
+    recipientIds: filteredRecipientIds,
+  });
+
+  return notificationResult;
 };
 
 export const listMyNotificationsService = async (recipientId, options = {}) => {
