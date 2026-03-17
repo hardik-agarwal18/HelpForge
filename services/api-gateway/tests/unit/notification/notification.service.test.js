@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockCreateNotifications = jest.fn();
 const mockGetNotificationsByRecipient = jest.fn();
+const mockGetNotificationPreferenceByUserId = jest.fn();
 const mockMarkAllNotificationsAsRead = jest.fn();
 const mockMarkNotificationAsRead = jest.fn();
-const mockSendNotification = jest.fn();
+const mockUpsertNotificationPreferenceByUserId = jest.fn();
+const mockEnqueueNotification = jest.fn();
 const mockResolveRecipientsForTicketEvent = jest.fn();
 const mockApplyRecipientPreferences = jest.fn();
 
@@ -27,16 +29,19 @@ jest.unstable_mockModule(
   "../../../src/modules/notifications/notification.repo.js",
   () => ({
     createNotifications: mockCreateNotifications,
+    getNotificationPreferenceByUserId: mockGetNotificationPreferenceByUserId,
     getNotificationsByRecipient: mockGetNotificationsByRecipient,
     markAllNotificationsAsRead: mockMarkAllNotificationsAsRead,
     markNotificationAsRead: mockMarkNotificationAsRead,
+    upsertNotificationPreferenceByUserId:
+      mockUpsertNotificationPreferenceByUserId,
   }),
 );
 
 jest.unstable_mockModule(
-  "../../../src/modules/notifications/notification.provider.js",
+  "../../../src/modules/notifications/queue/notification.queue.js",
   () => ({
-    sendNotification: mockSendNotification,
+    enqueueNotification: mockEnqueueNotification,
   }),
 );
 
@@ -61,21 +66,33 @@ const {
   markAllNotificationsAsReadService,
   markNotificationAsReadService,
   sendForTicketEventService,
+  getMyNotificationPreferencesService,
+  updateMyNotificationPreferencesService,
 } = await import("../../../src/modules/notifications/notification.service.js");
 
 describe("notification.service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCreateNotifications.mockResolvedValue({ count: 1 });
-    mockSendNotification.mockResolvedValue({ delivered: false });
+    mockEnqueueNotification.mockResolvedValue({ queued: true, jobId: "job-1" });
     mockResolveRecipientsForTicketEvent.mockResolvedValue({
       organizationId: "org-1",
       recipientIds: ["user-1", "user-2", "user-1"],
     });
     mockApplyRecipientPreferences.mockResolvedValue(["user-1", "user-2"]);
     mockGetNotificationsByRecipient.mockResolvedValue([]);
+    mockGetNotificationPreferenceByUserId.mockResolvedValue(null);
     mockMarkNotificationAsRead.mockResolvedValue({ count: 1 });
     mockMarkAllNotificationsAsRead.mockResolvedValue({ count: 2 });
+    mockUpsertNotificationPreferenceByUserId.mockResolvedValue({
+      userId: "user-1",
+      inAppEnabled: true,
+      emailEnabled: false,
+      pushEnabled: false,
+      websocketEnabled: true,
+      suppressSelfNotifications: true,
+      disabledTypes: [],
+    });
   });
 
   describe("createInAppNotificationsService", () => {
@@ -188,6 +205,7 @@ describe("notification.service", () => {
       expect(mockApplyRecipientPreferences).toHaveBeenCalledWith({
         recipientIds: ["user-1", "user-2"],
         actorId: "user-actor",
+        type: "TICKET_ASSIGNED",
       });
       expect(mockCreateNotifications).toHaveBeenCalledWith([
         {
@@ -213,7 +231,7 @@ describe("notification.service", () => {
           },
         },
       ]);
-      expect(mockSendNotification).toHaveBeenCalledWith({
+      expect(mockEnqueueNotification).toHaveBeenCalledWith({
         type: "TICKET_ASSIGNED",
         ticketId: "ticket-1",
         organizationId: "org-1",
@@ -236,7 +254,7 @@ describe("notification.service", () => {
 
       expect(mockCreateNotifications).not.toHaveBeenCalled();
       expect(result).toEqual({ count: 0 });
-      expect(mockSendNotification).toHaveBeenCalledWith({
+      expect(mockEnqueueNotification).toHaveBeenCalledWith({
         type: "TICKET_TAG_ADDED",
         ticketId: "ticket-3",
         organizationId: "org-1",
@@ -250,8 +268,48 @@ describe("notification.service", () => {
     it("forwards payload to provider", async () => {
       await sendForTicketEventService({ type: "TICKET_ASSIGNED" });
 
-      expect(mockSendNotification).toHaveBeenCalledWith({
+      expect(mockEnqueueNotification).toHaveBeenCalledWith({
         type: "TICKET_ASSIGNED",
+      });
+    });
+  });
+
+  describe("notification preferences", () => {
+    it("returns defaults when no preference row exists", async () => {
+      mockGetNotificationPreferenceByUserId.mockResolvedValue(null);
+
+      const result = await getMyNotificationPreferencesService("user-1");
+
+      expect(result).toEqual({
+        userId: "user-1",
+        inAppEnabled: true,
+        emailEnabled: false,
+        pushEnabled: false,
+        websocketEnabled: true,
+        suppressSelfNotifications: true,
+        disabledTypes: [],
+      });
+    });
+
+    it("updates notification preferences", async () => {
+      const result = await updateMyNotificationPreferencesService("user-1", {
+        websocketEnabled: false,
+      });
+
+      expect(mockUpsertNotificationPreferenceByUserId).toHaveBeenCalledWith(
+        "user-1",
+        {
+          websocketEnabled: false,
+        },
+      );
+      expect(result).toEqual({
+        userId: "user-1",
+        inAppEnabled: true,
+        emailEnabled: false,
+        pushEnabled: false,
+        websocketEnabled: true,
+        suppressSelfNotifications: true,
+        disabledTypes: [],
       });
     });
   });

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockNotificationCreateMany = jest.fn();
 const mockNotificationFindMany = jest.fn();
 const mockNotificationUpdateMany = jest.fn();
+const mockNotificationPreferenceFindMany = jest.fn();
+const mockNotificationPreferenceFindUnique = jest.fn();
+const mockNotificationPreferenceUpsert = jest.fn();
 const mockTicketFindUnique = jest.fn();
 const mockMembershipFindMany = jest.fn();
 
@@ -32,6 +35,11 @@ jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
       findMany: mockNotificationFindMany,
       updateMany: mockNotificationUpdateMany,
     },
+    notificationPreference: {
+      findMany: mockNotificationPreferenceFindMany,
+      findUnique: mockNotificationPreferenceFindUnique,
+      upsert: mockNotificationPreferenceUpsert,
+    },
     ticket: {
       findUnique: mockTicketFindUnique,
     },
@@ -48,6 +56,9 @@ const {
   markNotificationAsRead,
   getTicketNotificationContext,
   getOrganizationStaffRecipientIds,
+  getNotificationPreferencesForUsers,
+  getNotificationPreferenceByUserId,
+  upsertNotificationPreferenceByUserId,
 } = await import("../../../src/modules/notifications/notification.repo.js");
 
 describe("notification.repo", () => {
@@ -239,6 +250,80 @@ describe("notification.repo", () => {
         },
       });
       expect(result).toEqual(["owner-1", "admin-1", "agent-1"]);
+    });
+  });
+
+  describe("notification preferences", () => {
+    it("returns empty list when userIds are missing", async () => {
+      const result = await getNotificationPreferencesForUsers();
+
+      expect(result).toEqual([]);
+      expect(mockNotificationPreferenceFindMany).not.toHaveBeenCalled();
+    });
+
+    it("loads notification preferences for user list", async () => {
+      mockNotificationPreferenceFindMany.mockResolvedValue([
+        {
+          userId: "user-1",
+          inAppEnabled: true,
+          emailEnabled: false,
+          pushEnabled: false,
+          websocketEnabled: true,
+          suppressSelfNotifications: true,
+          disabledTypes: [],
+        },
+      ]);
+
+      const result = await getNotificationPreferencesForUsers(["user-1"]);
+
+      expect(mockNotificationPreferenceFindMany).toHaveBeenCalledWith({
+        where: {
+          userId: {
+            in: ["user-1"],
+          },
+        },
+        select: {
+          userId: true,
+          inAppEnabled: true,
+          emailEnabled: true,
+          pushEnabled: true,
+          websocketEnabled: true,
+          suppressSelfNotifications: true,
+          disabledTypes: true,
+        },
+      });
+      expect(result).toHaveLength(1);
+    });
+
+    it("returns null when userId is missing for single preference", async () => {
+      const result = await getNotificationPreferenceByUserId();
+
+      expect(result).toBeNull();
+      expect(mockNotificationPreferenceFindUnique).not.toHaveBeenCalled();
+    });
+
+    it("upserts preferences by user id", async () => {
+      mockNotificationPreferenceUpsert.mockResolvedValue({
+        userId: "user-1",
+      });
+
+      const result = await upsertNotificationPreferenceByUserId("user-1", {
+        websocketEnabled: false,
+      });
+
+      expect(mockNotificationPreferenceUpsert).toHaveBeenCalledWith({
+        where: {
+          userId: "user-1",
+        },
+        create: {
+          userId: "user-1",
+          websocketEnabled: false,
+        },
+        update: {
+          websocketEnabled: false,
+        },
+      });
+      expect(result).toEqual({ userId: "user-1" });
     });
   });
 });
