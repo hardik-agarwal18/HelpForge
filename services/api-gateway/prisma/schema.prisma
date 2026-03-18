@@ -130,13 +130,22 @@ model TicketComment {
   ticketId String
   ticket   Ticket @relation(fields: [ticketId], references: [id])
 
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id])
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id])
 
-  message    String
+  authorType CommentAuthorType
+
+  message String
+
   isInternal Boolean @default(false)
 
   createdAt DateTime @default(now())
+}
+
+enum CommentAuthorType {
+  USER
+  AI
+  SYSTEM
 }
 
 model TicketAttachment {
