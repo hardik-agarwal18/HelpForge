@@ -1,5 +1,6 @@
 import logger from "../../../config/logger.js";
 import * as augmentationService from "./ai.augmentation.service.js";
+import { ApiError } from "../../../utils/errorHandler.js";
 
 /**
  * AI Augmentation Controller - PHASE 3
@@ -11,7 +12,7 @@ import * as augmentationService from "./ai.augmentation.service.js";
  * POST /augment/suggestion/:ticketId
  * Generate AI-powered suggested reply for agent
  */
-export async function generateSuggestion(req, res) {
+export async function generateSuggestion(req, res, next) {
   try {
     const { ticketId } = req.params;
 
@@ -21,7 +22,7 @@ export async function generateSuggestion(req, res) {
       await augmentationService.generateAgentSuggestion(ticketId);
 
     if (!suggestion) {
-      return res.status(404).json({ error: "Could not generate suggestion" });
+      throw new ApiError(404, "Could not generate suggestion");
     }
 
     res.json({
@@ -37,7 +38,7 @@ export async function generateSuggestion(req, res) {
       { error, ticketId: req.params.ticketId },
       "Error generating suggestion",
     );
-    res.status(500).json({ error: "Failed to generate suggestion" });
+    next(error);
   }
 }
 
@@ -45,7 +46,7 @@ export async function generateSuggestion(req, res) {
  * GET /augment/summary/:ticketId
  * Get ticket summary with key information for agent
  */
-export async function getSummary(req, res) {
+export async function getSummary(req, res, next) {
   try {
     const { ticketId } = req.params;
 
@@ -54,7 +55,7 @@ export async function getSummary(req, res) {
     const summary = await augmentationService.generateTicketSummary(ticketId);
 
     if (!summary) {
-      return res.status(404).json({ error: "Ticket not found" });
+      throw new ApiError(404, "Ticket not found");
     }
 
     res.json({
@@ -74,7 +75,7 @@ export async function getSummary(req, res) {
       { error, ticketId: req.params.ticketId },
       "Error generating summary",
     );
-    res.status(500).json({ error: "Failed to generate summary" });
+    next(error);
   }
 }
 
@@ -82,7 +83,7 @@ export async function getSummary(req, res) {
  * GET /augment/actions/:ticketId
  * Get suggested actions for agent
  */
-export async function getSuggestedActions(req, res) {
+export async function getSuggestedActions(req, res, next) {
   try {
     const { ticketId } = req.params;
 
@@ -101,7 +102,7 @@ export async function getSuggestedActions(req, res) {
       { error, ticketId: req.params.ticketId },
       "Error generating actions",
     );
-    res.status(500).json({ error: "Failed to generate suggested actions" });
+    next(error);
   }
 }
 
@@ -110,7 +111,7 @@ export async function getSuggestedActions(req, res) {
  * Get agent performance boosters and AI-powered metrics
  * Query params: ?days=7 (default)
  */
-export async function getAgentStats(req, res) {
+export async function getAgentStats(req, res, next) {
   try {
     const { agentId } = req.params;
     const days = parseInt(req.query.days) || 7;
@@ -123,7 +124,7 @@ export async function getAgentStats(req, res) {
     );
 
     if (!stats) {
-      return res.status(404).json({ error: "Agent not found or no data" });
+      throw new ApiError(404, "Agent not found or no data");
     }
 
     res.json(stats);
@@ -132,7 +133,7 @@ export async function getAgentStats(req, res) {
       { error, agentId: req.params.agentId },
       "Error fetching agent stats",
     );
-    res.status(500).json({ error: "Failed to fetch agent stats" });
+    next(error);
   }
 }
 
@@ -141,7 +142,7 @@ export async function getAgentStats(req, res) {
  * One-endpoint solution: Get suggestion + summary + actions
  * For UI that wants everything at once
  */
-export async function quickAssist(req, res) {
+export async function quickAssist(req, res, next) {
   try {
     const { ticketId } = req.params;
 
@@ -165,7 +166,7 @@ export async function quickAssist(req, res) {
       { error, ticketId: req.params.ticketId },
       "Error in quick assist",
     );
-    res.status(500).json({ error: "Failed to generate quick assist" });
+    next(error);
   }
 }
 
@@ -174,7 +175,7 @@ export async function quickAssist(req, res) {
  * Get team-wide AI augmentation impact
  * Query params: ?days=7 (default)
  */
-export async function getTeamStats(req, res) {
+export async function getTeamStats(req, res, next) {
   try {
     const { organizationId } = req.params;
     const days = parseInt(req.query.days) || 7;
@@ -198,6 +199,6 @@ export async function getTeamStats(req, res) {
       { error, organizationId: req.params.organizationId },
       "Error fetching team stats",
     );
-    res.status(500).json({ error: "Failed to fetch team stats" });
+    next(error);
   }
 }

@@ -1,6 +1,7 @@
 import logger from "../../../config/logger.js";
 import * as decisionEngine from "./ai.automation.decision.js";
 import * as aiRepo from "./ai.automation.repo.js";
+import { ApiError } from "../../../utils/errorHandler.js";
 
 /**
  * AI Controller - PHASE 2
@@ -12,14 +13,14 @@ import * as aiRepo from "./ai.automation.repo.js";
  * GET /ai/status/:ticketId
  * Get current AI status and suggestions for a ticket
  */
-export const getStatus = async (req, res) => {
+export const getStatus = async (req, res, next) => {
   try {
     const { ticketId } = req.params;
 
     const ticket = await aiRepo.getTicket(ticketId);
 
     if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
+      throw new ApiError(404, "Ticket not found");
     }
 
     res.json({
@@ -35,7 +36,7 @@ export const getStatus = async (req, res) => {
       { error, ticketId: req.params.ticketId },
       "Error getting AI status",
     );
-    res.status(500).json({ error: "Failed to get AI status" });
+    next(error);
   }
 };
 
@@ -44,14 +45,14 @@ export const getStatus = async (req, res) => {
  * Get AI decision recommendation for a ticket
  * Useful for UI to show AI recommendations
  */
-export const getDecision = async (req, res) => {
+export const getDecision = async (req, res, next) => {
   try {
     const { ticketId } = req.params;
 
     const ticket = await aiRepo.getTicketWithComments(ticketId);
 
     if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
+      throw new ApiError(404, "Ticket not found");
     }
 
     // Calculate what AI would decide now
@@ -85,7 +86,7 @@ export const getDecision = async (req, res) => {
       { error, ticketId: req.params.ticketId },
       "Error getting decision",
     );
-    res.status(500).json({ error: "Failed to get decision" });
+    next(error);
   }
 };
 
@@ -93,13 +94,13 @@ export const getDecision = async (req, res) => {
  * POST /ai/toggle/:ticketId
  * Enable/disable AI for a specific ticket
  */
-export const toggleAI = async (req, res) => {
+export const toggleAI = async (req, res, next) => {
   try {
     const { ticketId } = req.params;
     const { aiActive } = req.body;
 
     if (typeof aiActive !== "boolean") {
-      return res.status(400).json({ error: "aiActive must be a boolean" });
+      throw new ApiError(400, "aiActive must be a boolean");
     }
 
     const updated = await aiRepo.updateTicket(ticketId, { aiActive });
@@ -112,7 +113,7 @@ export const toggleAI = async (req, res) => {
     });
   } catch (error) {
     logger.error({ error, ticketId: req.params.ticketId }, "Error toggling AI");
-    res.status(500).json({ error: "Failed to toggle AI" });
+    next(error);
   }
 };
 
@@ -120,7 +121,7 @@ export const toggleAI = async (req, res) => {
  * POST /ai/override/:ticketId
  * Override AI decision and manually assign or resolve
  */
-export const overrideDecision = async (req, res) => {
+export const overrideDecision = async (req, res, next) => {
   try {
     const { ticketId } = req.params;
     const { action, assignToId, status } = req.body;
@@ -128,7 +129,7 @@ export const overrideDecision = async (req, res) => {
     const ticket = await aiRepo.getTicket(ticketId);
 
     if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
+      throw new ApiError(404, "Ticket not found");
     }
 
     const updateData = {};
@@ -168,7 +169,7 @@ export const overrideDecision = async (req, res) => {
       { error, ticketId: req.params.ticketId },
       "Error overriding decision",
     );
-    res.status(500).json({ error: "Failed to override decision" });
+    next(error);
   }
 };
 
@@ -176,7 +177,7 @@ export const overrideDecision = async (req, res) => {
  * GET /ai/config
  * Get current AI decision rules/configuration
  */
-export const getConfig = async (req, res) => {
+export const getConfig = async (req, res, next) => {
   try {
     const rules = decisionEngine.getDecisionRules();
 
@@ -191,7 +192,7 @@ export const getConfig = async (req, res) => {
     });
   } catch (error) {
     logger.error({ error }, "Error getting config");
-    res.status(500).json({ error: "Failed to get config" });
+    next(error);
   }
 };
 
@@ -199,7 +200,7 @@ export const getConfig = async (req, res) => {
  * GET /ai/stats/:organizationId
  * Get AI effectiveness statistics for organization
  */
-export const getStats = async (req, res) => {
+export const getStats = async (req, res, next) => {
   try {
     const { organizationId } = req.params;
 
@@ -249,6 +250,6 @@ export const getStats = async (req, res) => {
       { error, organizationId: req.params.organizationId },
       "Error getting stats",
     );
-    res.status(500).json({ error: "Failed to get stats" });
+    next(error);
   }
 };
