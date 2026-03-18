@@ -1,6 +1,9 @@
 import prisma from "../../config/database.config.js";
 
-export const getTicketOrganizationMembership = async (organizationId, userId) => {
+export const getTicketOrganizationMembership = async (
+  organizationId,
+  userId,
+) => {
   return await prisma.membership.findUnique({
     where: {
       userId_organizationId: {
@@ -240,7 +243,11 @@ export const assignTicket = async (
   });
 };
 
-export const autoAssignTicket = async (ticketId, organizationId, agentUserId) => {
+export const autoAssignTicket = async (
+  ticketId,
+  organizationId,
+  agentUserId,
+) => {
   return await prisma.$transaction(async (tx) => {
     const now = new Date();
 
@@ -348,6 +355,7 @@ export const createTicketComment = async (ticketId, commentData) => {
   return await prisma.ticketComment.create({
     data: {
       ticketId,
+      authorType: "USER",
       ...commentData,
     },
     include: {

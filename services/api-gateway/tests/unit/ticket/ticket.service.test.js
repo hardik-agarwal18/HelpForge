@@ -1351,6 +1351,7 @@ describe("Ticket Service", () => {
 
       expect(mockCreateTicketComment).toHaveBeenCalledWith("ticket-1", {
         authorId: "user-1",
+        authorType: "USER",
         message: "Internal note",
         isInternal: true,
       });

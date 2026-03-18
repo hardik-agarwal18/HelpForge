@@ -574,6 +574,7 @@ export const createTicketCommentService = async (
 
   const comment = await createTicketComment(ticketId, {
     authorId: userId,
+    authorType: "USER",
     message: commentData.message,
     isInternal,
   });

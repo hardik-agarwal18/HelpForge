@@ -379,7 +379,9 @@ describe("Ticket API Integration Tests", () => {
         .expect(403);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe("Only agents can update their availability");
+      expect(response.body.message).toBe(
+        "Only agents can update their availability",
+      );
     });
 
     it("should reject invalid availability payloads", async () => {
@@ -525,9 +527,13 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.tickets).toHaveLength(2);
-      expect(response.body.data.tickets.every((ticket) =>
-        ["Member created ticket", "Member assigned ticket"].includes(ticket.title),
-      )).toBe(true);
+      expect(
+        response.body.data.tickets.every((ticket) =>
+          ["Member created ticket", "Member assigned ticket"].includes(
+            ticket.title,
+          ),
+        ),
+      ).toBe(true);
     });
 
     it("should filter tickets by query params", async () => {
@@ -671,7 +677,9 @@ describe("Ticket API Integration Tests", () => {
         .expect(403);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe("You do not have permission to create tags");
+      expect(response.body.message).toBe(
+        "You do not have permission to create tags",
+      );
     });
   });
 
@@ -721,6 +729,7 @@ describe("Ticket API Integration Tests", () => {
             create: {
               authorId: user1.id,
               message: "Initial note",
+              authorType: "USER",
             },
           },
         },
@@ -753,11 +762,13 @@ describe("Ticket API Integration Tests", () => {
               {
                 authorId: user1.id,
                 message: "Public note",
+                authorType: "USER",
                 isInternal: false,
               },
               {
                 authorId: user1.id,
                 message: "Internal note",
+                authorType: "USER",
                 isInternal: true,
               },
             ],
@@ -1312,11 +1323,13 @@ describe("Ticket API Integration Tests", () => {
               {
                 authorId: user1.id,
                 message: "Public note",
+                authorType: "USER",
                 isInternal: false,
               },
               {
                 authorId: user2.id,
                 message: "Internal note",
+                authorType: "USER",
                 isInternal: true,
               },
             ],
@@ -1496,6 +1509,7 @@ describe("Ticket API Integration Tests", () => {
           ticketId: ticket.id,
           authorId: user4.id,
           message: "Member comment",
+          authorType: "USER",
         },
       });
 
@@ -1504,6 +1518,7 @@ describe("Ticket API Integration Tests", () => {
           ticketId: ticket.id,
           authorId: user2.id,
           message: "Agent comment",
+          authorType: "USER",
           isInternal: true,
         },
       });
@@ -1564,6 +1579,7 @@ describe("Ticket API Integration Tests", () => {
           ticketId: ticket.id,
           authorId: unrelatedMember.id,
           message: "Own but unrelated",
+          authorType: "USER",
         },
       });
 
@@ -1580,7 +1596,9 @@ describe("Ticket API Integration Tests", () => {
 
     it("should return 404 when ticket does not exist", async () => {
       const response = await request(app)
-        .delete(`/api/tickets/non-existent-ticket-id/comments/${ownMemberComment.id}`)
+        .delete(
+          `/api/tickets/non-existent-ticket-id/comments/${ownMemberComment.id}`,
+        )
         .set("Authorization", `Bearer ${user1Token}`)
         .expect(404);
 
@@ -1604,6 +1622,7 @@ describe("Ticket API Integration Tests", () => {
           ticketId: otherTicket.id,
           authorId: user1.id,
           message: "Different ticket comment",
+          authorType: "USER",
         },
       });
 
@@ -1859,7 +1878,9 @@ describe("Ticket API Integration Tests", () => {
 
     it("should allow elevated roles to delete any attachment", async () => {
       const response = await request(app)
-        .delete(`/api/tickets/${ticket.id}/attachments/${ownMemberAttachment.id}`)
+        .delete(
+          `/api/tickets/${ticket.id}/attachments/${ownMemberAttachment.id}`,
+        )
         .set("Authorization", `Bearer ${user1Token}`)
         .expect(200);
 
@@ -1874,7 +1895,9 @@ describe("Ticket API Integration Tests", () => {
 
     it("should allow members to delete their own attachments on accessible tickets", async () => {
       const response = await request(app)
-        .delete(`/api/tickets/${ticket.id}/attachments/${ownMemberAttachment.id}`)
+        .delete(
+          `/api/tickets/${ticket.id}/attachments/${ownMemberAttachment.id}`,
+        )
         .set("Authorization", `Bearer ${user4Token}`)
         .expect(200);
 
@@ -1896,7 +1919,9 @@ describe("Ticket API Integration Tests", () => {
 
     it("should return 404 when ticket does not exist", async () => {
       const response = await request(app)
-        .delete(`/api/tickets/non-existent-ticket-id/attachments/${ownMemberAttachment.id}`)
+        .delete(
+          `/api/tickets/non-existent-ticket-id/attachments/${ownMemberAttachment.id}`,
+        )
         .set("Authorization", `Bearer ${user1Token}`)
         .expect(404);
 
