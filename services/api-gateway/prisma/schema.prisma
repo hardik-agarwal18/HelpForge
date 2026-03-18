@@ -107,6 +107,10 @@ model Ticket {
   assignedToId String?
   assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
 
+  // AI fields
+  aiActive       Boolean @default(true)
+  aiMessageCount Int     @default(0)
+
   comments      TicketComment[]
   attachments   TicketAttachment[]
   tags          TicketTag[]

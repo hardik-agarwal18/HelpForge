@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Ticket" ADD COLUMN     "aiActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "aiMessageCount" INTEGER NOT NULL DEFAULT 0;
