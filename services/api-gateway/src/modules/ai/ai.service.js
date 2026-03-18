@@ -1,7 +1,7 @@
 import logger from "../../config/logger.js";
 import * as aiProvider from "./ai.provider.js";
 import * as decisionEngine from "./ai.decision.js";
-import { buildTicketContext, buildSummaryContext } from "./ai.prompts.js";
+import { buildTicketContext } from "./ai.prompts.js";
 import * as aiRepo from "./ai.repo.js";
 
 /**
@@ -344,7 +344,6 @@ export const generateTicketSummary = async (ticketId) => {
       return null;
     }
 
-    const summaryContext = buildSummaryContext(ticket.comments);
     const summary = await aiProvider.generateSummary(ticket.comments);
 
     logger.info(
