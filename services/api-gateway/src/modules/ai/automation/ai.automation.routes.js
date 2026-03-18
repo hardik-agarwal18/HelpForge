@@ -6,7 +6,7 @@ import {
   overrideDecision,
   getConfig,
   getStats,
-} from "./ai.controller.js";
+} from "./ai.automation.controller.js";
 
 const router = express.Router();
 

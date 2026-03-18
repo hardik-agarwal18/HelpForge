@@ -1,6 +1,6 @@
-import logger from "../../config/logger.js";
-import * as aiRepo from "./ai.repo.js";
-import * as aiProvider from "./ai.provider.js";
+import logger from "../../../config/logger.js";
+import * as aiRepo from "../automation/ai.automation.repo.js";
+import * as aiProvider from "../core/ai.provider.js";
 
 /**
  * AI Augmentation Service - PHASE 3

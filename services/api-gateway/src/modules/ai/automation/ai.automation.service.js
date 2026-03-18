@@ -1,8 +1,8 @@
-import logger from "../../config/logger.js";
-import * as aiProvider from "./ai.provider.js";
-import * as decisionEngine from "./ai.decision.js";
-import { buildTicketContext } from "./ai.prompts.js";
-import * as aiRepo from "./ai.repo.js";
+import logger from "../../../config/logger.js";
+import * as aiProvider from "../core/ai.provider.js";
+import * as decisionEngine from "./ai.automation.decision.js";
+import { buildTicketContext } from "../core/ai.prompts.js";
+import * as aiRepo from "./ai.automation.repo.js";
 
 /**
  * AI Service - Main orchestrator for AI functionality

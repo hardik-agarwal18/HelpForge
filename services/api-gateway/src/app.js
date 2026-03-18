@@ -5,8 +5,8 @@ import notificationRoutes from "./modules/notifications/notification.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
 import agentRoutes from "./modules/tickets/ticket.agent.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
-import aiRoutes from "./modules/ai/ai.routes.js";
-import aiAugmentationRoutes from "./modules/ai/ai.augmentation.routes.js";
+import aiRoutes from "./modules/ai/automation/ai.automation.routes.js";
+import aiAugmentationRoutes from "./modules/ai/augmentation/ai.augmentation.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 
 const app = express();

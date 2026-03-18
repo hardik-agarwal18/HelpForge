@@ -1,6 +1,6 @@
-import logger from "../../config/logger.js";
-import * as decisionEngine from "./ai.decision.js";
-import * as aiRepo from "./ai.repo.js";
+import logger from "../../../config/logger.js";
+import * as decisionEngine from "./ai.automation.decision.js";
+import * as aiRepo from "./ai.automation.repo.js";
 
 /**
  * AI Controller - PHASE 2

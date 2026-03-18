@@ -1,5 +1,5 @@
-import logger from "../../config/logger.js";
-import * as augmentationService from "./ai.augmentation.js";
+import logger from "../../../config/logger.js";
+import * as augmentationService from "./ai.augmentation.service.js";
 
 /**
  * AI Augmentation Controller - PHASE 3

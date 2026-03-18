@@ -1,4 +1,4 @@
-import logger from "../../config/logger.js";
+import logger from "../../../config/logger.js";
 
 const DECISION_RULES = {
   MAX_AI_RESPONSES: 5, // Stop responding after this many AI messages

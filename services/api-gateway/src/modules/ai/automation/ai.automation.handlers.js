@@ -1,7 +1,7 @@
-import logger from "../../config/logger.js";
-import { handleCommentAdded } from "./ai.service.js";
-import { TICKET_COMMENT_ADDED_EVENT } from "../../events/eventTypes.js";
-import { registerAsyncHandler } from "../../events/eventBus.js";
+import logger from "../../../config/logger.js";
+import { handleCommentAdded } from "./ai.automation.service.js";
+import { TICKET_COMMENT_ADDED_EVENT } from "../../../events/eventTypes.js";
+import { registerAsyncHandler } from "../../../events/eventBus.js";
 
 /**
  * AI Event Handlers - Listens to ticket events and triggers AI operations
