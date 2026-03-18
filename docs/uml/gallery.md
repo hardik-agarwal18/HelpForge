@@ -548,6 +548,21 @@ flowchart TD
   K --> L
 ```
 
+### 24-activity-ai-decision-engine
+
+```mermaid
+flowchart TD
+  A[Ticket Created] --> B[AI Decision Engine]
+  B --> C{Decision Outcome}
+  C --> D[Resolved]
+  C --> E[Assigned to Agent]
+
+  D --> F[Close Ticket Lifecycle]
+  E --> G[Agent Works Ticket]
+  G --> H[Status Updates]
+  H --> I[Resolved]
+```
+
 ## Sequence
 
 ### 09-sequence-auth-register

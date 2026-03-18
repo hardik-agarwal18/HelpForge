@@ -16,6 +16,7 @@ Quick preview page: `gallery.md` (renders all diagrams in one markdown file).
 1. `06-activity-auto-assignment.mmd` - Ticket auto-assignment decision process.
 2. `07-activity-role-management.mmd` - Organization member role update process.
 3. `08-activity-ticket-status-update.mmd` - Ticket status update process.
+4. `24-activity-ai-decision-engine.mmd` - AI decision outcome: resolve or assign.
 
 ## State Diagram
 
