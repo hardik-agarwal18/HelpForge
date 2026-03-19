@@ -426,6 +426,39 @@ model AIProcessingLock {
   createdAt DateTime @default(now())
 }
 
+model AIProcessingFailure {
+  id String @id @default(uuid())
+
+  queueName String
+  jobName   String
+  jobId     String?
+
+  ticketId  String?
+  commentId String?
+
+  attemptsMade Int    @default(0)
+  retryLimit   Int    @default(0)
+  retryable    Boolean @default(true)
+  retryCount   Int     @default(0)
+
+  failureReason String
+  stacktrace    String?
+  payload       Json
+
+  failedAt      DateTime  @default(now())
+  lastRetriedAt DateTime?
+  resolvedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([queueName, failedAt])
+  @@index([ticketId, failedAt])
+  @@index([commentId, failedAt])
+  @@index([retryable, resolvedAt, failedAt])
+  @@map("AIProcessingFailures")
+}
+
 model EventStore {
   id String @id @default(uuid())
 
