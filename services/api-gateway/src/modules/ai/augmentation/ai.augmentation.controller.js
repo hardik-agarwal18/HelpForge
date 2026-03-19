@@ -158,10 +158,12 @@ export async function quickAssist(req, res, next) {
 
     logger.info({ ticketId }, "Generating quick assist");
 
+    const ticket = await aiRepo.getTicketWithComments(ticketId);
+
     const [suggestion, summary, actions] = await Promise.all([
-      augmentationService.generateAgentSuggestion(ticketId),
-      augmentationService.generateTicketSummary(ticketId),
-      augmentationService.generateSuggestedActions(ticketId),
+      generateAgentSuggestionFromTicket(ticket),
+      generateTicketSummaryFromTicket(ticket),
+      generateSuggestedActionsFromTicket(ticket),
     ]);
 
     res.json({
