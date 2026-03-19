@@ -14,46 +14,23 @@ const DECISION_RULES = {
 
 /**
  * Check if AI should respond to a comment
+ * ⚠️ NOTE: All guard checks happen in ai.automation.guards.js
+ * This function focuses on decision logic, not guard conditions
+ *
  * @param {Object} ticket - Ticket object
  * @param {Array} comments - All ticket comments
  * @returns {Object} Decision with shouldRespond flag
  */
 export const shouldRespondToComment = (ticket, comments) => {
-  // Check stop conditions
-  const aiComments = comments.filter((c) => c.authorType === "AI");
-  const aiResponseCount = aiComments.length;
-
-  // Stop condition 1: Max AI responses reached
-  if (aiResponseCount >= DECISION_RULES.MAX_AI_RESPONSES) {
-    logger.info(
-      { ticketId: ticket.id, aiResponseCount },
-      "AI stop condition: max responses reached",
-    );
-    return { shouldRespond: false, reason: "MAX_RESPONSES_REACHED" };
-  }
-
-  // Stop condition 2: AI is disabled for this ticket
-  if (!ticket.aiActive) {
-    logger.info(
-      { ticketId: ticket.id },
-      "AI stop condition: AI disabled for ticket",
-    );
-    return { shouldRespond: false, reason: "AI_DISABLED" };
-  }
-
-  // Stop condition 3: Ticket already assigned and in progress
-  if (ticket.assignedToId && ticket.status === "IN_PROGRESS") {
-    logger.info(
-      { ticketId: ticket.id },
-      "AI stop condition: ticket in progress with assignment",
-    );
-    return { shouldRespond: false, reason: "ALREADY_IN_PROGRESS" };
-  }
+  // All guard conditions (aiActive, max responses, cooldown, assignment state)
+  // are already checked in shouldProcessAI() guard layer
+  // This function can focus on additional decision logic if needed
 
   return {
     shouldRespond: true,
-    reason: "SHOULD_RESPOND",
-    currentAiResponseCount: aiResponseCount,
+    reason: "PASSED_GUARDS",
+    currentAiResponseCount: comments.filter((c) => c.authorType === "AI")
+      .length,
   };
 };
 

@@ -4,59 +4,12 @@ import {
   generateAISummary,
 } from "../core/provider/ai.provider.orchestrator.js";
 import * as decisionEngine from "./ai.automation.decision.js";
+import { shouldProcessAI } from "./ai.automation.guards.js";
 import {
   AUTOMATION_PROMPTS,
   buildTicketContext,
 } from "../core/prompts/automation.prompt.js";
 import * as aiRepo from "./ai.automation.repo.js";
-
-const AI_MAX_MESSAGES_PER_TICKET = 5;
-const AI_COMMENT_COOLDOWN_MS = 30 * 1000;
-
-const shouldSkipForMessageBudget = (ticket) => {
-  const aiResponseCount =
-    typeof ticket.aiMessageCount === "number"
-      ? ticket.aiMessageCount
-      : ticket.comments.filter((c) => c.authorType === "AI").length;
-
-  if (aiResponseCount >= AI_MAX_MESSAGES_PER_TICKET) {
-    logger.info(
-      { ticketId: ticket.id, aiResponseCount },
-      "AI budget guard: max messages reached",
-    );
-    return true;
-  }
-
-  return false;
-};
-
-const shouldSkipForCooldown = (ticket) => {
-  const lastAiComment = [...ticket.comments]
-    .reverse()
-    .find((comment) => comment.authorType === "AI");
-
-  if (!lastAiComment?.createdAt) {
-    return false;
-  }
-
-  const cooldownRemainingMs =
-    AI_COMMENT_COOLDOWN_MS -
-    (Date.now() - new Date(lastAiComment.createdAt).getTime());
-
-  if (cooldownRemainingMs > 0) {
-    logger.info(
-      {
-        ticketId: ticket.id,
-        cooldownRemainingMs,
-        lastAiCommentId: lastAiComment.id,
-      },
-      "AI cooldown guard: skipping response",
-    );
-    return true;
-  }
-
-  return false;
-};
 
 /**
  * AI Service - Main orchestrator for AI functionality
@@ -100,15 +53,17 @@ export const handleCommentAdded = async (payload) => {
       return;
     }
 
-    if (shouldSkipForMessageBudget(ticket)) {
+    // ✅ SINGLE GUARD LAYER - All checks in one place
+    const guardResult = shouldProcessAI(ticket);
+    if (!guardResult.canProcess) {
+      logger.info(
+        { ticketId, reason: guardResult.reason },
+        "AI processing blocked by guard",
+      );
       return;
     }
 
-    if (shouldSkipForCooldown(ticket)) {
-      return;
-    }
-
-    // Decide if AI should respond
+    // Decide if AI should respond (confidence-based, not guard-based)
     const decision = decisionEngine.shouldRespondToComment(
       ticket,
       ticket.comments,
