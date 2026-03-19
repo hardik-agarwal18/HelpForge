@@ -1,16 +1,5 @@
 import logger from "../../../config/logger.js";
-
-const DECISION_RULES = {
-  MAX_AI_RESPONSES: 5, // Stop responding after this many AI messages
-  CONFIDENCE_THRESHOLD_AUTO_CLOSE: 0.85, // Auto-close if confidence > this
-  CONFIDENCE_THRESHOLD_SUGGEST: 0.5, // Suggest if confidence > this
-  CONFIDENCE_THRESHOLD_ASSIGN: 0.0, // Assign to agent if < suggest threshold
-
-  // Phase 2: Assignment rules
-  SMART_ASSIGN_THRESHOLD: 0.65, // Trigger smart assignment if > this
-  URGENT_AUTO_ASSIGN: true, // Auto-assign urgent tickets
-  HIGH_AUTO_ASSIGN: false, // Don't auto-assign high priority (review needed)
-};
+import { DECISION_RULES } from "./ai.automation.constants.js";
 
 /**
  * Check if AI should respond to a comment
