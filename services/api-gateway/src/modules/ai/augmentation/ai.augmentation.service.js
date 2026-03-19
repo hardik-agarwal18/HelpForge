@@ -1,6 +1,10 @@
 import logger from "../../../config/logger.js";
 import * as aiRepo from "../automation/ai.automation.repo.js";
-import * as aiProvider from "../core/ai.provider.js";
+import * as aiProvider from "../core/provider/ai.provider.js";
+import {
+  buildAgentContext,
+  getAgentSystemPrompt,
+} from "../core/prompts/agent.prompt.js";
 
 /**
  * AI Augmentation Service - PHASE 3
@@ -251,62 +255,6 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
     logger.error({ error, agentId }, "Error calculating agent stats");
     return null;
   }
-};
-
-/**
- * Build context optimized for agent (vs customer)
- * @private
- */
-const buildAgentContext = (ticket, lastUserComment) => {
-  const comments = ticket.comments
-    .map(
-      (c) =>
-        `[${c.createdAt.toLocaleTimeString()}] ${c.authorType}: ${c.message}`,
-    )
-    .join("\n");
-
-  return `
-AGENT CONTEXT - Ticket #${ticket.id}
-====================================
-Customer: ${ticket.createdBy?.email || "unknown"}
-Priority: ${ticket.priority}
-Status: ${ticket.status}
-Duration: ${calculateTicketAge(ticket.createdAt)}
-
-Issue Summary:
-${ticket.description}
-
-Recent Conversation:
-${comments}
-
-Last User Message:
-${lastUserComment.message}
-
-Your task as agent:
-1. Understand the exact problem and attempted solutions
-2. Provide clear, actionable next step
-3. Be empathetic but professional
-4. If unsure, ask clarifying questions
-5. Suggest workarounds if resolution isn't immediately available
-`;
-};
-
-/**
- * Get system prompt optimized for agents
- * @private
- */
-const getAgentSystemPrompt = () => {
-  return `You are helping a support agent respond to a customer.
-Your suggestions should be:
-- Professional and empathetic
-- Clear and actionable
-- Concise (2-3 sentences ideal)
-- Include next steps or expectations
-- Acknowledge previous attempts
-- Use simple technical language
-
-Format your response as a complete message the agent can send to the customer.
-The agent can customize it before sending.`;
 };
 
 /**

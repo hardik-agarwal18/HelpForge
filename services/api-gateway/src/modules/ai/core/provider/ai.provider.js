@@ -1,4 +1,7 @@
-import logger from "../../../config/logger.js";
+import logger from "../../../../config/logger.js";
+import { withRetry } from "./ai.retry.js";
+import { withTimeout } from "./ai.timeout.js";
+import { buildSummaryContext } from "../prompts/summary.prompt.js";
 
 /**
  * AI Provider - Integrates with external AI services (OpenAI)
@@ -9,6 +12,28 @@ const provider = process.env.AI_PROVIDER || "openai";
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.AI_MODEL;
 
+const AI_PROVIDER_TIMEOUT_MS =
+  Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 15000;
+const AI_PROVIDER_RETRIES = Number(process.env.AI_PROVIDER_RETRIES) || 3;
+const AI_PROVIDER_RETRY_DELAY_MS =
+  Number(process.env.AI_PROVIDER_RETRY_DELAY_MS) || 500;
+
+const executeWithProviderGuards = async (fn, timeoutMessage) => {
+  return withRetry(
+    () => withTimeout(fn(), AI_PROVIDER_TIMEOUT_MS, timeoutMessage),
+    {
+      retries: AI_PROVIDER_RETRIES,
+      delayMs: AI_PROVIDER_RETRY_DELAY_MS,
+      onRetry: (error, retriesRemaining) => {
+        logger.warn(
+          { error, retriesRemaining },
+          "AI provider call failed, retrying",
+        );
+      },
+    },
+  );
+};
+
 /**
  * Generate AI response from a ticket context
  * @param {Object} context - Ticket context with comments
@@ -16,8 +41,6 @@ const model = process.env.AI_MODEL;
  */
 export const generateResponse = async (context) => {
   try {
-    // TODO: Implement actual OpenAI API call
-    // For now, returning structured placeholder
     logger.info(
       {
         ticketId: context.ticketId,
@@ -28,9 +51,10 @@ export const generateResponse = async (context) => {
       "Generating AI response",
     );
 
-    // This would be replaced with actual API call
-    const response = await callOpenAI(context);
-    return response;
+    return await executeWithProviderGuards(
+      async () => callOpenAI(context),
+      "AI provider timeout while generating response",
+    );
   } catch (error) {
     logger.error({ error, context }, "Failed to generate AI response");
     throw error;
@@ -60,10 +84,24 @@ export const generateSummary = async (comments) => {
       { commentCount: comments.length, provider, model },
       "Generating conversation summary",
     );
-    // TODO: Implement summary generation
-    return "Ticket summary placeholder";
+
+    return await executeWithProviderGuards(
+      async () => callOpenAISummary(comments),
+      "AI provider timeout while generating summary",
+    );
   } catch (error) {
     logger.error({ error }, "Failed to generate summary");
     throw error;
   }
+};
+
+const callOpenAISummary = async (comments) => {
+  const summaryContext = buildSummaryContext(comments);
+
+  // Placeholder for OpenAI summary call using summaryContext
+  if (!summaryContext) {
+    return "Ticket summary placeholder";
+  }
+
+  return "Ticket summary placeholder";
 };
