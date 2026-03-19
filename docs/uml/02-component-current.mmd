@@ -2,6 +2,7 @@ flowchart TB
 
   Client[Client App]
   API[API Gateway\nExpress Application]
+  SocketClient[WebSocket Client]
 
   subgraph CrossCutting[Cross-Cutting Components]
     AuthMW[Auth Middleware]
@@ -13,7 +14,7 @@ flowchart TB
     EventHandlers[Async Event Handlers]
   end
 
-  subgraph Modules[Feature Modules]
+  subgraph CoreModules[Core Modules]
     AuthRoutes[Auth Routes]
     OrgRoutes[Organization Routes]
     TicketRoutes[Ticket Routes]
@@ -32,10 +33,37 @@ flowchart TB
     TicketRepo[Ticket Repo]
   end
 
+  subgraph NotificationModules[Notification Modules]
+    NotificationRoutes[Notification Routes]
+    NotificationController[Notification Controller]
+    NotificationService[Notification Service]
+    NotificationRepo[Notification Repo]
+    RecipientStrategy[Recipient Strategy]
+    PreferenceStrategy[Preference Strategy]
+    NotificationQueue[Notification Queue]
+    NotificationWorker[Notification Worker]
+    NotificationProvider[Notification Provider]
+    SocketGateway[Socket.IO Gateway]
+  end
+
+  subgraph AIModules[AI Modules]
+    AiAutomationRoutes[AI Automation Routes]
+    AiAutomationController[AI Automation Controller]
+    AiAutomationService[AI Automation Service]
+    AiAutomationRepo[AI Automation Repo]
+    AiDecision[AI Decision Engine]
+
+    AiAugRoutes[AI Augmentation Routes]
+    AiAugController[AI Augmentation Controller]
+    AiAugService[AI Augmentation Service]
+  end
+
   Prisma[Prisma Client]
   DB[(PostgreSQL)]
+  Redis[(Redis)]
 
   Client --> API
+  SocketClient --> SocketGateway
   API --> AuthMW
   API --> ValidationMW
   API --> ErrorHandler
@@ -46,20 +74,42 @@ flowchart TB
   API --> OrgRoutes
   API --> TicketRoutes
   API --> AgentRoutes
+  API --> NotificationRoutes
+  API --> AiAutomationRoutes
+  API --> AiAugRoutes
 
   AuthRoutes --> AuthController
   OrgRoutes --> OrgController
   TicketRoutes --> TicketController
   AgentRoutes --> TicketController
+  NotificationRoutes --> NotificationController
+  AiAutomationRoutes --> AiAutomationController
+  AiAugRoutes --> AiAugController
 
   AuthController --> AuthService
   OrgController --> OrgService
   TicketController --> TicketService
+  NotificationController --> NotificationService
+  AiAutomationController --> AiAutomationService
+  AiAugController --> AiAugService
 
   AuthService --> AuthRepo
   OrgService --> OrgRepo
   TicketService --> TicketRepo
   TicketService --> EventBus
+  NotificationService --> NotificationRepo
+  NotificationService --> RecipientStrategy
+  NotificationService --> PreferenceStrategy
+  NotificationService --> NotificationQueue
+  NotificationWorker --> NotificationProvider
+  NotificationProvider --> SocketGateway
+  AiAutomationService --> AiAutomationRepo
+  AiAutomationService --> AiDecision
+  AiAugService --> AiAutomationRepo
+
+  EventBus --> EventHandlers
+  EventHandlers --> NotificationService
+  EventHandlers --> AiAutomationService
   EventBus --> EventHandlers
   EventHandlers --> TicketRepo
   EventHandlers --> Logger
@@ -67,5 +117,9 @@ flowchart TB
   AuthRepo --> Prisma
   OrgRepo --> Prisma
   TicketRepo --> Prisma
+  NotificationRepo --> Prisma
+  AiAutomationRepo --> Prisma
 
   Prisma --> DB
+  NotificationQueue --> Redis
+  NotificationWorker --> Redis

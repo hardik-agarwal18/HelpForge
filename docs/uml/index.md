@@ -46,5 +46,6 @@ Quick preview page: `gallery.md` (renders all diagrams in one markdown file).
 ## Notes
 
 - Current-state diagrams are based on implemented code under `services/api-gateway`.
+- Current-state diagrams include implemented `notifications` and `ai` modules (automation and augmentation routes).
 - Planned deployment is explicitly marked as target architecture and not fully implemented.
 - Mermaid format is used for version-controlled diagram sources.

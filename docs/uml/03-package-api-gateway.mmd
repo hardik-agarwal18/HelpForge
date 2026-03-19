@@ -8,6 +8,7 @@ flowchart TB
       ConfigIndex[index.js]
       DbConfig[database.config.js]
       LoggerConfig[logger.js]
+      RedisConfig[redis.config.js]
     end
 
     subgraph MiddlewarePkg[middleware]
@@ -43,6 +44,47 @@ flowchart TB
       TicketConstants[ticket.constants.js]
     end
 
+    subgraph NotificationPkg[modules/notifications]
+      NotificationRoutes[notification.routes.js]
+      NotificationController[notification.controller.js]
+      NotificationService[notification.service.js]
+      NotificationRepo[notification.repo.js]
+      NotificationProvider[notification.provider.js]
+      NotificationValidator[notification.validator.js]
+      NotificationConstants[notification.constants.js]
+
+      subgraph NotificationStrategies[strategies]
+        RecipientStrategy[recipient.strategy.js]
+        PreferenceStrategy[preference.strategy.js]
+      end
+
+      subgraph NotificationQueue[queue]
+        QueueFile[notification.queue.js]
+        WorkerFile[notification.worker.js]
+      end
+
+      subgraph NotificationRealtime[realtime]
+        SocketGateway[socket.gateway.js]
+      end
+    end
+
+    subgraph AIPkg[modules/ai]
+      subgraph AiAutomationPkg[automation]
+        AiAutomationRoutes[ai.automation.routes.js]
+        AiAutomationController[ai.automation.controller.js]
+        AiAutomationService[ai.automation.service.js]
+        AiAutomationRepo[ai.automation.repo.js]
+        AiAutomationDecision[ai.automation.decision.js]
+        AiAutomationHandlers[ai.automation.handlers.js]
+      end
+
+      subgraph AiAugmentationPkg[augmentation]
+        AiAugRoutes[ai.augmentation.routes.js]
+        AiAugController[ai.augmentation.controller.js]
+        AiAugService[ai.augmentation.service.js]
+      end
+    end
+
     subgraph EventsPkg[events]
       EventBus[eventBus.js]
       EventTypes[eventTypes.js]
@@ -63,8 +105,14 @@ flowchart TB
   App --> OrgRoutes
   App --> TicketRoutes
   App --> AgentRoutes
+  App --> NotificationRoutes
+  App --> AiAutomationRoutes
+  App --> AiAugRoutes
   App --> ErrorHandler
   App --> RegisterHandlers
+
+  Server --> SocketGateway
+  Server --> WorkerFile
 
   AuthRoutes --> ValidationMW
   AuthRoutes --> AuthMW
@@ -99,13 +147,45 @@ flowchart TB
   TicketRoutes --> TicketValidator
   AgentRoutes --> TicketValidator
 
+  NotificationRoutes --> AuthMW
+  NotificationRoutes --> ValidationMW
+  NotificationRoutes --> NotificationController
+  NotificationRoutes --> NotificationValidator
+  NotificationController --> NotificationService
+  NotificationService --> NotificationRepo
+  NotificationService --> RecipientStrategy
+  NotificationService --> PreferenceStrategy
+  NotificationService --> QueueFile
+  NotificationService --> NotificationConstants
+  NotificationRepo --> DbConfig
+  QueueFile --> RedisConfig
+  WorkerFile --> RedisConfig
+  WorkerFile --> NotificationProvider
+  NotificationProvider --> SocketGateway
+  SocketGateway --> ConfigIndex
+  SocketGateway --> LoggerConfig
+
+  AiAutomationRoutes --> AiAutomationController
+  AiAutomationController --> AiAutomationService
+  AiAutomationService --> AiAutomationRepo
+  AiAutomationService --> AiAutomationDecision
+  AiAutomationRepo --> DbConfig
+
+  AiAugRoutes --> AiAugController
+  AiAugController --> AiAugService
+  AiAugService --> AiAutomationRepo
+
   RegisterHandlers --> TicketHandlers
   RegisterHandlers --> NotificationHandlers
   RegisterHandlers --> AnalyticsHandlers
+  RegisterHandlers --> AiAutomationHandlers
   TicketHandlers --> EventBus
   NotificationHandlers --> EventBus
   AnalyticsHandlers --> EventBus
+  AiAutomationHandlers --> EventBus
   TicketHandlers --> TicketRepo
+  NotificationHandlers --> NotificationService
   TicketHandlers --> LoggerConfig
   NotificationHandlers --> LoggerConfig
   AnalyticsHandlers --> LoggerConfig
+  AiAutomationHandlers --> LoggerConfig

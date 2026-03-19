@@ -35,6 +35,8 @@ classDiagram
     +String organizationId
     +String createdById
     +String assignedToId
+    +Boolean aiActive
+    +Int aiMessageCount
     +DateTime createdAt
     +DateTime updatedAt
   }
@@ -43,6 +45,7 @@ classDiagram
     +String id
     +String ticketId
     +String authorId
+    +CommentAuthorType authorType
     +String message
     +Boolean isInternal
     +DateTime createdAt
@@ -89,6 +92,33 @@ classDiagram
     +DateTime lastWeeklyReset
   }
 
+  class Notification {
+    +String id
+    +String organizationId
+    +String ticketId
+    +String recipientId
+    +NotificationType type
+    +String title
+    +String message
+    +Json metadata
+    +Boolean isRead
+    +DateTime readAt
+    +DateTime createdAt
+  }
+
+  class NotificationPreference {
+    +String id
+    +String userId
+    +Boolean inAppEnabled
+    +Boolean emailEnabled
+    +Boolean pushEnabled
+    +Boolean websocketEnabled
+    +Boolean suppressSelfNotifications
+    +NotificationType[] disabledTypes
+    +DateTime createdAt
+    +DateTime updatedAt
+  }
+
   class Role {
     <<enumeration>>
     OWNER
@@ -121,6 +151,13 @@ classDiagram
     API
   }
 
+  class CommentAuthorType {
+    <<enumeration>>
+    USER
+    AI
+    SYSTEM
+  }
+
   class TicketActivityAction {
     <<enumeration>>
     TICKET_CREATED
@@ -133,6 +170,17 @@ classDiagram
     ATTACHMENT_DELETED
     TAG_ADDED
     TAG_REMOVED
+  }
+
+  class NotificationType {
+    <<enumeration>>
+    TICKET_ASSIGNED
+    TICKET_COMMENT_ADDED
+    TICKET_COMMENT_DELETED
+    TICKET_TAG_ADDED
+    TICKET_TAG_REMOVED
+    TICKET_ATTACHMENT_ADDED
+    TICKET_ATTACHMENT_DELETED
   }
 
   User "1" --> "*" Membership : memberOf
@@ -158,8 +206,16 @@ classDiagram
   User "1" --> "*" AgentWorkload : workload
   Organization "1" --> "*" AgentWorkload : scopedWorkload
 
+  Organization "1" --> "*" Notification : sends
+  Ticket "1" --> "0..*" Notification : about
+  User "1" --> "*" Notification : recipient
+  User "1" --> "0..1" NotificationPreference : preference
+
   Membership --> Role : role
   Ticket --> TicketStatus : status
   Ticket --> Priority : priority
   Ticket --> TicketSource : source
+  TicketComment --> CommentAuthorType : authorType
   TicketActivityLog --> TicketActivityAction : action
+  Notification --> NotificationType : type
+  NotificationPreference --> NotificationType : disabledTypes

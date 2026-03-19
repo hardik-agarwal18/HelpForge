@@ -25,6 +25,11 @@ flowchart LR
   U14((Manage Tags)):::usecase
   U15((View Agent Workload)):::usecase
   U16((Update Availability)):::usecase
+  U17((View Notifications)):::usecase
+  U18((Mark Notifications Read)):::usecase
+  U19((Update Notification Preferences)):::usecase
+  U20((Get AI Decision)):::usecase
+  U21((Use AI Quick Assist)):::usecase
 
   Guest --> U1
   Guest --> U2
@@ -34,6 +39,9 @@ flowchart LR
   Member --> U8
   Member --> U9
   Member --> U10
+  Member --> U17
+  Member --> U18
+  Member --> U19
 
   Agent --> U3
   Agent --> U5
@@ -43,6 +51,11 @@ flowchart LR
   Agent --> U13
   Agent --> U15
   Agent --> U16
+  Agent --> U17
+  Agent --> U18
+  Agent --> U19
+  Agent --> U20
+  Agent --> U21
 
   Admin --> U3
   Admin --> U4
@@ -56,6 +69,11 @@ flowchart LR
   Admin --> U13
   Admin --> U14
   Admin --> U15
+  Admin --> U17
+  Admin --> U18
+  Admin --> U19
+  Admin --> U20
+  Admin --> U21
 
   Owner --> U3
   Owner --> U4
@@ -70,3 +88,8 @@ flowchart LR
   Owner --> U14
   Owner --> U15
   Owner --> U16
+  Owner --> U17
+  Owner --> U18
+  Owner --> U19
+  Owner --> U20
+  Owner --> U21

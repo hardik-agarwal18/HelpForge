@@ -34,6 +34,11 @@ flowchart LR
   U14((Manage Tags)):::usecase
   U15((View Agent Workload)):::usecase
   U16((Update Availability)):::usecase
+  U17((View Notifications)):::usecase
+  U18((Mark Notifications Read)):::usecase
+  U19((Update Notification Preferences)):::usecase
+  U20((Get AI Decision)):::usecase
+  U21((Use AI Quick Assist)):::usecase
 
   Guest --> U1
   Guest --> U2
@@ -43,6 +48,9 @@ flowchart LR
   Member --> U8
   Member --> U9
   Member --> U10
+  Member --> U17
+  Member --> U18
+  Member --> U19
 
   Agent --> U3
   Agent --> U5
@@ -52,6 +60,11 @@ flowchart LR
   Agent --> U13
   Agent --> U15
   Agent --> U16
+  Agent --> U17
+  Agent --> U18
+  Agent --> U19
+  Agent --> U20
+  Agent --> U21
 
   Admin --> U3
   Admin --> U4
@@ -65,6 +78,11 @@ flowchart LR
   Admin --> U13
   Admin --> U14
   Admin --> U15
+  Admin --> U17
+  Admin --> U18
+  Admin --> U19
+  Admin --> U20
+  Admin --> U21
 
   Owner --> U3
   Owner --> U4
@@ -79,6 +97,11 @@ flowchart LR
   Owner --> U14
   Owner --> U15
   Owner --> U16
+  Owner --> U17
+  Owner --> U18
+  Owner --> U19
+  Owner --> U20
+  Owner --> U21
 ```
 
 ### 02-component-current
@@ -88,6 +111,7 @@ flowchart TB
 
   Client[Client App]
   API[API Gateway\nExpress Application]
+  SocketClient[WebSocket Client]
 
   subgraph CrossCutting[Cross-Cutting Components]
     AuthMW[Auth Middleware]
@@ -99,7 +123,7 @@ flowchart TB
     EventHandlers[Async Event Handlers]
   end
 
-  subgraph Modules[Feature Modules]
+  subgraph CoreModules[Core Modules]
     AuthRoutes[Auth Routes]
     OrgRoutes[Organization Routes]
     TicketRoutes[Ticket Routes]
@@ -118,10 +142,37 @@ flowchart TB
     TicketRepo[Ticket Repo]
   end
 
+  subgraph NotificationModules[Notification Modules]
+    NotificationRoutes[Notification Routes]
+    NotificationController[Notification Controller]
+    NotificationService[Notification Service]
+    NotificationRepo[Notification Repo]
+    RecipientStrategy[Recipient Strategy]
+    PreferenceStrategy[Preference Strategy]
+    NotificationQueue[Notification Queue]
+    NotificationWorker[Notification Worker]
+    NotificationProvider[Notification Provider]
+    SocketGateway[Socket.IO Gateway]
+  end
+
+  subgraph AIModules[AI Modules]
+    AiAutomationRoutes[AI Automation Routes]
+    AiAutomationController[AI Automation Controller]
+    AiAutomationService[AI Automation Service]
+    AiAutomationRepo[AI Automation Repo]
+    AiDecision[AI Decision Engine]
+
+    AiAugRoutes[AI Augmentation Routes]
+    AiAugController[AI Augmentation Controller]
+    AiAugService[AI Augmentation Service]
+  end
+
   Prisma[Prisma Client]
   DB[(PostgreSQL)]
+  Redis[(Redis)]
 
   Client --> API
+  SocketClient --> SocketGateway
   API --> AuthMW
   API --> ValidationMW
   API --> ErrorHandler
@@ -132,20 +183,42 @@ flowchart TB
   API --> OrgRoutes
   API --> TicketRoutes
   API --> AgentRoutes
+  API --> NotificationRoutes
+  API --> AiAutomationRoutes
+  API --> AiAugRoutes
 
   AuthRoutes --> AuthController
   OrgRoutes --> OrgController
   TicketRoutes --> TicketController
   AgentRoutes --> TicketController
+  NotificationRoutes --> NotificationController
+  AiAutomationRoutes --> AiAutomationController
+  AiAugRoutes --> AiAugController
 
   AuthController --> AuthService
   OrgController --> OrgService
   TicketController --> TicketService
+  NotificationController --> NotificationService
+  AiAutomationController --> AiAutomationService
+  AiAugController --> AiAugService
 
   AuthService --> AuthRepo
   OrgService --> OrgRepo
   TicketService --> TicketRepo
   TicketService --> EventBus
+  NotificationService --> NotificationRepo
+  NotificationService --> RecipientStrategy
+  NotificationService --> PreferenceStrategy
+  NotificationService --> NotificationQueue
+  NotificationWorker --> NotificationProvider
+  NotificationProvider --> SocketGateway
+  AiAutomationService --> AiAutomationRepo
+  AiAutomationService --> AiDecision
+  AiAugService --> AiAutomationRepo
+
+  EventBus --> EventHandlers
+  EventHandlers --> NotificationService
+  EventHandlers --> AiAutomationService
   EventBus --> EventHandlers
   EventHandlers --> TicketRepo
   EventHandlers --> Logger
@@ -153,8 +226,12 @@ flowchart TB
   AuthRepo --> Prisma
   OrgRepo --> Prisma
   TicketRepo --> Prisma
+  NotificationRepo --> Prisma
+  AiAutomationRepo --> Prisma
 
   Prisma --> DB
+  NotificationQueue --> Redis
+  NotificationWorker --> Redis
 ```
 
 ### 03-package-api-gateway
@@ -170,6 +247,7 @@ flowchart TB
       ConfigIndex[index.js]
       DbConfig[database.config.js]
       LoggerConfig[logger.js]
+      RedisConfig[redis.config.js]
     end
 
     subgraph MiddlewarePkg[middleware]
@@ -197,12 +275,53 @@ flowchart TB
 
     subgraph TicketPkg[modules/tickets]
       TicketRoutes[ticket.routes.js]
-      AgentRoutes[agent.routes.js]
+      AgentRoutes[ticket.agent.routes.js]
       TicketController[ticket.controller.js]
       TicketService[ticket.service.js]
       TicketRepo[ticket.repo.js]
       TicketValidator[ticket.validator.js]
       TicketConstants[ticket.constants.js]
+    end
+
+    subgraph NotificationPkg[modules/notifications]
+      NotificationRoutes[notification.routes.js]
+      NotificationController[notification.controller.js]
+      NotificationService[notification.service.js]
+      NotificationRepo[notification.repo.js]
+      NotificationProvider[notification.provider.js]
+      NotificationValidator[notification.validator.js]
+      NotificationConstants[notification.constants.js]
+
+      subgraph NotificationStrategies[strategies]
+        RecipientStrategy[recipient.strategy.js]
+        PreferenceStrategy[preference.strategy.js]
+      end
+
+      subgraph NotificationQueue[queue]
+        QueueFile[notification.queue.js]
+        WorkerFile[notification.worker.js]
+      end
+
+      subgraph NotificationRealtime[realtime]
+        SocketGateway[socket.gateway.js]
+      end
+    end
+
+    subgraph AIPkg[modules/ai]
+      subgraph AiAutomationPkg[automation]
+        AiAutomationRoutes[ai.automation.routes.js]
+        AiAutomationController[ai.automation.controller.js]
+        AiAutomationService[ai.automation.service.js]
+        AiAutomationRepo[ai.automation.repo.js]
+        AiAutomationDecision[ai.automation.decision.js]
+        AiAutomationHandlers[ai.automation.handlers.js]
+      end
+
+      subgraph AiAugmentationPkg[augmentation]
+        AiAugRoutes[ai.augmentation.routes.js]
+        AiAugController[ai.augmentation.controller.js]
+        AiAugService[ai.augmentation.service.js]
+      end
     end
 
     subgraph EventsPkg[events]
@@ -225,8 +344,14 @@ flowchart TB
   App --> OrgRoutes
   App --> TicketRoutes
   App --> AgentRoutes
+  App --> NotificationRoutes
+  App --> AiAutomationRoutes
+  App --> AiAugRoutes
   App --> ErrorHandler
   App --> RegisterHandlers
+
+  Server --> SocketGateway
+  Server --> WorkerFile
 
   AuthRoutes --> ValidationMW
   AuthRoutes --> AuthMW
@@ -261,16 +386,48 @@ flowchart TB
   TicketRoutes --> TicketValidator
   AgentRoutes --> TicketValidator
 
+  NotificationRoutes --> AuthMW
+  NotificationRoutes --> ValidationMW
+  NotificationRoutes --> NotificationController
+  NotificationRoutes --> NotificationValidator
+  NotificationController --> NotificationService
+  NotificationService --> NotificationRepo
+  NotificationService --> RecipientStrategy
+  NotificationService --> PreferenceStrategy
+  NotificationService --> QueueFile
+  NotificationService --> NotificationConstants
+  NotificationRepo --> DbConfig
+  QueueFile --> RedisConfig
+  WorkerFile --> RedisConfig
+  WorkerFile --> NotificationProvider
+  NotificationProvider --> SocketGateway
+  SocketGateway --> ConfigIndex
+  SocketGateway --> LoggerConfig
+
+  AiAutomationRoutes --> AiAutomationController
+  AiAutomationController --> AiAutomationService
+  AiAutomationService --> AiAutomationRepo
+  AiAutomationService --> AiAutomationDecision
+  AiAutomationRepo --> DbConfig
+
+  AiAugRoutes --> AiAugController
+  AiAugController --> AiAugService
+  AiAugService --> AiAutomationRepo
+
   RegisterHandlers --> TicketHandlers
   RegisterHandlers --> NotificationHandlers
   RegisterHandlers --> AnalyticsHandlers
+  RegisterHandlers --> AiAutomationHandlers
   TicketHandlers --> EventBus
   NotificationHandlers --> EventBus
   AnalyticsHandlers --> EventBus
+  AiAutomationHandlers --> EventBus
   TicketHandlers --> TicketRepo
+  NotificationHandlers --> NotificationService
   TicketHandlers --> LoggerConfig
   NotificationHandlers --> LoggerConfig
   AnalyticsHandlers --> LoggerConfig
+  AiAutomationHandlers --> LoggerConfig
 ```
 
 ### 04-class-domain-prisma
@@ -313,6 +470,8 @@ classDiagram
     +String organizationId
     +String createdById
     +String assignedToId
+    +Boolean aiActive
+    +Int aiMessageCount
     +DateTime createdAt
     +DateTime updatedAt
   }
@@ -321,6 +480,7 @@ classDiagram
     +String id
     +String ticketId
     +String authorId
+    +CommentAuthorType authorType
     +String message
     +Boolean isInternal
     +DateTime createdAt
@@ -367,6 +527,33 @@ classDiagram
     +DateTime lastWeeklyReset
   }
 
+  class Notification {
+    +String id
+    +String organizationId
+    +String ticketId
+    +String recipientId
+    +NotificationType type
+    +String title
+    +String message
+    +Json metadata
+    +Boolean isRead
+    +DateTime readAt
+    +DateTime createdAt
+  }
+
+  class NotificationPreference {
+    +String id
+    +String userId
+    +Boolean inAppEnabled
+    +Boolean emailEnabled
+    +Boolean pushEnabled
+    +Boolean websocketEnabled
+    +Boolean suppressSelfNotifications
+    +NotificationType[] disabledTypes
+    +DateTime createdAt
+    +DateTime updatedAt
+  }
+
   class Role {
     <<enumeration>>
     OWNER
@@ -399,6 +586,13 @@ classDiagram
     API
   }
 
+  class CommentAuthorType {
+    <<enumeration>>
+    USER
+    AI
+    SYSTEM
+  }
+
   class TicketActivityAction {
     <<enumeration>>
     TICKET_CREATED
@@ -411,6 +605,17 @@ classDiagram
     ATTACHMENT_DELETED
     TAG_ADDED
     TAG_REMOVED
+  }
+
+  class NotificationType {
+    <<enumeration>>
+    TICKET_ASSIGNED
+    TICKET_COMMENT_ADDED
+    TICKET_COMMENT_DELETED
+    TICKET_TAG_ADDED
+    TICKET_TAG_REMOVED
+    TICKET_ATTACHMENT_ADDED
+    TICKET_ATTACHMENT_DELETED
   }
 
   User "1" --> "*" Membership : memberOf
@@ -436,11 +641,19 @@ classDiagram
   User "1" --> "*" AgentWorkload : workload
   Organization "1" --> "*" AgentWorkload : scopedWorkload
 
+  Organization "1" --> "*" Notification : sends
+  Ticket "1" --> "0..*" Notification : about
+  User "1" --> "*" Notification : recipient
+  User "1" --> "0..1" NotificationPreference : preference
+
   Membership --> Role : role
   Ticket --> TicketStatus : status
   Ticket --> Priority : priority
   Ticket --> TicketSource : source
+  TicketComment --> CommentAuthorType : authorType
   TicketActivityLog --> TicketActivityAction : action
+  Notification --> NotificationType : type
+  NotificationPreference --> NotificationType : disabledTypes
 ```
 
 ## State
