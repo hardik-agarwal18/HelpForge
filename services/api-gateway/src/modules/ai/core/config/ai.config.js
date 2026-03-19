@@ -30,6 +30,16 @@ export const aiConfig = {
     retries: toNumber(process.env.AI_PROVIDER_RETRIES, 3),
     retryDelayMs: toNumber(process.env.AI_PROVIDER_RETRY_DELAY_MS, 500),
   },
+  usage: {
+    promptCostPer1kTokens: toNumber(
+      process.env.AI_PROMPT_COST_PER_1K_TOKENS,
+      0.00015,
+    ),
+    completionCostPer1kTokens: toNumber(
+      process.env.AI_COMPLETION_COST_PER_1K_TOKENS,
+      0.0006,
+    ),
+  },
   cache: {
     enabled: process.env.AI_CACHE_ENABLED !== "false",
     ttlSeconds: toNumber(process.env.AI_CACHE_TTL_SECONDS, 300),

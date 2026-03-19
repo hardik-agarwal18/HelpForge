@@ -13,10 +13,18 @@ export const buildAICommentProcessedCacheKey = (commentId) =>
 export const buildAICommentProcessingLockKey = (commentId) =>
   `ai:comment:${commentId}:processing`;
 
+export const buildAITicketUsageCacheKey = (ticketId) =>
+  `ai:usage:ticket:${ticketId}`;
+
+export const buildAIOrganizationUsageCacheKey = (organizationId) =>
+  `ai:usage:organization:${organizationId}`;
+
 export default {
   buildAITicketSummaryCacheKey,
   buildAITicketSuggestionCacheKey,
   buildAIAgentStatsCacheKey,
   buildAICommentProcessedCacheKey,
   buildAICommentProcessingLockKey,
+  buildAITicketUsageCacheKey,
+  buildAIOrganizationUsageCacheKey,
 };

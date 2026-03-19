@@ -126,12 +126,17 @@ export const formatAIResponse = (response, action = {}) => {
  * @param {Object} action - Action decision
  * @returns {Object} Metadata object
  */
-export const createAIMetadata = (confidenceData = {}, action = {}) => {
+export const createAIMetadata = (
+  confidenceData = {},
+  action = {},
+  aiUsage = null,
+) => {
   return {
     confidence: confidenceData.confidence || 0,
     action: action.type || "unknown",
     reasoning: action.reasoning || "",
     recommendation: confidenceData.recommendation || "unknown",
+    aiUsage,
     timestamp: new Date().toISOString(),
   };
 };
@@ -153,10 +158,11 @@ export const storeAIComment = async (
   response,
   confidenceData = {},
   action = {},
+  aiUsage = null,
 ) => {
   try {
     const formattedMessage = formatAIResponse(response, action);
-    const metadata = createAIMetadata(confidenceData, action);
+    const metadata = createAIMetadata(confidenceData, action, aiUsage);
 
     const comment = await createComment({
       ticketId,
@@ -171,6 +177,7 @@ export const storeAIComment = async (
         ticketId,
         commentId: comment.id,
         action: action.type,
+        aiUsage,
       },
       "AI comment stored successfully",
     );

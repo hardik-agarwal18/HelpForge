@@ -21,6 +21,7 @@ import {
   AUTOMATION_PROMPTS,
   buildTicketContext,
 } from "../core/prompts/automation.prompt.js";
+import { logAIActivity } from "../core/repo/ai.logs.repo.js";
 import {
   getTicketWithComments,
   updateTicket,
@@ -187,11 +188,13 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     );
 
     // Call AI provider to generate response
-    const aiResponse = await generateAIResponse({
+    const aiResult = await generateAIResponse({
       ticketId: ticket.id,
       context,
       systemPrompt: AUTOMATION_PROMPTS.TICKET_ASSISTANT_SYSTEM,
     });
+    const aiResponse = aiResult.content;
+    const aiUsage = aiResult.aiUsage;
 
     // Enhanced confidence calculation with more factors
     const confidenceData = decisionEngine.calculateConfidence({
@@ -228,7 +231,21 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
       aiResponse,
       confidenceData,
       action,
+      aiUsage,
     );
+
+    await logAIActivity({
+      organizationId: ticket.organizationId,
+      ticketId: ticket.id,
+      module: "ai.automation",
+      action: "response_generated",
+      metadata: {
+        commentId: latestComment.id,
+        aiCommentId: aiComment.id,
+        model: aiUsage?.model,
+        aiUsage,
+      },
+    });
 
     // Update ticket state based on decision
     const ticketUpdate = decisionEngine.buildTicketUpdate(ticket, {
@@ -275,6 +292,7 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
         confidence: confidenceData.confidence,
         action: action.type,
         newStatus: updatedTicket.status,
+        aiUsage,
       },
       "AI response processed and ticket updated",
     );
@@ -401,7 +419,19 @@ export const generateTicketSummary = async (ticketId) => {
       return null;
     }
 
-    const summary = await generateAISummary(ticket.comments);
+    const summaryResult = await generateAISummary(ticket.comments);
+    const summary = summaryResult.content;
+
+    await logAIActivity({
+      organizationId: ticket.organizationId,
+      ticketId,
+      module: "ai.automation",
+      action: "summary_generated",
+      metadata: {
+        model: summaryResult.aiUsage?.model,
+        aiUsage: summaryResult.aiUsage,
+      },
+    });
 
     logger.info(
       { ticketId, summaryLength: summary.length },

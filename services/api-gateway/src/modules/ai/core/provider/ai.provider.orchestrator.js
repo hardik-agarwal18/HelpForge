@@ -29,7 +29,7 @@ const executeWithProviderGuards = async (fn, timeoutMessage) => {
 /**
  * Generate an AI response with standardized retry and timeout guards.
  * @param {Object} config
- * @returns {Promise<string>}
+ * @returns {Promise<{content: string, aiUsage: Object}>}
  */
 export const generateAIResponse = async (config) => {
   return executeWithProviderGuards(
@@ -41,7 +41,7 @@ export const generateAIResponse = async (config) => {
 /**
  * Generate an AI summary with standardized retry and timeout guards.
  * @param {Array} comments
- * @returns {Promise<string>}
+ * @returns {Promise<{content: string, aiUsage: Object}>}
  */
 export const generateAISummary = async (comments) => {
   return executeWithProviderGuards(

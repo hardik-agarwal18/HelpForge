@@ -87,9 +87,37 @@ export const deleteCacheValue = async (key) => {
   }
 };
 
+export const incrementHashValues = async (key, values = {}) => {
+  const client = getCacheClient();
+
+  if (!client) {
+    return null;
+  }
+
+  try {
+    const entries = Object.entries(values).filter(([, value]) =>
+      Number.isFinite(Number(value)),
+    );
+
+    if (!entries.length) {
+      return true;
+    }
+
+    for (const [field, value] of entries) {
+      await client.hincrbyfloat(key, field, Number(value));
+    }
+
+    return true;
+  } catch (error) {
+    logger.error({ error, key, values }, "Error incrementing AI cache hash");
+    return false;
+  }
+};
+
 export default {
   getCacheValue,
   setCacheValue,
   setCacheValueIfAbsent,
   deleteCacheValue,
+  incrementHashValues,
 };
