@@ -1,5 +1,5 @@
 import logger from "../../../config/logger.js";
-import * as aiRepo from "../automation/ai.automation.repo.js";
+import * as augmentationRepo from "./ai.augmentation.repo.js";
 import {
   generateAIResponse,
   generateAISummary,
@@ -30,7 +30,8 @@ import {
  */
 export const generateAgentSuggestion = async (ticketId) => {
   try {
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket =
+      await augmentationRepo.getAugmentationTicketWithComments(ticketId);
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for suggestion");
@@ -104,7 +105,8 @@ export const generateAgentSuggestionFromTicket = async (ticket) => {
  */
 export const generateTicketSummary = async (ticketId) => {
   try {
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket =
+      await augmentationRepo.getAugmentationTicketWithComments(ticketId);
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for summary");
@@ -164,7 +166,7 @@ export const generateTicketSummaryFromTicket = async (ticket) => {
  */
 export const generateSuggestedActions = async (ticketId) => {
   try {
-    const ticket = await aiRepo.getTicket(ticketId);
+    const ticket = await augmentationRepo.getAugmentationTicket(ticketId);
     return generateSuggestedActionsFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating suggested actions");
@@ -263,7 +265,10 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
     const effectiveDays = resolveDays(days);
     const daysAgo = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
 
-    const tickets = await aiRepo.getAgentTickets(agentId, daysAgo);
+    const tickets = await augmentationRepo.getAugmentationAgentTickets(
+      agentId,
+      daysAgo,
+    );
 
     const resolvedTickets = tickets.filter((t) => t.status === "RESOLVED");
     const activeTickets = tickets.filter((t) => t.status !== "RESOLVED");
@@ -314,7 +319,8 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
  */
 export const generateQuickAssist = async (ticketId) => {
   try {
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket =
+      await augmentationRepo.getAugmentationTicketWithComments(ticketId);
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for quick assist");
@@ -583,24 +589,22 @@ const generateAgentRecommendations = (resolved, active) => {
   const recommendations = [];
 
   if (resolved.length > 0) {
-    recommendations.push(
-      "✅ Strong resolution rate - keep up the quality work",
-    );
+    recommendations.push("Strong resolution rate - keep up the quality work");
   }
 
   if (active.length > 5) {
     recommendations.push(
-      "⚠️ High active tickets - consider reducing new assignments",
+      "High active tickets - consider reducing new assignments",
     );
   }
 
   if (resolved.length > 0) {
     const avgTime = calculateAvgTicketAge(resolved);
     if (avgTime < 2) {
-      recommendations.push("🚀 Quick resolution time - excellent performance");
+      recommendations.push("Quick resolution time - excellent performance");
     } else if (avgTime > 12) {
       recommendations.push(
-        "⏱️ Tickets taking longer to resolve - escalation may help",
+        "Tickets taking longer to resolve - escalation may help",
       );
     }
   }
