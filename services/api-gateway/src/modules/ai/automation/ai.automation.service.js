@@ -5,6 +5,7 @@ import {
 } from "../core/provider/ai.provider.orchestrator.js";
 import * as decisionEngine from "./ai.automation.decision.js";
 import { shouldProcessAI } from "./ai.automation.guards.js";
+import * as aiUtils from "./ai.automation.utils.js";
 import {
   AUTOMATION_PROMPTS,
   buildTicketContext,
@@ -111,7 +112,7 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     // Enhanced confidence calculation with more factors
     const confidenceData = decisionEngine.calculateConfidence({
       responseLength: aiResponse.length,
-      hasProblematicKeywords: checkProblematicKeywords(aiResponse),
+      hasProblematicKeywords: aiUtils.checkProblematicKeywords(aiResponse),
       isFollowUp: ticket.comments.length > 3,
       ticketPriority: ticket.priority,
       ticketAge: Date.now() - ticket.createdAt.getTime(),
@@ -138,7 +139,7 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     );
 
     // Store AI response as comment
-    const aiComment = await storeAIComment(
+    const aiComment = await aiUtils.storeAIComment(
       ticket.id,
       aiResponse,
       confidenceData,
@@ -202,7 +203,6 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     );
   }
 };
-
 /**
  * PHASE 2: Handle auto-resolution
  */
@@ -303,49 +303,6 @@ const handleSuggestion = async (ticket, aiComment, action) => {
   } catch (error) {
     logger.error({ error, ticketId: ticket.id }, "Error in suggestion handler");
   }
-};
-
-/**
- * Store AI generated comment in database
- * PHASE 2: Store with action and confidence metadata
- */
-const storeAIComment = async (
-  ticketId,
-  response,
-  confidenceData,
-  action = {},
-) => {
-  const message =
-    action.type === "auto_resolve"
-      ? `✅ **AI Resolution**: ${response}`
-      : action.type === "suggest"
-        ? `💡 **AI Suggestion**: ${response}`
-        : response;
-
-  return await aiRepo.createComment({
-    ticketId,
-    message,
-    authorType: "AI",
-    isInternal: false, // AI responses visible to user by default
-    // Note: Add metadata field to store:
-    // { confidence, action, reasoning } in production
-  });
-};
-
-/**
- * Check if response contains problematic keywords that need review
- */
-const checkProblematicKeywords = (text) => {
-  const keywords = [
-    "maybe", // Uncertainty
-    "probably", // Uncertainty
-    "not sure", // Uncertainty
-    "unclear", // Unclear problem
-    "sorry", // Apologetic (might need human touch)
-  ];
-
-  const lowerText = text.toLowerCase();
-  return keywords.some((keyword) => lowerText.includes(keyword));
 };
 
 /**

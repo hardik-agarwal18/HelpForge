@@ -1,8 +1,8 @@
 import logger from "../../../config/logger.js";
-
-// Guard constants
-const AI_MAX_MESSAGES_PER_TICKET = 5;
-const AI_COMMENT_COOLDOWN_MS = 30 * 1000;
+import {
+  AI_MAX_MESSAGES_PER_TICKET,
+  AI_COMMENT_COOLDOWN_MS,
+} from "./ai.automation.constants.js";
 
 /**
  * Single consolidated guard layer for all AI processing checks
@@ -66,12 +66,4 @@ export const shouldProcessAI = (ticket) => {
 
   // All guards passed
   return { canProcess: true, reason: "READY_TO_PROCESS" };
-};
-
-/**
- * Export constants for use in tests or configuration
- */
-export const GUARD_CONSTANTS = {
-  AI_MAX_MESSAGES_PER_TICKET,
-  AI_COMMENT_COOLDOWN_MS,
 };
