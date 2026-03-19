@@ -4,6 +4,94 @@ import * as decisionEngine from "./ai.automation.decision.js";
 import { buildTicketContext } from "../core/ai.prompts.js";
 import * as aiRepo from "./ai.automation.repo.js";
 
+const AI_MAX_MESSAGES_PER_TICKET = 5;
+const AI_COMMENT_COOLDOWN_MS = 30 * 1000;
+const AI_PROVIDER_TIMEOUT_MS = 15 * 1000;
+const AI_PROVIDER_RETRIES = 3;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const withTimeout = (promise, timeoutMs, timeoutMessage) => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+};
+
+const withRetry = async (fn, retries = AI_PROVIDER_RETRIES, delayMs = 500) => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+
+    logger.warn(
+      { error, retriesRemaining: retries },
+      "AI provider call failed, retrying",
+    );
+
+    await sleep(delayMs);
+    return withRetry(fn, retries - 1, delayMs);
+  }
+};
+
+const shouldSkipForMessageBudget = (ticket) => {
+  const aiResponseCount =
+    typeof ticket.aiMessageCount === "number"
+      ? ticket.aiMessageCount
+      : ticket.comments.filter((c) => c.authorType === "AI").length;
+
+  if (aiResponseCount >= AI_MAX_MESSAGES_PER_TICKET) {
+    logger.info(
+      { ticketId: ticket.id, aiResponseCount },
+      "AI budget guard: max messages reached",
+    );
+    return true;
+  }
+
+  return false;
+};
+
+const shouldSkipForCooldown = (ticket) => {
+  const lastAiComment = [...ticket.comments]
+    .reverse()
+    .find((comment) => comment.authorType === "AI");
+
+  if (!lastAiComment?.createdAt) {
+    return false;
+  }
+
+  const cooldownRemainingMs =
+    AI_COMMENT_COOLDOWN_MS -
+    (Date.now() - new Date(lastAiComment.createdAt).getTime());
+
+  if (cooldownRemainingMs > 0) {
+    logger.info(
+      {
+        ticketId: ticket.id,
+        cooldownRemainingMs,
+        lastAiCommentId: lastAiComment.id,
+      },
+      "AI cooldown guard: skipping response",
+    );
+    return true;
+  }
+
+  return false;
+};
+
 /**
  * AI Service - Main orchestrator for AI functionality
  * Coordinates between provider, decision engine, and data persistence
@@ -46,6 +134,14 @@ export const handleCommentAdded = async (payload) => {
       return;
     }
 
+    if (shouldSkipForMessageBudget(ticket)) {
+      return;
+    }
+
+    if (shouldSkipForCooldown(ticket)) {
+      return;
+    }
+
     // Decide if AI should respond
     const decision = decisionEngine.shouldRespondToComment(
       ticket,
@@ -85,11 +181,17 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     );
 
     // Call AI provider to generate response
-    const aiResponse = await aiProvider.generateResponse({
-      ticketId: ticket.id,
-      context,
-      systemPrompt: "You are a helpful support assistant.",
-    });
+    const aiResponse = await withRetry(() =>
+      withTimeout(
+        aiProvider.generateResponse({
+          ticketId: ticket.id,
+          context,
+          systemPrompt: "You are a helpful support assistant.",
+        }),
+        AI_PROVIDER_TIMEOUT_MS,
+        "AI provider timeout while generating response",
+      ),
+    );
 
     // Enhanced confidence calculation with more factors
     const confidenceData = decisionEngine.calculateConfidence({
@@ -344,7 +446,13 @@ export const generateTicketSummary = async (ticketId) => {
       return null;
     }
 
-    const summary = await aiProvider.generateSummary(ticket.comments);
+    const summary = await withRetry(() =>
+      withTimeout(
+        aiProvider.generateSummary(ticket.comments),
+        AI_PROVIDER_TIMEOUT_MS,
+        "AI provider timeout while generating summary",
+      ),
+    );
 
     logger.info(
       { ticketId, summaryLength: summary.length },
