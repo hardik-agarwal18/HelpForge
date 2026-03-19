@@ -7,6 +7,7 @@ import {
   disconnectDatabase,
 } from "./config/database.config.js";
 import { getSharedBullmqConnection } from "./config/redis.config.js";
+import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automation.worker.js";
 import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
 
@@ -18,6 +19,7 @@ const startServer = async () => {
   await connectDatabase();
 
   initializeWebsocketGateway(server);
+  startAIAutomationWorker();
   startNotificationWorker();
 
   server.listen(PORT, () => {
