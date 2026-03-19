@@ -8,8 +8,8 @@ const mockGetTicketWithComments = jest.fn();
 const mockGetTicket = jest.fn();
 const mockGetAgentTickets = jest.fn();
 
-const mockGenerateResponse = jest.fn();
-const mockGenerateSummary = jest.fn();
+const mockGenerateAIResponse = jest.fn();
+const mockGenerateAISummary = jest.fn();
 
 jest.unstable_mockModule("../../../../src/config/logger.js", () => ({
   default: {
@@ -29,10 +29,10 @@ jest.unstable_mockModule(
 );
 
 jest.unstable_mockModule(
-  "../../../../src/modules/ai/core/ai.provider.js",
+  "../../../../src/modules/ai/core/provider/ai.provider.orchestrator.js",
   () => ({
-    generateResponse: mockGenerateResponse,
-    generateSummary: mockGenerateSummary,
+    generateAIResponse: mockGenerateAIResponse,
+    generateAISummary: mockGenerateAISummary,
   }),
 );
 
@@ -70,7 +70,7 @@ describe("ai.augmentation.service", () => {
         { ticketId: "ticket-1" },
         "Ticket not found for suggestion",
       );
-      expect(mockGenerateResponse).not.toHaveBeenCalled();
+      expect(mockGenerateAIResponse).not.toHaveBeenCalled();
     });
 
     it("returns null and warns when no user comment exists", async () => {
@@ -120,14 +120,14 @@ describe("ai.augmentation.service", () => {
         ],
       });
 
-      mockGenerateResponse.mockResolvedValue(
+      mockGenerateAIResponse.mockResolvedValue(
         "Please try resetting your browser session and signing in from an incognito window. " +
           "If it still fails, can you share the exact error text and timestamp so we can verify account lock events.",
       );
 
       const result = await generateAgentSuggestion("ticket-3");
 
-      expect(mockGenerateResponse).toHaveBeenCalledWith(
+      expect(mockGenerateAIResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           ticketId: "ticket-3",
           systemPrompt: expect.stringContaining(
@@ -157,7 +157,7 @@ describe("ai.augmentation.service", () => {
         comments: [buildComment({ authorType: "USER", message: "Need help" })],
         createdAt: new Date(),
       });
-      mockGenerateResponse.mockRejectedValue(new Error("provider down"));
+      mockGenerateAIResponse.mockRejectedValue(new Error("provider down"));
 
       const result = await generateAgentSuggestion("ticket-4");
 
@@ -215,13 +215,13 @@ describe("ai.augmentation.service", () => {
           }),
         ],
       });
-      mockGenerateSummary.mockResolvedValue(
+      mockGenerateAISummary.mockResolvedValue(
         "Issue reproduced on one shard and mitigated by cache refresh.",
       );
 
       const result = await generateTicketSummary("ticket-6");
 
-      expect(mockGenerateSummary).toHaveBeenCalledWith(expect.any(Array));
+      expect(mockGenerateAISummary).toHaveBeenCalledWith(expect.any(Array));
       expect(result).toEqual(
         expect.objectContaining({
           ticketId: "ticket-6",
@@ -258,7 +258,7 @@ describe("ai.augmentation.service", () => {
         createdAt: new Date(),
         comments: [],
       });
-      mockGenerateSummary.mockRejectedValue(new Error("summary failed"));
+      mockGenerateAISummary.mockRejectedValue(new Error("summary failed"));
 
       const result = await generateTicketSummary("ticket-7");
 
