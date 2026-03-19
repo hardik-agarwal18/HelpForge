@@ -1,5 +1,5 @@
 import logger from "../../../config/logger.js";
-import * as aiRepo from "./ai.automation.repo.js";
+import { createComment } from "./ai.automation.repo.js";
 
 /**
  * AI Automation Utilities
@@ -158,7 +158,7 @@ export const storeAIComment = async (
     const formattedMessage = formatAIResponse(response, action);
     const metadata = createAIMetadata(confidenceData, action);
 
-    const comment = await aiRepo.createComment({
+    const comment = await createComment({
       ticketId,
       message: formattedMessage,
       authorType: "AI",
@@ -190,7 +190,7 @@ export const storeAIComment = async (
  */
 export const createInternalAINote = async (ticketId, note) => {
   try {
-    return await aiRepo.createComment({
+    return await createComment({
       ticketId,
       message: `*[Internal AI Note]: ${note}*`,
       authorType: "AI",

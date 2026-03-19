@@ -10,7 +10,11 @@ import {
   AUTOMATION_PROMPTS,
   buildTicketContext,
 } from "../core/prompts/automation.prompt.js";
-import * as aiRepo from "./ai.automation.repo.js";
+import {
+  getTicketWithComments,
+  updateTicket,
+  getAvailableAgents,
+} from "./ai.automation.repo.js";
 
 /**
  * AI Service - Main orchestrator for AI functionality
@@ -31,7 +35,7 @@ export const handleCommentAdded = async (payload) => {
     );
 
     // Fetch full ticket and comments
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket = await getTicketWithComments(ticketId);
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found");
@@ -182,7 +186,7 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     }
 
     // Apply ticket updates
-    const updatedTicket = await aiRepo.updateTicket(ticket.id, ticketUpdate);
+    const updatedTicket = await updateTicket(ticket.id, ticketUpdate);
 
     logger.info(
       {
@@ -239,9 +243,7 @@ const handleSmartAssign = async (ticket, aiComment, action) => {
     );
 
     // Fetch available agents for this organization
-    const availableAgents = await aiRepo.getAvailableAgents(
-      ticket.organizationId,
-    );
+    const availableAgents = await getAvailableAgents(ticket.organizationId);
 
     if (availableAgents.length === 0) {
       logger.warn(
@@ -259,7 +261,7 @@ const handleSmartAssign = async (ticket, aiComment, action) => {
 
     if (selectedAgent) {
       // Assign ticket to agent
-      await aiRepo.updateTicket(ticket.id, {
+      await updateTicket(ticket.id, {
         assignedToId: selectedAgent.userId,
         status: "IN_PROGRESS",
       });
@@ -311,7 +313,7 @@ const handleSuggestion = async (ticket, aiComment, action) => {
  */
 export const generateTicketSummary = async (ticketId) => {
   try {
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket = await getTicketWithComments(ticketId);
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for summary");
@@ -339,7 +341,7 @@ export const generateTicketSummary = async (ticketId) => {
  */
 export const toggleAIForTicket = async (ticketId, active) => {
   try {
-    await aiRepo.updateTicket(ticketId, { aiActive: active });
+    await updateTicket(ticketId, { aiActive: active });
 
     logger.info({ ticketId, aiActive: active }, "AI toggled for ticket");
   } catch (error) {

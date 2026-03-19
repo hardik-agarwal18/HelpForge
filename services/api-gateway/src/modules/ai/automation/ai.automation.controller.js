@@ -1,6 +1,11 @@
 import logger from "../../../config/logger.js";
 import * as decisionEngine from "./ai.automation.decision.js";
-import * as aiRepo from "./ai.automation.repo.js";
+import {
+  getTicket,
+  getTicketWithComments,
+  updateTicket,
+  getOrganizationTickets,
+} from "./ai.automation.repo.js";
 import { ApiError } from "../../../utils/errorHandler.js";
 import {
   ticketIdParamSchema,
@@ -21,7 +26,7 @@ export const getStatus = async (req, res, next) => {
   try {
     const { ticketId } = ticketIdParamSchema.parse(req.params);
 
-    const ticket = await aiRepo.getTicket(ticketId);
+    const ticket = await getTicket(ticketId);
 
     if (!ticket) {
       throw new ApiError(404, "Ticket not found");
@@ -53,7 +58,7 @@ export const getDecision = async (req, res, next) => {
   try {
     const { ticketId } = ticketIdParamSchema.parse(req.params);
 
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const ticket = await getTicketWithComments(ticketId);
 
     if (!ticket) {
       throw new ApiError(404, "Ticket not found");
@@ -107,7 +112,7 @@ export const toggleAI = async (req, res, next) => {
       throw new ApiError(400, "aiActive must be a boolean");
     }
 
-    const updated = await aiRepo.updateTicket(ticketId, { aiActive });
+    const updated = await updateTicket(ticketId, { aiActive });
 
     logger.info({ ticketId, aiActive }, "AI toggled for ticket");
 
@@ -130,7 +135,7 @@ export const overrideDecision = async (req, res, next) => {
     const { ticketId } = ticketIdParamSchema.parse(req.params);
     const { action, assignToId, status } = req.body;
 
-    const ticket = await aiRepo.getTicket(ticketId);
+    const ticket = await getTicket(ticketId);
 
     if (!ticket) {
       throw new ApiError(404, "Ticket not found");
@@ -150,7 +155,7 @@ export const overrideDecision = async (req, res, next) => {
 
     updateData.aiActive = false; // Disable AI when manually overridden
 
-    const updated = await aiRepo.updateTicket(ticketId, updateData);
+    const updated = await updateTicket(ticketId, updateData);
 
     logger.info(
       {
@@ -211,10 +216,7 @@ export const getStats = async (req, res, next) => {
     // Get all tickets created in last 7 days
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const tickets = await aiRepo.getOrganizationTickets(
-      organizationId,
-      sevenDaysAgo,
-    );
+    const tickets = await getOrganizationTickets(organizationId, sevenDaysAgo);
 
     const aiResolvedCount = tickets.filter(
       (t) => t.status === "RESOLVED" && t.aiMessageCount > 0,
