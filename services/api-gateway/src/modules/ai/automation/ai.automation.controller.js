@@ -196,7 +196,7 @@ export const getConfig = async (req, res, next) => {
       automation: {
         retryLimit: aiConfig.automation.retryLimit,
         retryBackoffMs: aiConfig.automation.retryBackoffMs,
-        dlqKey: aiConfig.automation.dlqKey,
+        dlqStorage: "postgres",
         dlqMaxEntries: aiConfig.automation.dlqMaxEntries,
       },
       rules,

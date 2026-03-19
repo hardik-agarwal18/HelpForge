@@ -386,3 +386,70 @@ export const transaction = async (callback) => {
     throw error;
   }
 };
+
+/**
+ * Persist an exhausted AI queue job for later inspection/retry.
+ * @param {Object} data - Failure data extracted from BullMQ job state
+ * @param {number} maxEntries - Maximum number of failure rows to retain
+ * @returns {Promise<Object>} Persisted failure record
+ */
+export const createAIProcessingFailure = async (data, maxEntries) => {
+  try {
+    const failure = await prisma.aiProcessingFailure.create({
+      data: {
+        queueName: data.queueName,
+        jobName: data.jobName,
+        jobId: data.jobId ? String(data.jobId) : null,
+        ticketId: data.ticketId || null,
+        commentId: data.commentId || null,
+        attemptsMade: data.attemptsMade || 0,
+        retryLimit: data.retryLimit || 0,
+        retryable: data.retryable ?? true,
+        failureReason: data.failureReason,
+        stacktrace: data.stacktrace || null,
+        payload: data.payload,
+        failedAt: data.failedAt || new Date(),
+      },
+    });
+
+    if (Number.isFinite(maxEntries) && maxEntries > 0) {
+      const staleFailures = await prisma.aiProcessingFailure.findMany({
+        orderBy: [{ failedAt: "desc" }, { createdAt: "desc" }],
+        skip: maxEntries,
+        select: { id: true },
+      });
+
+      if (staleFailures.length > 0) {
+        await prisma.aiProcessingFailure.deleteMany({
+          where: {
+            id: {
+              in: staleFailures.map((entry) => entry.id),
+            },
+          },
+        });
+      }
+    }
+
+    return failure;
+  } catch (error) {
+    logger.error({ error, data }, "Error creating AI processing failure");
+    throw error;
+  }
+};
+
+/**
+ * Get persisted AI queue failures from Postgres.
+ * @param {number} limit - Number of failures to return
+ * @returns {Promise<Array>} Failure records ordered newest-first
+ */
+export const getAIProcessingFailures = async (limit = 50) => {
+  try {
+    return await prisma.aiProcessingFailure.findMany({
+      orderBy: [{ failedAt: "desc" }, { createdAt: "desc" }],
+      take: limit,
+    });
+  } catch (error) {
+    logger.error({ error, limit }, "Error fetching AI processing failures");
+    throw error;
+  }
+};

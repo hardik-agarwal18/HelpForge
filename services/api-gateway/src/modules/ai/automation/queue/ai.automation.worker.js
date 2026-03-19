@@ -21,7 +21,9 @@ export const processAICommentJob = async (job) => {
 
 export const startAIAutomationWorker = () => {
   if (!config.redis.url || config.nodeEnv === "test") {
-    logger.info("AI automation worker skipped (missing REDIS_URL or test mode)");
+    logger.info(
+      "AI automation worker skipped (missing REDIS_URL or test mode)",
+    );
     return null;
   }
 
@@ -38,6 +40,7 @@ export const startAIAutomationWorker = () => {
 
   worker = new Worker(getAIAutomationQueueName(), processAICommentJob, {
     connection,
+    concurrency: 5, // or dynamic
   });
 
   worker.on("completed", (job) => {
