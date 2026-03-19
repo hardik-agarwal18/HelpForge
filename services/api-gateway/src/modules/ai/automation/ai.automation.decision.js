@@ -130,10 +130,6 @@ export const decideAction = (confidence, options = {}) => {
     action.type = "auto_resolve";
     action.shouldAutoResolve = true;
     action.reasoning = "High confidence - can auto-resolve ticket";
-  } else if (confidence >= DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST) {
-    action.type = "suggest";
-    action.shouldSuggest = true;
-    action.reasoning = "Medium confidence - suggest to user, wait for feedback";
   } else if (
     confidence >= DECISION_RULES.SMART_ASSIGN_THRESHOLD &&
     options.canAssign
@@ -142,6 +138,10 @@ export const decideAction = (confidence, options = {}) => {
     action.shouldAssign = true;
     action.reasoning =
       "Moderate confidence - suggest assignment to available agent";
+  } else if (confidence >= DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST) {
+    action.type = "suggest";
+    action.shouldSuggest = true;
+    action.reasoning = "Medium confidence - suggest to user, wait for feedback";
   } else {
     action.type = "store_and_wait";
     action.reasoning =
@@ -289,11 +289,11 @@ const getRecommendation = (score) => {
   if (score >= DECISION_RULES.CONFIDENCE_THRESHOLD_AUTO_CLOSE) {
     return "HIGH_CONFIDENCE_RESOLVE";
   }
-  if (score >= DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST) {
-    return "MEDIUM_CONFIDENCE_SUGGEST";
-  }
   if (score >= DECISION_RULES.SMART_ASSIGN_THRESHOLD) {
     return "MODERATE_CONFIDENCE_ASSIGN";
+  }
+  if (score >= DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST) {
+    return "MEDIUM_CONFIDENCE_SUGGEST";
   }
   return "LOW_CONFIDENCE_STORE";
 };
