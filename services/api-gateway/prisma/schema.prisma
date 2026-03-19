@@ -113,11 +113,19 @@ model Ticket {
   aiActive       Boolean @default(true)
   aiMessageCount Int     @default(0)
 
+  category      String?
   comments      TicketComment[]
   attachments   TicketAttachment[]
   tags          TicketTag[]
   activities    TicketActivityLog[]
   notifications Notification[]
+
+  resolvedAt      DateTime?
+  firstResponseAt DateTime?
+  dueAt           DateTime?
+
+  resolvedBy        String? // "AI" | "AGENT"
+  resolutionSummary String?
 
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -232,6 +240,9 @@ model AgentWorkload {
 
   assignedToday    Int @default(0)
   assignedThisWeek Int @default(0)
+
+  activeTickets Int      @default(0)
+  skills        String[]
 
   lastDailyReset  DateTime
   lastWeeklyReset DateTime
@@ -402,4 +413,29 @@ model TicketSummary {
   lastUpdatedAt DateTime
 
   createdAt DateTime @default(now())
+}
+
+model AIProcessingLock {
+  id String @id @default(uuid())
+
+  ticketId  String
+  commentId String @unique
+
+  status String // processing | completed | failed
+
+  createdAt DateTime @default(now())
+}
+
+model EventStore {
+  id String @id @default(uuid())
+
+  eventType String
+  payload   Json
+
+  ticketId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([ticketId, createdAt])
 }
