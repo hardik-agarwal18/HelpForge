@@ -20,11 +20,11 @@ jest.unstable_mockModule("../../../../src/config/logger.js", () => ({
 }));
 
 jest.unstable_mockModule(
-  "../../../../src/modules/ai/automation/ai.automation.repo.js",
+  "../../../../src/modules/ai/augmentation/ai.augmentation.repo.js",
   () => ({
-    getTicketWithComments: mockGetTicketWithComments,
-    getTicket: mockGetTicket,
-    getAgentTickets: mockGetAgentTickets,
+    getAugmentationTicketWithComments: mockGetTicketWithComments,
+    getAugmentationTicket: mockGetTicket,
+    getAugmentationAgentTickets: mockGetAgentTickets,
   }),
 );
 
