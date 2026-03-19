@@ -61,13 +61,14 @@ model Organization {
   name      String   @unique
   createdAt DateTime @default(now())
 
-  memberships    Membership[]
-  tickets        Ticket[]
-  tags           Tag[]
-  agentWorkloads AgentWorkload[]
-  notifications  Notification[]
-  aiusages       AIUsage[]
-  aiconfig       AIConfig?
+  memberships            Membership[]
+  tickets                Ticket[]
+  tags                   Tag[]
+  agentWorkloads         AgentWorkload[]
+  notifications          Notification[]
+  aiusages               AIUsage[]
+  aiconfig               AIConfig?
+  ticketSubmissionConfig TicketSubmissionConfig?
 }
 
 model Membership {
@@ -436,8 +437,8 @@ model AIProcessingFailure {
   ticketId  String?
   commentId String?
 
-  attemptsMade Int    @default(0)
-  retryLimit   Int    @default(0)
+  attemptsMade Int     @default(0)
+  retryLimit   Int     @default(0)
   retryable    Boolean @default(true)
   retryCount   Int     @default(0)
 
@@ -471,4 +472,34 @@ model EventStore {
 
   @@index([eventType, createdAt])
   @@index([ticketId, createdAt])
+}
+
+model TicketSubmissionConfig {
+  id String @id @default(uuid())
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // UX behavior
+  mode SubmissionMode @default(FLEXIBLE)
+
+  requireDescription Boolean @default(true)
+  requireAttachments Boolean @default(false)
+
+  minDescriptionLength Int @default(0)
+  maxMessagesBeforeAI  Int @default(3)
+
+  enableMessageBatching Boolean @default(true)
+  batchingWindowMs      Int     @default(5000)
+
+  enableSpamProtection Boolean @default(true)
+  maxMessagesPerMinute Int     @default(5)
+
+  createdAt DateTime @default(now())
+}
+
+enum SubmissionMode {
+  STRICT // One detailed message required
+  GUIDED // Ask follow-up questions
+  FLEXIBLE // Free chat
 }
