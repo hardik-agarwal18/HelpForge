@@ -1,5 +1,17 @@
 import logger from "../../../config/logger.js";
 import { createComment } from "./ai.automation.repo.js";
+import {
+  getCacheValue,
+  setCacheValue,
+  setCacheValueIfAbsent,
+  deleteCacheValue,
+} from "../core/cache/cache.service.js";
+import {
+  buildAICommentProcessedCacheKey,
+  buildAICommentProcessingLockKey,
+} from "../core/cache/cache.keys.js";
+import { UNCERTAINTY_KEYWORDS } from "./ai.automation.constants.js";
+import { ApiError } from "../../../utils/errorHandler.js";
 
 /**
  * AI Automation Utilities
@@ -16,19 +28,8 @@ import { createComment } from "./ai.automation.repo.js";
  * @returns {boolean} True if problematic keywords found
  */
 export const checkProblematicKeywords = (text) => {
-  const keywords = [
-    "maybe", // Uncertainty
-    "probably", // Uncertainty
-    "not sure", // Uncertainty
-    "unclear", // Unclear problem
-    "sorry", // Apologetic (might need human touch)
-    "i think", // Vague speculation
-    "might be", // Uncertainty
-    "could be", // Uncertainty
-  ];
-
   const lowerText = text.toLowerCase();
-  return keywords.some((keyword) => lowerText.includes(keyword));
+  return UNCERTAINTY_KEYWORDS.some((keyword) => lowerText.includes(keyword));
 };
 
 /**
@@ -37,20 +38,8 @@ export const checkProblematicKeywords = (text) => {
  * @returns {Array} Array of found keywords
  */
 export const extractUncertaintyIndicators = (text) => {
-  const indicators = [
-    "maybe",
-    "probably",
-    "not sure",
-    "unclear",
-    "sorry",
-    "i think",
-    "might be",
-    "could be",
-    "uncertain",
-  ];
-
   const lowerText = text.toLowerCase();
-  return indicators.filter((indicator) => lowerText.includes(indicator));
+  return UNCERTAINTY_KEYWORDS.filter((keyword) => lowerText.includes(keyword));
 };
 
 /**
@@ -291,6 +280,133 @@ export const isRecentTicket = (createdAt) => {
 export const isAgedTicket = (createdAt) => {
   const ONE_DAY_MS = 86400000;
   return calculateTicketAge(createdAt) > ONE_DAY_MS;
+};
+
+// ============================================================================
+// CACHE UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Get cache key for processed comment tracking
+ * @param {string} commentId - Comment ID
+ * @returns {string} Cache key
+ */
+export const getProcessedCommentCacheKey = (commentId) => {
+  return buildAICommentProcessedCacheKey(commentId);
+};
+
+/**
+ * Get cache key for comment processing lock
+ * @param {string} commentId - Comment ID
+ * @returns {string} Cache key
+ */
+export const getCommentProcessingLockCacheKey = (commentId) => {
+  return buildAICommentProcessingLockKey(commentId);
+};
+
+/**
+ * Check if comment has already been processed
+ * @param {string} commentId - Comment ID
+ * @returns {Promise<boolean>} True if processed
+ */
+export const hasCommentBeenProcessed = async (commentId) => {
+  const processedValue = await getCacheValue(
+    getProcessedCommentCacheKey(commentId),
+  );
+  return processedValue === "1";
+};
+
+/**
+ * Acquire lock for comment processing (idempotency control)
+ * @param {string} commentId - Comment ID
+ * @param {number} ttlSeconds - Lock TTL in seconds
+ * @returns {Promise<boolean>} True if lock acquired
+ */
+export const acquireCommentProcessingLock = async (commentId, ttlSeconds) => {
+  return setCacheValueIfAbsent(
+    getCommentProcessingLockCacheKey(commentId),
+    "1",
+    ttlSeconds,
+  );
+};
+
+/**
+ * Mark comment as processed for idempotency
+ * @param {string} commentId - Comment ID
+ * @param {number} ttlSeconds - Cache TTL in seconds
+ * @returns {Promise<void>}
+ */
+export const markCommentAsProcessed = async (commentId, ttlSeconds) => {
+  await setCacheValue(getProcessedCommentCacheKey(commentId), "1", ttlSeconds);
+};
+
+/**
+ * Release comment processing lock
+ * @param {string} commentId - Comment ID
+ * @returns {Promise<void>}
+ */
+export const releaseCommentProcessingLock = async (commentId) => {
+  await deleteCacheValue(getCommentProcessingLockCacheKey(commentId));
+};
+
+// ============================================================================
+// VALIDATION UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Validate ticket exists and throw error if not
+ * @param {Object|null} ticket - Ticket object
+ * @param {string} ticketId - Ticket ID for error message
+ * @throws {ApiError} 404 if ticket not found
+ * @returns {Object} Ticket object if valid
+ */
+export const validateTicketExists = (ticket, ticketId) => {
+  if (!ticket) {
+    throw new ApiError(404, `Ticket ${ticketId} not found`);
+  }
+  return ticket;
+};
+
+/**
+ * Validate comment exists and throw error if not
+ * @param {Object|null} comment - Comment object
+ * @param {string} commentId - Comment ID for error message
+ * @throws {ApiError} 404 if comment not found
+ * @returns {Object} Comment object if valid
+ */
+export const validateCommentExists = (comment, commentId) => {
+  if (!comment) {
+    throw new ApiError(404, `Comment ${commentId} not found`);
+  }
+  return comment;
+};
+
+/**
+ * Check if comment is from specific author type
+ * @param {Object} comment - Comment object
+ * @param {string} authorType - Author type ("USER", "AI")
+ * @returns {boolean} True if comment from specified author type
+ */
+export const isCommentFromAuthor = (comment, authorType = "USER") => {
+  return comment?.authorType === authorType;
+};
+
+/**
+ * Check if comment is from a user
+ * @param {Object} comment - Comment object
+ * @returns {boolean} True if comment is from user
+ */
+export const isUserComment = (comment) => {
+  return isCommentFromAuthor(comment, "USER");
+};
+
+/**
+ * Check if comment is from AI
+ * @param {Object} comment - Comment object
+ * @returns {boolean} True if comment is from AI
+ */
+export const isAIComment = (comment) => {
+  return isCommentFromAuthor(comment, "AI");
 };
 
 /**

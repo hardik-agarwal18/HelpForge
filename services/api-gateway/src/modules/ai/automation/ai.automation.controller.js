@@ -13,6 +13,7 @@ import {
   ticketIdParamSchema,
   organizationIdParamSchema,
 } from "./ai.automation.validator.js";
+import { validateTicketExists } from "./ai.automation.utils.js";
 
 /**
  * AI Controller - PHASE 2
@@ -29,10 +30,7 @@ export const getStatus = async (req, res, next) => {
     const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     const ticket = await getTicket(ticketId);
-
-    if (!ticket) {
-      throw new ApiError(404, "Ticket not found");
-    }
+    validateTicketExists(ticket, ticketId);
 
     res.json({
       ticketId: ticket.id,
@@ -61,10 +59,7 @@ export const getDecision = async (req, res, next) => {
     const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     const ticket = await getTicketWithComments(ticketId);
-
-    if (!ticket) {
-      throw new ApiError(404, "Ticket not found");
-    }
+    validateTicketExists(ticket, ticketId);
 
     // Calculate what AI would decide now
     const confidence = decisionEngine.calculateConfidence({
@@ -138,10 +133,7 @@ export const overrideDecision = async (req, res, next) => {
     const { action, assignToId, status } = req.body;
 
     const ticket = await getTicket(ticketId);
-
-    if (!ticket) {
-      throw new ApiError(404, "Ticket not found");
-    }
+    validateTicketExists(ticket, ticketId);
 
     const updateData = {};
 

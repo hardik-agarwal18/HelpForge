@@ -4,16 +4,6 @@ import {
   generateAISummary,
 } from "../core/provider/ai.provider.orchestrator.js";
 import aiConfig from "../core/config/ai.config.js";
-import {
-  buildAICommentProcessedCacheKey,
-  buildAICommentProcessingLockKey,
-} from "../core/cache/cache.keys.js";
-import {
-  deleteCacheValue,
-  getCacheValue,
-  setCacheValue,
-  setCacheValueIfAbsent,
-} from "../core/cache/cache.service.js";
 import * as decisionEngine from "./ai.automation.decision.js";
 import { shouldProcessAI } from "./ai.automation.guards.js";
 import * as aiUtils from "./ai.automation.utils.js";
@@ -29,30 +19,6 @@ import {
 } from "./ai.automation.repo.js";
 
 const { idempotencyTtlSeconds, processingLockTtlSeconds } = aiConfig.automation;
-
-const getProcessedCommentKey = (commentId) =>
-  buildAICommentProcessedCacheKey(commentId);
-
-const getProcessingLockKey = (commentId) =>
-  buildAICommentProcessingLockKey(commentId);
-
-const hasProcessedComment = async (commentId) => {
-  const processedValue = await getCacheValue(getProcessedCommentKey(commentId));
-  return processedValue === "1";
-};
-
-const acquireCommentProcessingLock = async (commentId) =>
-  setCacheValueIfAbsent(
-    getProcessingLockKey(commentId),
-    "1",
-    processingLockTtlSeconds,
-  );
-
-const markCommentProcessed = async (commentId) =>
-  setCacheValue(getProcessedCommentKey(commentId), "1", idempotencyTtlSeconds);
-
-const releaseCommentProcessingLock = async (commentId) =>
-  deleteCacheValue(getProcessingLockKey(commentId));
 
 /**
  * AI Service - Main orchestrator for AI functionality
@@ -75,11 +41,14 @@ export const handleCommentAdded = async (payload) => {
     );
 
     if (!commentId) {
-      logger.warn({ ticketId, payload }, "Skipping AI processing without commentId");
+      logger.warn(
+        { ticketId, payload },
+        "Skipping AI processing without commentId",
+      );
       return;
     }
 
-    if (await hasProcessedComment(commentId)) {
+    if (await aiUtils.hasCommentBeenProcessed(commentId)) {
       logger.info(
         { ticketId, commentId },
         "Skipping duplicate AI automation event for processed comment",
@@ -87,7 +56,10 @@ export const handleCommentAdded = async (payload) => {
       return;
     }
 
-    const lockResult = await acquireCommentProcessingLock(commentId);
+    const lockResult = await aiUtils.acquireCommentProcessingLock(
+      commentId,
+      processingLockTtlSeconds,
+    );
     usingIdempotency = lockResult !== null;
     processingLockAcquired = lockResult === true;
 
@@ -158,14 +130,14 @@ export const handleCommentAdded = async (payload) => {
     await generateAndStoreAIResponse(ticket, newComment);
 
     if (usingIdempotency) {
-      await markCommentProcessed(commentId);
+      await aiUtils.markCommentAsProcessed(commentId, idempotencyTtlSeconds);
     }
   } catch (error) {
     logger.error({ error, payload }, "Error in handleCommentAdded");
     throw error;
   } finally {
     if (usingIdempotency && processingLockAcquired && commentId) {
-      await releaseCommentProcessingLock(commentId);
+      await aiUtils.releaseCommentProcessingLock(commentId);
     }
   }
 };
