@@ -122,6 +122,8 @@ model Ticket {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   aidecisionLogs AIDecisionLog[]
+  aifeedbacks    AIFeedback[]
+  aiusages       AIUsage[]
 
   @@index([organizationId])
   @@index([assignedToId])
@@ -146,7 +148,11 @@ model TicketComment {
 
   isInternal Boolean @default(false)
 
-  createdAt DateTime @default(now())
+  metadata Json?
+
+  createdAt      DateTime        @default(now())
+  aidecisionLogs AIDecisionLog[]
+  aifeedbacks    AIFeedback[]
 }
 
 enum CommentAuthorType {
@@ -305,7 +311,8 @@ model AIDecisionLog {
   ticketId String
   ticket   Ticket @relation(fields: [ticketId], references: [id])
 
-  commentId String? // AI comment linked
+  commentId String?
+  comment   TicketComment? @relation(fields: [commentId], references: [id])
 
   confidence     Float
   action         String
@@ -327,6 +334,7 @@ model AIUsage {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id])
 
   tokensUsed Int
   cost       Float
@@ -343,6 +351,9 @@ model AIFeedback {
   ticketId  String
   commentId String
 
+  ticket  Ticket        @relation(fields: [ticketId], references: [id])
+  comment TicketComment @relation(fields: [commentId], references: [id])
+
   isHelpful Boolean
   feedback  String?
 
@@ -354,6 +365,14 @@ model AIConfig {
 
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id])
+
+  allowedModels String[] @default(["gpt-4", "gpt-3.5"])
+
+  maxTokensPerRequest Int    @default(2000)
+  maxCostPerDay       Float?
+
+  enableAutoResolve Boolean @default(true)
+  enableSmartAssign Boolean @default(true)
 
   autoResolveThreshold Float @default(0.85)
   suggestThreshold     Float @default(0.5)
