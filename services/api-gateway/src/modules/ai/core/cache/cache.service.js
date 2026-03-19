@@ -39,7 +39,7 @@ export const setCacheValue = async (
   const client = getCacheClient();
 
   if (!client) {
-    return false;
+    return null;
   }
 
   try {
@@ -51,11 +51,31 @@ export const setCacheValue = async (
   }
 };
 
+export const setCacheValueIfAbsent = async (
+  key,
+  value,
+  ttlSeconds = aiConfig.cache.ttlSeconds,
+) => {
+  const client = getCacheClient();
+
+  if (!client) {
+    return null;
+  }
+
+  try {
+    const result = await client.set(key, value, "EX", ttlSeconds, "NX");
+    return result === "OK";
+  } catch (error) {
+    logger.error({ error, key }, "Error writing AI cache with NX");
+    return false;
+  }
+};
+
 export const deleteCacheValue = async (key) => {
   const client = getCacheClient();
 
   if (!client) {
-    return false;
+    return null;
   }
 
   try {
@@ -70,5 +90,6 @@ export const deleteCacheValue = async (key) => {
 export default {
   getCacheValue,
   setCacheValue,
+  setCacheValueIfAbsent,
   deleteCacheValue,
 };

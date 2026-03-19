@@ -16,6 +16,14 @@ export const aiConfig = {
     retryBackoffMs: toNumber(process.env.AI_AUTOMATION_RETRY_BACKOFF_MS, 1000),
     dlqKey: process.env.AI_AUTOMATION_DLQ_KEY || "ai-automation:dlq",
     dlqMaxEntries: toNumber(process.env.AI_AUTOMATION_DLQ_MAX_ENTRIES, 1000),
+    idempotencyTtlSeconds: toNumber(
+      process.env.AI_AUTOMATION_IDEMPOTENCY_TTL_SECONDS,
+      604800,
+    ),
+    processingLockTtlSeconds: toNumber(
+      process.env.AI_AUTOMATION_PROCESSING_LOCK_TTL_SECONDS,
+      300,
+    ),
   },
   providerGuards: {
     timeoutMs: toNumber(process.env.AI_PROVIDER_TIMEOUT_MS, 15000),
