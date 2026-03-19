@@ -1,6 +1,9 @@
 import logger from "../../../config/logger.js";
 import * as aiRepo from "../automation/ai.automation.repo.js";
-import * as aiProvider from "../core/provider/ai.provider.js";
+import {
+  generateAIResponse,
+  generateAISummary,
+} from "../core/provider/ai.provider.orchestrator.js";
 import {
   buildAgentContext,
   getAgentSystemPrompt,
@@ -43,7 +46,7 @@ export const generateAgentSuggestion = async (ticketId) => {
     logger.info({ ticketId }, "Generating agent suggestion");
 
     // Call AI with agent-optimized prompt
-    const suggestion = await aiProvider.generateResponse({
+    const suggestion = await generateAIResponse({
       ticketId: ticket.id,
       context,
       systemPrompt: getAgentSystemPrompt(),
@@ -88,7 +91,7 @@ export const generateTicketSummary = async (ticketId) => {
 
     logger.info({ ticketId }, "Generating ticket summary");
 
-    const summary = await aiProvider.generateSummary(ticket.comments);
+    const summary = await generateAISummary(ticket.comments);
 
     // Extract key information
     const keyInfo = extractKeyInformation(ticket);

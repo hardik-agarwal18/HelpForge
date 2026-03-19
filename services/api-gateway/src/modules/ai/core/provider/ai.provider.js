@@ -1,6 +1,4 @@
 import logger from "../../../../config/logger.js";
-import { withRetry } from "./ai.retry.js";
-import { withTimeout } from "./ai.timeout.js";
 import { buildSummaryContext } from "../prompts/summary.prompt.js";
 
 /**
@@ -11,28 +9,6 @@ import { buildSummaryContext } from "../prompts/summary.prompt.js";
 const provider = process.env.AI_PROVIDER || "openai";
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.AI_MODEL;
-
-const AI_PROVIDER_TIMEOUT_MS =
-  Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 15000;
-const AI_PROVIDER_RETRIES = Number(process.env.AI_PROVIDER_RETRIES) || 3;
-const AI_PROVIDER_RETRY_DELAY_MS =
-  Number(process.env.AI_PROVIDER_RETRY_DELAY_MS) || 500;
-
-const executeWithProviderGuards = async (fn, timeoutMessage) => {
-  return withRetry(
-    () => withTimeout(fn(), AI_PROVIDER_TIMEOUT_MS, timeoutMessage),
-    {
-      retries: AI_PROVIDER_RETRIES,
-      delayMs: AI_PROVIDER_RETRY_DELAY_MS,
-      onRetry: (error, retriesRemaining) => {
-        logger.warn(
-          { error, retriesRemaining },
-          "AI provider call failed, retrying",
-        );
-      },
-    },
-  );
-};
 
 /**
  * Generate AI response from a ticket context
@@ -51,10 +27,7 @@ export const generateResponse = async (context) => {
       "Generating AI response",
     );
 
-    return await executeWithProviderGuards(
-      async () => callOpenAI(context),
-      "AI provider timeout while generating response",
-    );
+    return await callOpenAI(context);
   } catch (error) {
     logger.error({ error, context }, "Failed to generate AI response");
     throw error;
@@ -85,10 +58,7 @@ export const generateSummary = async (comments) => {
       "Generating conversation summary",
     );
 
-    return await executeWithProviderGuards(
-      async () => callOpenAISummary(comments),
-      "AI provider timeout while generating summary",
-    );
+    return await callOpenAISummary(comments);
   } catch (error) {
     logger.error({ error }, "Failed to generate summary");
     throw error;

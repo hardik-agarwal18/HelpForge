@@ -1,5 +1,8 @@
 import logger from "../../../config/logger.js";
-import * as aiProvider from "../core/provider/ai.provider.js";
+import {
+  generateAIResponse,
+  generateAISummary,
+} from "../core/provider/ai.provider.orchestrator.js";
 import * as decisionEngine from "./ai.automation.decision.js";
 import {
   AUTOMATION_PROMPTS,
@@ -144,7 +147,7 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
     );
 
     // Call AI provider to generate response
-    const aiResponse = await aiProvider.generateResponse({
+    const aiResponse = await generateAIResponse({
       ticketId: ticket.id,
       context,
       systemPrompt: AUTOMATION_PROMPTS.TICKET_ASSISTANT_SYSTEM,
@@ -403,7 +406,7 @@ export const generateTicketSummary = async (ticketId) => {
       return null;
     }
 
-    const summary = await aiProvider.generateSummary(ticket.comments);
+    const summary = await generateAISummary(ticket.comments);
 
     logger.info(
       { ticketId, summaryLength: summary.length },
