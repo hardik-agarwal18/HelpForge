@@ -2,6 +2,10 @@ import logger from "../../../config/logger.js";
 import * as decisionEngine from "./ai.automation.decision.js";
 import * as aiRepo from "./ai.automation.repo.js";
 import { ApiError } from "../../../utils/errorHandler.js";
+import {
+  ticketIdParamSchema,
+  organizationIdParamSchema,
+} from "./ai.automation.validator.js";
 
 /**
  * AI Controller - PHASE 2
@@ -15,7 +19,7 @@ import { ApiError } from "../../../utils/errorHandler.js";
  */
 export const getStatus = async (req, res, next) => {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     const ticket = await aiRepo.getTicket(ticketId);
 
@@ -47,7 +51,7 @@ export const getStatus = async (req, res, next) => {
  */
 export const getDecision = async (req, res, next) => {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     const ticket = await aiRepo.getTicketWithComments(ticketId);
 
@@ -96,7 +100,7 @@ export const getDecision = async (req, res, next) => {
  */
 export const toggleAI = async (req, res, next) => {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
     const { aiActive } = req.body;
 
     if (typeof aiActive !== "boolean") {
@@ -123,7 +127,7 @@ export const toggleAI = async (req, res, next) => {
  */
 export const overrideDecision = async (req, res, next) => {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
     const { action, assignToId, status } = req.body;
 
     const ticket = await aiRepo.getTicket(ticketId);
@@ -202,7 +206,7 @@ export const getConfig = async (req, res, next) => {
  */
 export const getStats = async (req, res, next) => {
   try {
-    const { organizationId } = req.params;
+    const { organizationId } = organizationIdParamSchema.parse(req.params);
 
     // Get all tickets created in last 7 days
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

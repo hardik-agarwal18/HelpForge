@@ -1,4 +1,5 @@
 import express from "express";
+import { validate } from "../../../middleware/validation.middleware.js";
 import {
   getStatus,
   getDecision,
@@ -7,6 +8,10 @@ import {
   getConfig,
   getStats,
 } from "./ai.automation.controller.js";
+import {
+  toggleAISchema,
+  overrideDecisionSchema,
+} from "./ai.automation.validator.js";
 
 const router = express.Router();
 
@@ -22,10 +27,14 @@ router.get("/status/:ticketId", getStatus);
 router.post("/decision/:ticketId", getDecision);
 
 // Toggle AI endpoint
-router.post("/toggle/:ticketId", toggleAI);
+router.post("/toggle/:ticketId", validate(toggleAISchema), toggleAI);
 
 // Override decision endpoint
-router.post("/override/:ticketId", overrideDecision);
+router.post(
+  "/override/:ticketId",
+  validate(overrideDecisionSchema),
+  overrideDecision,
+);
 
 // Configuration endpoint
 router.get("/config", getConfig);

@@ -1,6 +1,12 @@
 import logger from "../../../config/logger.js";
 import * as augmentationService from "./ai.augmentation.service.js";
 import { ApiError } from "../../../utils/errorHandler.js";
+import {
+  ticketIdParamSchema,
+  agentIdParamSchema,
+  organizationIdParamSchema,
+  statsQuerySchema,
+} from "./ai.augmentation.validator.js";
 
 /**
  * AI Augmentation Controller - PHASE 3
@@ -14,7 +20,7 @@ import { ApiError } from "../../../utils/errorHandler.js";
  */
 export async function generateSuggestion(req, res, next) {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     logger.info({ ticketId }, "Generating agent suggestion");
 
@@ -48,7 +54,7 @@ export async function generateSuggestion(req, res, next) {
  */
 export async function getSummary(req, res, next) {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     logger.info({ ticketId }, "Generating ticket summary");
 
@@ -85,7 +91,7 @@ export async function getSummary(req, res, next) {
  */
 export async function getSuggestedActions(req, res, next) {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     logger.info({ ticketId }, "Generating suggested actions");
 
@@ -113,14 +119,18 @@ export async function getSuggestedActions(req, res, next) {
  */
 export async function getAgentStats(req, res, next) {
   try {
-    const { agentId } = req.params;
-    const days = parseInt(req.query.days) || 7;
+    const { agentId } = agentIdParamSchema.parse(req.params);
+    const { days } = statsQuerySchema.parse(req.query);
+    const effectiveDays = days || 7;
 
-    logger.info({ agentId, days }, "Fetching agent augmentation stats");
+    logger.info(
+      { agentId, days: effectiveDays },
+      "Fetching agent augmentation stats",
+    );
 
     const stats = await augmentationService.getAgentAugmentationStats(
       agentId,
-      days,
+      effectiveDays,
     );
 
     if (!stats) {
@@ -144,7 +154,7 @@ export async function getAgentStats(req, res, next) {
  */
 export async function quickAssist(req, res, next) {
   try {
-    const { ticketId } = req.params;
+    const { ticketId } = ticketIdParamSchema.parse(req.params);
 
     logger.info({ ticketId }, "Generating quick assist");
 
@@ -177,16 +187,20 @@ export async function quickAssist(req, res, next) {
  */
 export async function getTeamStats(req, res, next) {
   try {
-    const { organizationId } = req.params;
-    const days = parseInt(req.query.days) || 7;
+    const { organizationId } = organizationIdParamSchema.parse(req.params);
+    const { days } = statsQuerySchema.parse(req.query);
+    const effectiveDays = days || 7;
 
-    logger.info({ organizationId, days }, "Fetching team augmentation stats");
+    logger.info(
+      { organizationId, days: effectiveDays },
+      "Fetching team augmentation stats",
+    );
 
     // Placeholder for team stats aggregation
     // In production: Query all agents in organization, aggregate their stats
     res.json({
       organizationId,
-      period: `Last ${days} days`,
+      period: `Last ${effectiveDays} days`,
       message: "Team stats aggregation - configure agent list first",
       // Will populate with:
       // - Total team tickets handled
