@@ -66,6 +66,8 @@ model Organization {
   tags           Tag[]
   agentWorkloads AgentWorkload[]
   notifications  Notification[]
+  aiusages       AIUsage[]
+  aiconfig       AIConfig?
 }
 
 model Membership {
@@ -117,8 +119,9 @@ model Ticket {
   activities    TicketActivityLog[]
   notifications Notification[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  aidecisionLogs AIDecisionLog[]
 
   @@index([organizationId])
   @@index([assignedToId])
@@ -294,4 +297,71 @@ enum NotificationType {
   TICKET_TAG_REMOVED
   TICKET_ATTACHMENT_ADDED
   TICKET_ATTACHMENT_DELETED
+}
+
+model AIDecisionLog {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  commentId String? // AI comment linked
+
+  confidence     Float
+  action         String
+  reasoning      String
+  recommendation String
+
+  tokensUsed Int?
+  model      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model AIUsage {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  ticketId String?
+
+  tokensUsed Int
+  cost       Float
+  model      String
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
+model AIFeedback {
+  id String @id @default(uuid())
+
+  ticketId  String
+  commentId String
+
+  isHelpful Boolean
+  feedback  String?
+
+  createdAt DateTime @default(now())
+}
+
+model AIConfig {
+  id String @id @default(uuid())
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  autoResolveThreshold Float @default(0.85)
+  suggestThreshold     Float @default(0.5)
+  smartAssignThreshold Float @default(0.65)
+
+  maxAIResponses Int @default(5)
+
+  aiEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
 }
