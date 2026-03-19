@@ -1,6 +1,11 @@
 import logger from "../../../config/logger.js";
-
 import prisma from "../../../config/database.config.js";
+import {
+  getAgentTickets as getBaseAgentTickets,
+  getTicket as getBaseTicket,
+  getTicketComments as getBaseTicketComments,
+  getTicketWithComments as getBaseTicketWithComments,
+} from "../core/repo/ticket.base.repo.js";
 
 /**
  * AI Repository - Data access layer for AI module
@@ -14,17 +19,7 @@ import prisma from "../../../config/database.config.js";
  */
 export const getTicketWithComments = async (ticketId) => {
   try {
-    return await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        comments: {
-          orderBy: { createdAt: "asc" },
-        },
-        createdBy: true,
-        assignedTo: true,
-        organization: true,
-      },
-    });
+    return await getBaseTicketWithComments(ticketId);
   } catch (error) {
     logger.error({ error, ticketId }, "Error fetching ticket with comments");
     throw error;
@@ -38,9 +33,7 @@ export const getTicketWithComments = async (ticketId) => {
  */
 export const getTicket = async (ticketId) => {
   try {
-    return await prisma.ticket.findUnique({
-      where: { id: ticketId },
-    });
+    return await getBaseTicket(ticketId);
   } catch (error) {
     logger.error({ error, ticketId }, "Error fetching ticket");
     throw error;
@@ -54,10 +47,7 @@ export const getTicket = async (ticketId) => {
  */
 export const getTicketComments = async (ticketId) => {
   try {
-    return await prisma.ticketComment.findMany({
-      where: { ticketId },
-      orderBy: { createdAt: "asc" },
-    });
+    return await getBaseTicketComments(ticketId);
   } catch (error) {
     logger.error({ error, ticketId }, "Error fetching comments");
     throw error;
@@ -215,15 +205,7 @@ export const getAgentWorkload = async (userId, organizationId) => {
  */
 export const getAgentTickets = async (agentId, since) => {
   try {
-    return await prisma.ticket.findMany({
-      where: {
-        assignedToId: agentId,
-        updatedAt: { gte: since },
-      },
-      include: {
-        comments: true,
-      },
-    });
+    return await getBaseAgentTickets(agentId, since);
   } catch (error) {
     logger.error({ error, agentId }, "Error fetching agent tickets");
     throw error;
