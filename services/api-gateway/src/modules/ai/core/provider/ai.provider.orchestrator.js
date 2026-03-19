@@ -2,12 +2,13 @@ import logger from "../../../../config/logger.js";
 import * as aiProvider from "./ai.provider.js";
 import { withRetry } from "./ai.retry.js";
 import { withTimeout } from "./ai.timeout.js";
+import aiConfig from "../config/ai.config.js";
 
-const AI_PROVIDER_TIMEOUT_MS =
-  Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 15000;
-const AI_PROVIDER_RETRIES = Number(process.env.AI_PROVIDER_RETRIES) || 3;
-const AI_PROVIDER_RETRY_DELAY_MS =
-  Number(process.env.AI_PROVIDER_RETRY_DELAY_MS) || 500;
+const {
+  timeoutMs: AI_PROVIDER_TIMEOUT_MS,
+  retries: AI_PROVIDER_RETRIES,
+  retryDelayMs: AI_PROVIDER_RETRY_DELAY_MS,
+} = aiConfig.providerGuards;
 
 const executeWithProviderGuards = async (fn, timeoutMessage) => {
   return withRetry(

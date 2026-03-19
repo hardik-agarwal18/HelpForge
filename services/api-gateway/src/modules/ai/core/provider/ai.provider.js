@@ -1,14 +1,13 @@
 import logger from "../../../../config/logger.js";
 import { buildSummaryContext } from "../prompts/summary.prompt.js";
+import aiConfig from "../config/ai.config.js";
 
 /**
  * AI Provider - Integrates with external AI services (OpenAI)
  * Currently supports OpenAI's API, extendable for other providers
  */
 
-const provider = process.env.AI_PROVIDER || "openai";
-const apiKey = process.env.OPENAI_API_KEY;
-const model = process.env.AI_MODEL;
+const { provider, openAiApiKey: apiKey, model } = aiConfig;
 
 /**
  * Generate AI response from a ticket context

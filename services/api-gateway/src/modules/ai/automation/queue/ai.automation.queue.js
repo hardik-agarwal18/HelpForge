@@ -1,9 +1,12 @@
 import { Queue } from "bullmq";
 import logger from "../../../../config/logger.js";
 import { getSharedBullmqConnection } from "../../../../config/redis.config.js";
+import aiConfig from "../../core/config/ai.config.js";
 
-const AI_AUTOMATION_QUEUE_NAME = "ai-automation";
-const PROCESS_COMMENT_JOB_NAME = "process-ticket-comment";
+const {
+  queueName: AI_AUTOMATION_QUEUE_NAME,
+  processCommentJobName: PROCESS_COMMENT_JOB_NAME,
+} = aiConfig.automation;
 
 let queue;
 
