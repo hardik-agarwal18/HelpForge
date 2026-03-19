@@ -6,6 +6,7 @@ import {
   toggleAI,
   overrideDecision,
   getConfig,
+  getDLQInspection,
   getStats,
 } from "./ai.automation.controller.js";
 import {
@@ -38,6 +39,9 @@ router.post(
 
 // Configuration endpoint
 router.get("/config", getConfig);
+
+// DLQ inspection endpoint
+router.get("/queue/dlq", getDLQInspection);
 
 // Statistics endpoint
 router.get("/stats/:organizationId", getStats);

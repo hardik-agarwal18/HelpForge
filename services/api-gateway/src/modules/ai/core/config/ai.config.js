@@ -12,6 +12,10 @@ export const aiConfig = {
     processCommentJobName:
       process.env.AI_AUTOMATION_PROCESS_COMMENT_JOB_NAME ||
       "process-ticket-comment",
+    retryLimit: toNumber(process.env.AI_AUTOMATION_RETRY_LIMIT, 3),
+    retryBackoffMs: toNumber(process.env.AI_AUTOMATION_RETRY_BACKOFF_MS, 1000),
+    dlqKey: process.env.AI_AUTOMATION_DLQ_KEY || "ai-automation:dlq",
+    dlqMaxEntries: toNumber(process.env.AI_AUTOMATION_DLQ_MAX_ENTRIES, 1000),
   },
   providerGuards: {
     timeoutMs: toNumber(process.env.AI_PROVIDER_TIMEOUT_MS, 15000),

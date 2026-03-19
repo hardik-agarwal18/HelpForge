@@ -7,6 +7,8 @@ import {
   getOrganizationTickets,
 } from "./ai.automation.repo.js";
 import { ApiError } from "../../../utils/errorHandler.js";
+import aiConfig from "../core/config/ai.config.js";
+import { inspectAIAutomationDLQ } from "./queue/ai.automation.queue.js";
 import {
   ticketIdParamSchema,
   organizationIdParamSchema,
@@ -191,6 +193,12 @@ export const getConfig = async (req, res, next) => {
     const rules = decisionEngine.getDecisionRules();
 
     res.json({
+      automation: {
+        retryLimit: aiConfig.automation.retryLimit,
+        retryBackoffMs: aiConfig.automation.retryBackoffMs,
+        dlqKey: aiConfig.automation.dlqKey,
+        dlqMaxEntries: aiConfig.automation.dlqMaxEntries,
+      },
       rules,
       description: {
         MAX_AI_RESPONSES: "Maximum AI responses before fallback to agent",
@@ -201,6 +209,24 @@ export const getConfig = async (req, res, next) => {
     });
   } catch (error) {
     logger.error({ error }, "Error getting config");
+    next(error);
+  }
+};
+
+/**
+ * GET /ai/queue/dlq
+ * Inspect persisted DLQ entries and BullMQ failed jobs
+ */
+export const getDLQInspection = async (req, res, next) => {
+  try {
+    const limit = Number.parseInt(req.query.limit, 10);
+    const inspection = await inspectAIAutomationDLQ(
+      Number.isFinite(limit) ? limit : 50,
+    );
+
+    res.json(inspection);
+  } catch (error) {
+    logger.error({ error }, "Error inspecting AI automation DLQ");
     next(error);
   }
 };
