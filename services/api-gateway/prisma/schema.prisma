@@ -124,6 +124,10 @@ model Ticket {
   aidecisionLogs AIDecisionLog[]
   aifeedbacks    AIFeedback[]
   aiusages       AIUsage[]
+  ticketSummary  TicketSummary?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
 
   @@index([organizationId])
   @@index([assignedToId])
@@ -149,6 +153,9 @@ model TicketComment {
   isInternal Boolean @default(false)
 
   metadata Json?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
 
   createdAt      DateTime        @default(now())
   aidecisionLogs AIDecisionLog[]
@@ -381,6 +388,18 @@ model AIConfig {
   maxAIResponses Int @default(5)
 
   aiEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+model TicketSummary {
+  id String @id @default(uuid())
+
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
+  summary       String
+  lastUpdatedAt DateTime
 
   createdAt DateTime @default(now())
 }
