@@ -7,6 +7,13 @@ import {
   organizationIdParamSchema,
   statsQuerySchema,
 } from "./ai.augmentation.validator.js";
+import {
+  resolveDays,
+  mapSuggestionResponse,
+  mapSummaryResponse,
+  buildQuickAssistResponse,
+  buildTeamStatsPlaceholder,
+} from "./ai.augmentation.utils.js";
 
 /**
  * AI Augmentation Controller - PHASE 3
@@ -31,14 +38,7 @@ export async function generateSuggestion(req, res, next) {
       throw new ApiError(404, "Could not generate suggestion");
     }
 
-    res.json({
-      ticketId: suggestion.ticketId,
-      suggestion: suggestion.suggestion,
-      quality: suggestion.quality,
-      confidence: suggestion.confidence,
-      reasoning: suggestion.reasoning,
-      copySuggestion: suggestion.copySuggestion,
-    });
+    res.json(mapSuggestionResponse(suggestion));
   } catch (error) {
     logger.error(
       { error, ticketId: req.params.ticketId },
@@ -64,18 +64,7 @@ export async function getSummary(req, res, next) {
       throw new ApiError(404, "Ticket not found");
     }
 
-    res.json({
-      ticketId: summary.ticketId,
-      title: summary.title,
-      issue: summary.issue,
-      timeline: summary.timeline,
-      keyPoints: summary.keyPoints,
-      attemptedSolutions: summary.attemptedSolutions,
-      nextSteps: summary.nextSteps,
-      customerSentiment: summary.customerSentiment,
-      priority: summary.priority,
-      age: summary.age,
-    });
+    res.json(mapSummaryResponse(summary));
   } catch (error) {
     logger.error(
       { error, ticketId: req.params.ticketId },
@@ -121,7 +110,7 @@ export async function getAgentStats(req, res, next) {
   try {
     const { agentId } = agentIdParamSchema.parse(req.params);
     const { days } = statsQuerySchema.parse(req.query);
-    const effectiveDays = days || 7;
+    const effectiveDays = resolveDays(days);
 
     logger.info(
       { agentId, days: effectiveDays },
@@ -158,21 +147,14 @@ export async function quickAssist(req, res, next) {
 
     logger.info({ ticketId }, "Generating quick assist");
 
-    const ticket = await aiRepo.getTicketWithComments(ticketId);
+    const quickAssistPayload =
+      await augmentationService.generateQuickAssist(ticketId);
 
-    const [suggestion, summary, actions] = await Promise.all([
-      generateAgentSuggestionFromTicket(ticket),
-      generateTicketSummaryFromTicket(ticket),
-      generateSuggestedActionsFromTicket(ticket),
-    ]);
+    if (!quickAssistPayload) {
+      throw new ApiError(404, "Ticket not found");
+    }
 
-    res.json({
-      ticketId,
-      suggestion: suggestion || undefined,
-      summary: summary || undefined,
-      actions: actions || [],
-      timestamp: new Date().toISOString(),
-    });
+    res.json(buildQuickAssistResponse(quickAssistPayload));
   } catch (error) {
     logger.error(
       { error, ticketId: req.params.ticketId },
@@ -191,7 +173,7 @@ export async function getTeamStats(req, res, next) {
   try {
     const { organizationId } = organizationIdParamSchema.parse(req.params);
     const { days } = statsQuerySchema.parse(req.query);
-    const effectiveDays = days || 7;
+    const effectiveDays = resolveDays(days);
 
     logger.info(
       { organizationId, days: effectiveDays },
@@ -200,16 +182,7 @@ export async function getTeamStats(req, res, next) {
 
     // Placeholder for team stats aggregation
     // In production: Query all agents in organization, aggregate their stats
-    res.json({
-      organizationId,
-      period: `Last ${effectiveDays} days`,
-      message: "Team stats aggregation - configure agent list first",
-      // Will populate with:
-      // - Total team tickets handled
-      // - Average resolution rate
-      // - AI-suggestion adoption rate
-      // - Time saved by team
-    });
+    res.json(buildTeamStatsPlaceholder(organizationId, effectiveDays));
   } catch (error) {
     logger.error(
       { error, organizationId: req.params.organizationId },

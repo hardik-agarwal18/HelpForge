@@ -8,6 +8,13 @@ import {
   buildAgentContext,
   getAgentSystemPrompt,
 } from "../core/prompts/agent.prompt.js";
+import {
+  getTicketComments,
+  containsAnyKeyword,
+  buildCopySuggestion,
+  toLowerText,
+  resolveDays,
+} from "./ai.augmentation.utils.js";
 
 /**
  * AI Augmentation Service - PHASE 3
@@ -33,7 +40,7 @@ export const generateAgentSuggestion = async (ticketId) => {
     return await generateAgentSuggestionFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating agent suggestion");
-    throw error;
+    return null;
   }
 };
 
@@ -47,7 +54,7 @@ export const generateAgentSuggestionFromTicket = async (ticket) => {
     return null;
   }
 
-  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+  const comments = getTicketComments(ticket);
 
   // Get the last user comment
   const lastUserComment = [...comments]
@@ -85,7 +92,7 @@ export const generateAgentSuggestionFromTicket = async (ticket) => {
     quality: metrics.quality, // "excellent" | "good" | "fair"
     confidence: metrics.confidence,
     reasoning: metrics.reasoning,
-    copySuggestion: `Copy & Customize: ${suggestion.substring(0, 50)}...`,
+    copySuggestion: buildCopySuggestion(suggestion),
   };
 };
 
@@ -107,7 +114,7 @@ export const generateTicketSummary = async (ticketId) => {
     return await generateTicketSummaryFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating summary");
-    throw error;
+    return null;
   }
 };
 
@@ -121,7 +128,7 @@ export const generateTicketSummaryFromTicket = async (ticket) => {
     return null;
   }
 
-  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+  const comments = getTicketComments(ticket);
 
   logger.info({ ticketId: ticket.id }, "Generating ticket summary");
 
@@ -161,7 +168,7 @@ export const generateSuggestedActions = async (ticketId) => {
     return generateSuggestedActionsFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating suggested actions");
-    throw error;
+    return [];
   }
 };
 
@@ -175,7 +182,7 @@ export const generateSuggestedActionsFromTicket = (ticket) => {
     return [];
   }
 
-  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+  const comments = getTicketComments(ticket);
   const actions = [];
 
   // Check for patterns
@@ -253,7 +260,8 @@ export const generateSuggestedActionsFromTicket = (ticket) => {
  */
 export const getAgentAugmentationStats = async (agentId, days = 7) => {
   try {
-    const daysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const effectiveDays = resolveDays(days);
+    const daysAgo = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
 
     const tickets = await aiRepo.getAgentTickets(agentId, daysAgo);
 
@@ -269,7 +277,7 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
 
     return {
       agentId,
-      period: `Last ${days} days`,
+      period: `Last ${effectiveDays} days`,
       stats: {
         totalTicketsHandled: totalHandled,
         resolved: totalResolved,
@@ -285,8 +293,8 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
         ticketsWithAISuggestions: aiBoosted,
         suggestionsAcceptanceRate:
           ((aiBoosted / Math.max(1, totalHandled)) * 100).toFixed(2) + "%",
-        timeSavedPerDay: `${Math.round((aiBoosted * 15) / days)} min`,
-        estimatedHoursSaved: ((aiBoosted * 0.25) / days).toFixed(2),
+        timeSavedPerDay: `${Math.round((aiBoosted * 15) / effectiveDays)} min`,
+        estimatedHoursSaved: ((aiBoosted * 0.25) / effectiveDays).toFixed(2),
       },
       recommendations: generateAgentRecommendations(
         resolvedTickets,
@@ -295,6 +303,39 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
     };
   } catch (error) {
     logger.error({ error, agentId }, "Error calculating agent stats");
+    return null;
+  }
+};
+
+/**
+ * Get quick-assist payload for ticket with one ticket fetch.
+ * @param {string} ticketId - Ticket ID
+ * @returns {Promise<Object|null>} Combined suggestion, summary and actions
+ */
+export const generateQuickAssist = async (ticketId) => {
+  try {
+    const ticket = await aiRepo.getTicketWithComments(ticketId);
+
+    if (!ticket) {
+      logger.warn({ ticketId }, "Ticket not found for quick assist");
+      return null;
+    }
+
+    const [suggestion, summary, actions] = await Promise.all([
+      generateAgentSuggestionFromTicket(ticket),
+      generateTicketSummaryFromTicket(ticket),
+      generateSuggestedActionsFromTicket(ticket),
+    ]);
+
+    return {
+      ticketId,
+      suggestion,
+      summary,
+      actions,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    logger.error({ error, ticketId }, "Error generating quick assist");
     throw error;
   }
 };
@@ -304,6 +345,7 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
  * @private
  */
 const calculateSuggestionQuality = (suggestion) => {
+  const normalizedSuggestion = toLowerText(suggestion);
   let quality = "fair";
   let confidence = 0.5;
   const factors = [];
@@ -316,20 +358,13 @@ const calculateSuggestionQuality = (suggestion) => {
   }
 
   // Check for clarity
-  if (
-    !suggestion.toLowerCase().includes("unclear") &&
-    !suggestion.toLowerCase().includes("unsure")
-  ) {
+  if (!containsAnyKeyword(normalizedSuggestion, ["unclear", "unsure"])) {
     confidence += 0.1;
     factors.push("clear response");
   }
 
   // Check for actionability
-  if (
-    suggestion.toLowerCase().includes("please") ||
-    suggestion.toLowerCase().includes("try") ||
-    suggestion.toLowerCase().includes("can you")
-  ) {
+  if (containsAnyKeyword(normalizedSuggestion, ["please", "try", "can you"])) {
     quality = "excellent";
     confidence += 0.2;
     factors.push("actionable");
@@ -337,7 +372,7 @@ const calculateSuggestionQuality = (suggestion) => {
 
   // Penalize for generic responses
   if (
-    suggestion.toLowerCase().includes("sorry for the inconvenience") &&
+    containsAnyKeyword(normalizedSuggestion, ["sorry for the inconvenience"]) &&
     suggestion.length < 100
   ) {
     quality = "fair";
@@ -428,7 +463,9 @@ const generateTimeline = (ticket) => {
  * @private
  */
 const analyzeCustomerSentiment = (comments) => {
-  const userComments = comments.filter((c) => c.authorType === "USER");
+  const userComments = getTicketComments({ comments }).filter(
+    (c) => c.authorType === "USER",
+  );
 
   if (userComments.length === 0) return "neutral";
 
@@ -454,7 +491,7 @@ const analyzeCustomerSentiment = (comments) => {
   ];
 
   userComments.forEach((c) => {
-    const lower = c.message.toLowerCase();
+    const lower = toLowerText(c.message);
     positive.forEach((word) => {
       if (lower.includes(word)) positiveKeywords++;
     });
@@ -499,11 +536,10 @@ const calculateAvgResponseTime = (tickets) => {
   let count = 0;
 
   tickets.forEach((ticket) => {
-    if (ticket.comments.length > 1) {
-      const userComments = ticket.comments.filter(
-        (c) => c.authorType === "USER",
-      );
-      const agentComments = ticket.comments.filter(
+    const comments = getTicketComments(ticket);
+    if (comments.length > 1) {
+      const userComments = comments.filter((c) => c.authorType === "USER");
+      const agentComments = comments.filter(
         (c) => c.authorType !== "USER" && c.authorType !== "AI",
       );
 
