@@ -30,48 +30,63 @@ export const generateAgentSuggestion = async (ticketId) => {
       return null;
     }
 
-    // Get the last user comment
-    const lastUserComment = [...ticket.comments]
-      .reverse()
-      .find((c) => c.authorType === "USER");
-
-    if (!lastUserComment) {
-      logger.warn({ ticketId }, "No user comment found");
-      return null;
-    }
-
-    // Build context for agent
-    const context = buildAgentContext(ticket, lastUserComment);
-
-    logger.info({ ticketId }, "Generating agent suggestion");
-
-    // Call AI with agent-optimized prompt
-    const suggestion = await generateAIResponse({
-      ticketId: ticket.id,
-      context,
-      systemPrompt: getAgentSystemPrompt(),
-    });
-
-    // Calculate quality metrics
-    const metrics = calculateSuggestionQuality(suggestion);
-
-    logger.info(
-      { ticketId, quality: metrics.quality },
-      "Agent suggestion generated",
-    );
-
-    return {
-      ticketId: ticket.id,
-      suggestion,
-      quality: metrics.quality, // "excellent" | "good" | "fair"
-      confidence: metrics.confidence,
-      reasoning: metrics.reasoning,
-      copySuggestion: `Copy & Customize: ${suggestion.substring(0, 50)}...`,
-    };
+    return await generateAgentSuggestionFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating agent suggestion");
+    throw error;
+  }
+};
+
+/**
+ * Generate suggested reply from a pre-fetched ticket.
+ * @param {Object|null} ticket - Ticket with comments
+ * @returns {Promise<Object|null>} Suggested reply with confidence
+ */
+export const generateAgentSuggestionFromTicket = async (ticket) => {
+  if (!ticket) {
     return null;
   }
+
+  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+
+  // Get the last user comment
+  const lastUserComment = [...comments]
+    .reverse()
+    .find((c) => c.authorType === "USER");
+
+  if (!lastUserComment) {
+    logger.warn({ ticketId: ticket.id }, "No user comment found");
+    return null;
+  }
+
+  // Build context for agent
+  const context = buildAgentContext(ticket, lastUserComment);
+
+  logger.info({ ticketId: ticket.id }, "Generating agent suggestion");
+
+  // Call AI with agent-optimized prompt
+  const suggestion = await generateAIResponse({
+    ticketId: ticket.id,
+    context,
+    systemPrompt: getAgentSystemPrompt(),
+  });
+
+  // Calculate quality metrics
+  const metrics = calculateSuggestionQuality(suggestion);
+
+  logger.info(
+    { ticketId: ticket.id, quality: metrics.quality },
+    "Agent suggestion generated",
+  );
+
+  return {
+    ticketId: ticket.id,
+    suggestion,
+    quality: metrics.quality, // "excellent" | "good" | "fair"
+    confidence: metrics.confidence,
+    reasoning: metrics.reasoning,
+    copySuggestion: `Copy & Customize: ${suggestion.substring(0, 50)}...`,
+  };
 };
 
 /**
@@ -89,34 +104,49 @@ export const generateTicketSummary = async (ticketId) => {
       return null;
     }
 
-    logger.info({ ticketId }, "Generating ticket summary");
-
-    const summary = await generateAISummary(ticket.comments);
-
-    // Extract key information
-    const keyInfo = extractKeyInformation(ticket);
-
-    logger.info(
-      { ticketId, summaryLength: summary.length },
-      "Ticket summary generated",
-    );
-
-    return {
-      ticketId: ticket.id,
-      title: ticket.title,
-      issue: generateIssueSummary(ticket, summary),
-      timeline: generateTimeline(ticket),
-      keyPoints: keyInfo.keyPoints,
-      attemptedSolutions: keyInfo.attemptedSolutions,
-      nextSteps: keyInfo.nextSteps,
-      customerSentiment: analyzeCustomerSentiment(ticket.comments),
-      priority: ticket.priority,
-      age: calculateTicketAge(ticket.createdAt),
-    };
+    return await generateTicketSummaryFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating summary");
+    throw error;
+  }
+};
+
+/**
+ * Generate conversation summary from a pre-fetched ticket.
+ * @param {Object|null} ticket - Ticket with comments
+ * @returns {Promise<Object|null>} Summary with key information
+ */
+export const generateTicketSummaryFromTicket = async (ticket) => {
+  if (!ticket) {
     return null;
   }
+
+  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+
+  logger.info({ ticketId: ticket.id }, "Generating ticket summary");
+
+  const summary = await generateAISummary(comments);
+
+  // Extract key information
+  const keyInfo = extractKeyInformation({ ...ticket, comments });
+
+  logger.info(
+    { ticketId: ticket.id, summaryLength: summary.length },
+    "Ticket summary generated",
+  );
+
+  return {
+    ticketId: ticket.id,
+    title: ticket.title,
+    issue: generateIssueSummary(ticket, summary),
+    timeline: generateTimeline(ticket),
+    keyPoints: keyInfo.keyPoints,
+    attemptedSolutions: keyInfo.attemptedSolutions,
+    nextSteps: keyInfo.nextSteps,
+    customerSentiment: analyzeCustomerSentiment(comments),
+    priority: ticket.priority,
+    age: calculateTicketAge(ticket.createdAt),
+  };
 };
 
 /**
@@ -128,82 +158,91 @@ export const generateTicketSummary = async (ticketId) => {
 export const generateSuggestedActions = async (ticketId) => {
   try {
     const ticket = await aiRepo.getTicket(ticketId);
-
-    if (!ticket) {
-      return [];
-    }
-
-    const actions = [];
-
-    // Check for patterns
-    const commentCount = ticket.comments.length;
-    const hasAttachments = ticket.comments.some(
-      (c) => c.attachments && c.attachments.length > 0,
-    );
-    const lastComment = ticket.comments[ticket.comments.length - 1];
-    const ticketAge = Date.now() - ticket.createdAt.getTime();
-
-    // Action 1: Escalation check
-    if (
-      ticketAge > 86400000 && // > 24 hours
-      commentCount > 3 &&
-      ticket.status === "OPEN"
-    ) {
-      actions.push({
-        rank: 1,
-        actionType: "escalate",
-        title: "Consider escalation",
-        description:
-          "Ticket is 24+ hours old with multiple comments. May need supervisor review.",
-        priority: "HIGH",
-      });
-    }
-
-    // Action 2: Attachment request
-    if (!hasAttachments && ticket.priority === "HIGH") {
-      actions.push({
-        rank: 2,
-        actionType: "request_attachment",
-        title: "Request more information",
-        description:
-          "High priority ticket without attachments. Ask for logs/screenshots.",
-        priority: "MEDIUM",
-      });
-    }
-
-    // Action 3: Schedule follow-up
-    if (commentCount > 5) {
-      actions.push({
-        rank: 3,
-        actionType: "schedule_followup",
-        title: "Schedule follow-up",
-        description:
-          "Complex issue with multiple back-and-forths. Schedule dedicated call.",
-        priority: "MEDIUM",
-      });
-    }
-
-    // Action 4: Knowledge base search
-    if (lastComment?.authorType === "USER" && commentCount > 2) {
-      actions.push({
-        rank: 4,
-        actionType: "kb_search",
-        title: "Check knowledge base",
-        description: "Suggested searches: common errors related to this issue.",
-        priority: "LOW",
-      });
-    }
-
-    logger.info(
-      { ticketId, actionCount: actions.length },
-      "Suggested actions generated",
-    );
-
-    return actions;
+    return generateSuggestedActionsFromTicket(ticket);
   } catch (error) {
     logger.error({ error, ticketId }, "Error generating suggested actions");
+    throw error;
+  }
+};
+
+/**
+ * Generate suggested actions from a pre-fetched ticket.
+ * @param {Object|null} ticket - Ticket with comments
+ * @returns {Array} Array of suggested actions
+ */
+export const generateSuggestedActionsFromTicket = (ticket) => {
+  if (!ticket) {
     return [];
   }
+
+  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
+  const actions = [];
+
+  // Check for patterns
+  const commentCount = comments.length;
+  const hasAttachments = comments.some(
+    (c) => c.attachments && c.attachments.length > 0,
+  );
+  const lastComment = comments[comments.length - 1];
+  const ticketAge = Date.now() - ticket.createdAt.getTime();
+
+  // Action 1: Escalation check
+  if (
+    ticketAge > 86400000 && // > 24 hours
+    commentCount > 3 &&
+    ticket.status === "OPEN"
+  ) {
+    actions.push({
+      rank: 1,
+      actionType: "escalate",
+      title: "Consider escalation",
+      description:
+        "Ticket is 24+ hours old with multiple comments. May need supervisor review.",
+      priority: "HIGH",
+    });
+  }
+
+  // Action 2: Attachment request
+  if (!hasAttachments && ticket.priority === "HIGH") {
+    actions.push({
+      rank: 2,
+      actionType: "request_attachment",
+      title: "Request more information",
+      description:
+        "High priority ticket without attachments. Ask for logs/screenshots.",
+      priority: "MEDIUM",
+    });
+  }
+
+  // Action 3: Schedule follow-up
+  if (commentCount > 5) {
+    actions.push({
+      rank: 3,
+      actionType: "schedule_followup",
+      title: "Schedule follow-up",
+      description:
+        "Complex issue with multiple back-and-forths. Schedule dedicated call.",
+      priority: "MEDIUM",
+    });
+  }
+
+  // Action 4: Knowledge base search
+  if (lastComment?.authorType === "USER" && commentCount > 2) {
+    actions.push({
+      rank: 4,
+      actionType: "kb_search",
+      title: "Check knowledge base",
+      description: "Suggested searches: common errors related to this issue.",
+      priority: "LOW",
+    });
+  }
+
+  logger.info(
+    { ticketId: ticket.id, actionCount: actions.length },
+    "Suggested actions generated",
+  );
+
+  return actions;
 };
 
 /**
@@ -256,7 +295,7 @@ export const getAgentAugmentationStats = async (agentId, days = 7) => {
     };
   } catch (error) {
     logger.error({ error, agentId }, "Error calculating agent stats");
-    return null;
+    throw error;
   }
 };
 
