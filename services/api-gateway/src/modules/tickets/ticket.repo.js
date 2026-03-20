@@ -519,3 +519,23 @@ export const deleteTicketAttachment = async (attachmentId) => {
     },
   });
 };
+
+export const getOrganizationTicketsWithAIMetrics = async (
+  organizationId,
+  since,
+) => {
+  return prisma.ticket.findMany({
+    where: {
+      organizationId,
+      createdAt: { gte: since },
+    },
+    select: {
+      id: true,
+      status: true,
+      comments: {
+        where: { authorType: "AI" },
+        select: { id: true },
+      },
+    },
+  });
+};

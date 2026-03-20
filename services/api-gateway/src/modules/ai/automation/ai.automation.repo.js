@@ -213,31 +213,6 @@ export const getAgentTickets = async (agentId, since) => {
 };
 
 /**
- * Get organization tickets with AI activity
- * @param {string} organizationId - Organization ID
- * @param {Date} since - Start date
- * @returns {Promise<Array>} Tickets with AI activity
- */
-export const getOrganizationTickets = async (organizationId, since) => {
-  try {
-    return await prisma.ticket.findMany({
-      where: {
-        organizationId,
-        createdAt: { gte: since },
-      },
-      include: {
-        comments: {
-          where: { authorType: "AI" },
-        },
-      },
-    });
-  } catch (error) {
-    logger.error({ error, organizationId }, "Error fetching org tickets");
-    throw error;
-  }
-};
-
-/**
  * Get ticket AI metadata
  * @param {string} ticketId - Ticket ID
  * @returns {Promise<Object>} { aiActive, aiMessageCount, status, priority }

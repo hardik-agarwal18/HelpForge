@@ -43,7 +43,4 @@ router.get("/config", getConfig);
 // DLQ inspection endpoint
 router.get("/queue/dlq", getDLQInspection);
 
-// Statistics endpoint
-router.get("/stats/:organizationId", getStats);
-
 export default router;
