@@ -25,26 +25,12 @@ import {
 
 const router = express.Router();
 
-router.post(
-  "/",
-  authenticate,
-  validate(createOrganizationSchema),
-  createOrganizationController,
-);
 router.get("/", authenticate, getOrganizationsByUserIdController);
 router.get(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
   getOrganizationByIdController,
-);
-router.patch(
-  "/:orgId",
-  authenticate,
-  verifyOrganizationMembership,
-  requireOwnerOrAdmin,
-  validate(updateOrganizationSchema),
-  updateOrganizationController,
 );
 
 router.delete(

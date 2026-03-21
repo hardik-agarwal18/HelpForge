@@ -1,22 +1,5 @@
 import prisma from "../../config/database.config.js";
 
-export const createOrganization = async (name, userId) => {
-  return await prisma.organization.create({
-    data: {
-      name,
-      memberships: {
-        create: {
-          userId,
-          role: "OWNER",
-        },
-      },
-    },
-    include: {
-      memberships: true,
-    },
-  });
-};
-
 export const getOrganizationsByUserId = async (userId) => {
   return await prisma.organization.findMany({
     where: {
@@ -25,17 +8,6 @@ export const getOrganizationsByUserId = async (userId) => {
           userId,
         },
       },
-    },
-  });
-};
-
-export const patchOrganization = async (orgId, name) => {
-  return await prisma.organization.update({
-    where: {
-      id: orgId,
-    },
-    data: {
-      name,
     },
   });
 };

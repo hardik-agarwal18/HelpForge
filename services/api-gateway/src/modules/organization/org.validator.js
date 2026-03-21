@@ -4,11 +4,18 @@ import { ROLE_POLICIES } from "./org.constants.js";
 const roleValues = Object.keys(ROLE_POLICIES);
 
 export const createOrganizationSchema = z.object({
-  name: z.string().min(1, "Organization name is required"),
+  body: z.object({
+    name: z.string().min(1, "Organization name is required"),
+  }),
 });
 
 export const updateOrganizationSchema = z.object({
-  name: z.string().min(1, "Organization name is required"),
+  body: z.object({
+    name: z.string().min(1, "Organization name is required"),
+  }),
+  params: z.object({
+    orgId: z.string().uuid("Invalid organization ID"),
+  }),
 });
 
 export const inviteMemberSchema = z.object({
