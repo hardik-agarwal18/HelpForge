@@ -1,10 +1,12 @@
 import express from "express";
 import {
   createOrganizationController,
+  deleteOrganizationController,
   updateOrganizationController,
 } from "../controllers/org.Controller";
 import {
   createOrganizationSchema,
+  deleteOrganizationSchema,
   updateOrganizationSchema,
 } from "../org.validator";
 import { authenticate } from "../../../middleware/auth.middleware";
@@ -28,4 +30,14 @@ router.patch(
   requireOwner,
   updateOrganizationController,
 );
+
+router.delete(
+  "/:orgId",
+  authenticate,
+  validate(deleteOrganizationSchema),
+  verifyOrganizationMembership,
+  requireOwner,
+  deleteOrganizationController,
+);
+
 export default router;

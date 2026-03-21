@@ -1,6 +1,7 @@
 import { ApiError } from "../../../utils/errorHandler";
 import {
   createOrganization,
+  deleteOrganization,
   findOrganizationByOwner,
   patchOrganization,
 } from "../repos/org.Repo";
@@ -28,4 +29,14 @@ export const updateOrganizationService = async ({ orgId, name }) => {
   }
 
   return updatedOrganization;
+};
+
+export const deleteOrganizationService = async ({ orgId }) => {
+  const deletedOrganization = await deleteOrganization({ orgId });
+
+  if (!deletedOrganization || !deletedOrganization.id) {
+    throw new ApiError(500, "Failed to delete organization");
+  }
+
+  return deletedOrganization;
 };

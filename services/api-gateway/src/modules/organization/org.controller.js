@@ -32,22 +32,6 @@ export const getOrganizationByIdController = async (req, res, next) => {
   }
 };
 
-export const deleteOrganizationController = async (req, res, next) => {
-  try {
-    const orgId = req.params.orgId;
-
-    const deletedOrganization = await deleteOrganizationService(orgId);
-
-    return res.status(200).json({
-      success: true,
-      message: "Organization deleted successfully",
-      data: { organization: deletedOrganization },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 export const inviteMemberInOrganizationController = async (req, res, next) => {
   try {
     const orgId = req.params.orgId;

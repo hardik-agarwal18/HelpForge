@@ -33,14 +33,6 @@ router.get(
   getOrganizationByIdController,
 );
 
-router.delete(
-  "/:orgId",
-  authenticate,
-  verifyOrganizationMembership,
-  requireOwner,
-  deleteOrganizationController,
-);
-
 //Organization Member Routes
 
 router.post(

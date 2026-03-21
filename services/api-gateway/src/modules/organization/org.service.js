@@ -75,16 +75,6 @@ export const getOrganizationByUserIdService = async (userId) => {
   return organizations || [];
 };
 
-export const deleteOrganizationService = async (orgId) => {
-  const deletedOrganization = await deleteOrganization(orgId);
-
-  if (!deletedOrganization || !deletedOrganization.id) {
-    throw new ApiError(500, "Failed to delete organization");
-  }
-
-  return deletedOrganization;
-};
-
 export const inviteMemberInOrganizationService = async (
   orgId,
   userId,

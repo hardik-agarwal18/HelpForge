@@ -17,6 +17,11 @@ export const updateOrganizationSchema = z.object({
     orgId: z.string().uuid("Invalid organization ID"),
   }),
 });
+export const deleteOrganizationSchema = z.object({
+  params: z.object({
+    orgId: z.string().uuid("Invalid organization ID"),
+  }),
+});
 
 export const inviteMemberSchema = z.object({
   userId: z.string().min(1, "User ID is required"),

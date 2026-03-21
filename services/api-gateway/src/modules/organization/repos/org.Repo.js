@@ -43,3 +43,20 @@ export const findOrganizationByOwner = async ({ userId }) => {
     },
   });
 };
+
+export const deleteOrganization = async ({ orgId }) => {
+  return await prisma.$transaction(async (tx) => {
+    // Delete memberships and organization together so we never leave an org orphaned.
+    await tx.membership.deleteMany({
+      where: {
+        organizationId: orgId,
+      },
+    });
+
+    return await tx.organization.delete({
+      where: {
+        id: orgId,
+      },
+    });
+  });
+};

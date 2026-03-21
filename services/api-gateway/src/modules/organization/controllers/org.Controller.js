@@ -1,5 +1,6 @@
 import {
   createOrganizationService,
+  deleteOrganizationService,
   updateOrganizationService,
 } from "../services/org.Service";
 
@@ -31,6 +32,22 @@ export const updateOrganizationController = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: updatedOrganization,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteOrganizationController = async (req, res, next) => {
+  try {
+    const orgId = req.params.orgId;
+
+    const deletedOrganization = await deleteOrganizationService({ orgId });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization deleted successfully",
+      data: deletedOrganization,
     });
   } catch (error) {
     next(error);
