@@ -3,7 +3,10 @@ RAG Pipeline  (production-hardened)
 ─────────────────────────────────────
 Full pipeline for one conversation turn:
 
-  [INPUT GUARD]  sanitize_input()         ← blocks injection attempts
+  [GUARD]        sanitize_input()         ← blocks injection attempts
+  [ROUTER]       query_router.classify()  ← short-circuit cheap query types
+                   SMALL_TALK / ACTION → return canned response immediately
+                   FAQ / COMPLAINT / UNKNOWN → continue pipeline
   [RETRIEVE]     hybrid retriever          ← dense + keyword, RRF merge
   [RE-RANK]      LLM re-ranker            ← filters noise from top-K
   [MEMORY]       load conversation window ← Redis, with summarization
@@ -23,6 +26,7 @@ from app.memory.summarizer import summarizer
 from app.memory.ticket_memory import ticket_memory
 from app.observability.metrics import MetricsCollector
 from app.rag.prompt_builder import prompt_builder
+from app.rag.query_router import QueryType, query_router
 from app.rag.reranker import reranker
 from app.rag.retriever import retriever
 from app.security.guardrails import guardrails
@@ -66,7 +70,29 @@ class RAGPipeline:
 
         clean_message = guard.safe_value
 
-        # ── 2. Hybrid retrieval ───────────────────────────────────────────
+        # ── 2. Query routing ──────────────────────────────────────────────
+        m.start("routing")
+        route = await query_router.classify(org_id, clean_message)
+        m.stop("routing")
+        m.record("query_type", route.query_type.value)
+
+        if not route.use_rag:
+            # Short-circuit: canned response, no retrieval, no LLM generation
+            canned = route.canned_response or "How can I help you?"
+            await ticket_memory.add_message(org_id, ticket_id, "user", clean_message)
+            await ticket_memory.add_message(org_id, ticket_id, "assistant", canned)
+            m.increment("short_circuit")
+            m.emit(org_id=org_id, ticket_id=ticket_id, query_type=route.query_type.value)
+            return {
+                "response": canned,
+                "sources": [],
+                "usage": {},
+                "query_type": route.query_type.value,
+                "action": route.extracted_action,
+                "reranked_docs": [],
+            }
+
+        # ── 3. Hybrid retrieval ───────────────────────────────────────────
         m.start("retrieval")
         retrieved_docs = await retriever.retrieve(
             org_id=org_id,
@@ -76,7 +102,7 @@ class RAGPipeline:
         m.stop("retrieval")
         m.record("retrieved_count", len(retrieved_docs))
 
-        # ── 3. Re-rank ────────────────────────────────────────────────────
+        # ── 4. Re-rank ────────────────────────────────────────────────────
         m.start("rerank")
         reranked_docs = await reranker.rerank(
             org_id=org_id,
@@ -149,13 +175,19 @@ class RAGPipeline:
         ]
 
         # ── 10. Emit metrics ──────────────────────────────────────────────
-        m.emit(org_id=org_id, ticket_id=ticket_id, source_count=len(sources))
+        m.emit(
+            org_id=org_id, ticket_id=ticket_id,
+            source_count=len(sources),
+            query_type=route.query_type.value,
+        )
 
         return {
             "response": response_text,
             "sources": sources,
             "usage": usage,
             "reranked_docs": reranked_docs,  # passed to chat_service for confidence
+            "query_type": route.query_type.value,
+            "action": route.extracted_action,
         }
 
     # ── Streaming ─────────────────────────────────────────────────────────
@@ -181,6 +213,15 @@ class RAGPipeline:
             return
 
         clean_message = guard.safe_value
+
+        # Router short-circuit (same logic as run())
+        route = await query_router.classify(org_id, clean_message)
+        if not route.use_rag:
+            canned = route.canned_response or "How can I help you?"
+            await ticket_memory.add_message(org_id, ticket_id, "user", clean_message)
+            await ticket_memory.add_message(org_id, ticket_id, "assistant", canned)
+            yield canned
+            return
 
         # Retrieval + re-rank (same as run())
         retrieved_docs = await retriever.retrieve(org_id=org_id, query=clean_message)
