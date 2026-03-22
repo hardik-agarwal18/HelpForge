@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
     vector_size: int = 1536           # OpenAI text-embedding-ada-002
+    embedding_version: str = "v1"     # Bump when switching embedding models
 
     # ── RAG ───────────────────────────────────────────────────────────────
     top_k_retrieval: int = 5

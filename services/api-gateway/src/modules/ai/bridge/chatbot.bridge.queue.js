@@ -19,6 +19,7 @@ export const CHATBOT_BRIDGE_QUEUE = "chatbot-bridge";
 export const JOB_PROCESS_DOCUMENT = "process-document";
 export const JOB_EMBED_TEXTS = "embed-texts";
 export const JOB_ANALYZE_FEEDBACK = "analyze-feedback";
+export const JOB_RE_EMBED_ORG = "re-embed-org";
 
 // ── Queue singleton ───────────────────────────────────────────────────────────
 let queue;
@@ -106,5 +107,38 @@ export const enqueueAnalyzeFeedback = async (orgId, feedbackData = {}) => {
     feedback_data: feedbackData,
   });
 
+  return { queued: true, jobId: job.id };
+};
+
+/**
+ * Queue an embedding version migration for an org.
+ * Triggers a background scroll of the org's Qdrant collection and re-embeds
+ * all chunks whose `embedding_version` does not match the current model version.
+ *
+ * @param {string} orgId
+ * @param {Object} [options]
+ * @param {string} [options.targetVersion]  - Override the target version (default: server setting)
+ */
+export const enqueueReEmbedOrg = async (orgId, options = {}) => {
+  const q = getQueue();
+  if (!q) {
+    logger.warn("Chatbot bridge queue disabled — REDIS_URL not set");
+    return { queued: false };
+  }
+
+  const job = await q.add(
+    JOB_RE_EMBED_ORG,
+    {
+      org_id: orgId,
+      target_version: options.targetVersion ?? null,
+    },
+    {
+      // Migration jobs are long-running; keep a smaller completed history
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 100 },
+    },
+  );
+
+  logger.info({ jobId: job.id, orgId }, "Queued re-embed-org job");
   return { queued: true, jobId: job.id };
 };

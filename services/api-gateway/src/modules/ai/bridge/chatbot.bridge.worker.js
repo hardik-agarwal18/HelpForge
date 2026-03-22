@@ -21,6 +21,7 @@ import {
   JOB_ANALYZE_FEEDBACK,
   JOB_EMBED_TEXTS,
   JOB_PROCESS_DOCUMENT,
+  JOB_RE_EMBED_ORG,
 } from "./chatbot.bridge.queue.js";
 
 const CHATBOT_URL = config.services.chatbot || "http://chatbot-service:8000";
@@ -66,6 +67,11 @@ const handlers = {
   [JOB_ANALYZE_FEEDBACK]: async (data) => {
     logger.info({ orgId: data.org_id }, "Analyzing feedback");
     return callChatbot("/internal/analyze-feedback", data);
+  },
+
+  [JOB_RE_EMBED_ORG]: async (data) => {
+    logger.info({ orgId: data.org_id, targetVersion: data.target_version }, "Re-embedding stale vectors");
+    return callChatbot("/internal/re-embed-org", data);
   },
 };
 

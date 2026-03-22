@@ -90,3 +90,16 @@ class AnalyzeFeedbackRequest(BaseModel):
 class AnalyzeFeedbackResponse(BaseModel):
     org_id: str
     stats: Dict[str, Any]
+
+
+class ReEmbedOrgRequest(BaseModel):
+    org_id: str
+    target_version: Optional[str] = None  # defaults to settings.embedding_version
+
+
+class ReEmbedOrgResponse(BaseModel):
+    org_id: str
+    stale_chunks_found: int
+    chunks_re_embedded: int
+    errors: int
+    status: str  # "up_to_date" | "completed" | "completed_with_errors"

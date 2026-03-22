@@ -68,16 +68,21 @@ class QdrantVectorStore:
             logger.info("Created Qdrant collection: %s", name)
 
         # Ensure full-text index on `text` payload field for keyword search.
+        # Ensure keyword index on `embedding_version` for stale-chunk scrolls.
         # create_payload_index is idempotent — safe to call every time.
-        try:
-            await self.client.create_payload_index(
-                collection_name=name,
-                field_name="text",
-                field_schema=PayloadSchemaType.TEXT,
-            )
-        except Exception:
-            # Index may already exist — Qdrant raises on duplicate, just ignore
-            pass
+        for field_name, schema in (
+            ("text", PayloadSchemaType.TEXT),
+            ("embedding_version", PayloadSchemaType.KEYWORD),
+        ):
+            try:
+                await self.client.create_payload_index(
+                    collection_name=name,
+                    field_name=field_name,
+                    field_schema=schema,
+                )
+            except Exception:
+                # Index may already exist — Qdrant raises on duplicate, just ignore
+                pass
 
     # ── Write ──────────────────────────────────────────────────────────────
 
@@ -171,6 +176,50 @@ class QdrantVectorStore:
                 must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
             ),
         )
+
+    # ── Migration support ──────────────────────────────────────────────────
+
+    async def scroll_stale_chunks(
+        self,
+        org_id: str,
+        current_version: str,
+        batch_size: int = 100,
+    ) -> list[dict[str, Any]]:
+        """
+        Return all points in the org's collection whose `embedding_version`
+        payload field does NOT equal `current_version`.
+
+        Uses Qdrant's `must_not` filter — only efficient when the
+        `embedding_version` keyword index exists (created in ensure_collection).
+        """
+        stale_filter = Filter(
+            must_not=[
+                FieldCondition(
+                    key="embedding_version",
+                    match=MatchValue(value=current_version),
+                )
+            ]
+        )
+
+        stale_points: list[dict[str, Any]] = []
+        next_offset = None
+
+        while True:
+            result, next_offset = await self.client.scroll(
+                collection_name=self._collection(org_id),
+                scroll_filter=stale_filter,
+                limit=batch_size,
+                offset=next_offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            stale_points.extend(
+                {"id": str(p.id), "payload": p.payload or {}} for p in result
+            )
+            if next_offset is None:
+                break
+
+        return stale_points
 
     # ── Helpers ────────────────────────────────────────────────────────────
 

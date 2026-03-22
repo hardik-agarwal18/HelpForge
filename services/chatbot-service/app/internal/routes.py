@@ -21,9 +21,12 @@ from app.models.schemas import (
     EmbedResponse,
     ProcessDocumentRequest,
     ProcessDocumentResponse,
+    ReEmbedOrgRequest,
+    ReEmbedOrgResponse,
 )
 from app.services.document_service import document_service
 from app.services.feedback_service import feedback_service
+from app.services.migration_service import migration_service
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 logger = logging.getLogger(__name__)
@@ -86,3 +89,18 @@ async def analyze_feedback(
     """
     stats = await feedback_service.get_stats(request.org_id)
     return AnalyzeFeedbackResponse(org_id=request.org_id, stats=stats)
+
+
+@router.post(
+    "/re-embed-org",
+    response_model=ReEmbedOrgResponse,
+    dependencies=_INTERNAL,
+)
+async def re_embed_org(request: ReEmbedOrgRequest) -> ReEmbedOrgResponse:
+    """
+    Called by Node worker after `re-embed-org` BullMQ job.
+    Scrolls the org's Qdrant collection for chunks with a stale
+    `embedding_version`, re-embeds them in-place with the current model,
+    and returns counts for observability.
+    """
+    return await migration_service.run_migration(request)

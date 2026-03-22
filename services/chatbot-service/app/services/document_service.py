@@ -9,6 +9,7 @@ Re-indexing: existing vectors for the same document_id are deleted first.
 
 import logging
 
+from app.config.settings import settings
 from app.embeddings.embedder import embedder
 from app.models.schemas import (
     EmbedRequest,
@@ -37,6 +38,7 @@ class DocumentService:
             "document_id": request.document_id,
             "org_id": request.org_id,
             "source": request.metadata.get("filename", request.document_id),
+            "embedding_version": settings.embedding_version,
             **request.metadata,
         }
 
