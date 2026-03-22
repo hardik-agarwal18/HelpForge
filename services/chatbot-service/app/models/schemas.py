@@ -103,3 +103,38 @@ class ReEmbedOrgResponse(BaseModel):
     chunks_re_embedded: int
     errors: int
     status: str  # "up_to_date" | "completed" | "completed_with_errors"
+
+
+# ─── Unified Agent (called by internal agent routes) ──────────────────────────
+
+class AgentRequest(BaseModel):
+    """
+    Internal request to the unified agent.
+    Used by the automation route (BullMQ bridge) and augmentation route.
+    """
+    org_id: str
+    ticket_id: str
+    user_id: Optional[str] = None
+    mode: str  # "chat" | "automation" | "augmentation"
+    query: str
+    ticket_context: Dict[str, Any] = {}
+    rag_context: Optional[str] = None
+    history: Optional[List[Dict[str, Any]]] = None
+    extra: Dict[str, Any] = {}  # event_type, agent_id, etc.
+
+
+class AgentResponse(BaseModel):
+    """
+    Unified agent decision result.
+    Mirrors AgentDecision — kept as a separate schema so callers
+    don't need to import from the agent package.
+    """
+    mode: str
+    action: str          # respond | tool_call | escalate | suggest
+    tool: Optional[str] = None
+    tool_input: Dict[str, Any] = {}
+    confidence: float
+    reasoning: str
+    message: str
+    tool_result: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = {}

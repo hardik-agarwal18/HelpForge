@@ -1,27 +1,26 @@
 """
-Chat Service  (multi-signal confidence)
-────────────────────────────────────────
-Wraps the RAG pipeline and makes the action decision that gets sent back
-to the API Gateway (auto_resolve / suggest / escalate / none).
+Chat Service  (unified agent integration)
+──────────────────────────────────────────
+Wraps the unified agent for CHAT mode and translates AgentDecision back into
+the ChatResponse shape that the public chat endpoint expects.
 
-Confidence is now a weighted combination of three independent signals:
+Agent flow (replaces direct RAG pipeline call):
+  1. Build AgentInput from ChatRequest
+  2. Call unified_agent.run(inp) → AgentDecision
+     (agent handles RAG retrieval, memory, LLM decision, tool execution)
+  3. Map AgentDecision → ChatResponse (action mapping below)
+  4. Write memory for streaming (agent handles it for non-streaming)
 
-  Signal 1 — Retrieval quality  (40%)
-    Average Qdrant similarity score of returned sources.
-    If re-ranker scores are present, they carry 40% weight within this signal
-    (they are a stronger quality indicator than raw vector distance).
+Action mapping (AgentDecision → ChatResponse.action):
+  respond    → "none"         (answered; no ticket-level action needed)
+  tool_call  → "none"         (tool was already executed by agent)
+  escalate   → "escalate"
+  suggest    → "suggest"
 
-  Signal 2 — Answer completeness  (30%)
-    Proxy for how thorough the response is.  Very short responses are likely
-    "I don't know" answers; very long ones may be rambling.
-
-  Signal 3 — Certainty  (30%)
-    Inverse of uncertainty hedge-phrase density.
-    Each detected phrase ("I'm not sure", "might be", etc.) reduces this
-    signal by 15 pp, floored at 0.
-
-Final confidence = 0.40 × sig1 + 0.30 × sig2 + 0.30 × sig3
-Clamped to [0.0, 1.0].
+Confidence is taken directly from AgentDecision.confidence — which is now
+set by the LLM itself (0–1 range) rather than computed from heuristics.
+The old threshold constants are preserved in settings for the automation
+service which still uses the legacy flow.
 """
 
 import logging
@@ -55,48 +54,54 @@ _UNCERTAINTY_PHRASES: list[str] = [
 
 
 class ChatService:
-    # ── Standard request/response ─────────────────────────────────────────
+    # ── Standard request/response (agent-powered) ─────────────────────────
 
     async def handle_message(self, request: ChatRequest) -> ChatResponse:
+        """
+        Route through the unified agent in CHAT mode.
+
+        The agent handles: input guard → RAG → memory → LLM decision →
+        optional tool execution → output guard → metrics.
+        """
+        from app.agent.agent import unified_agent
+        from app.agent.schema import AgentInput, AgentMode
+
         ticket_context = self._build_ticket_context(request)
 
-        result = await rag_pipeline.run(
+        inp = AgentInput(
+            mode=AgentMode.CHAT,
             org_id=request.org_id,
             ticket_id=request.ticket_id,
-            user_message=request.message,
+            user_id=request.user_id,
+            query=request.message,
             ticket_context=ticket_context,
-            mode=request.mode,
         )
 
-        # Pipeline blocked the request (injection / empty)
-        if result.get("blocked"):
-            return ChatResponse(
-                ticket_id=request.ticket_id,
-                message=result["response"],
-                confidence=0.0,
-                action="none",
-                sources=[],
-            )
+        decision = await unified_agent.run(inp)
 
-        confidence = self._calculate_confidence(
-            sources=result["sources"],
-            reranked_docs=result.get("reranked_docs", []),
-            response=result["response"],
-        )
-        action = self._decide_action(confidence)
+        # Map AgentAction → ChatResponse.action
+        action = self._map_action(decision.action.value)
 
         logger.info(
-            "Chat: ticket=%s, confidence=%.3f, action=%s, sources=%d",
-            request.ticket_id, confidence, action, len(result["sources"]),
+            "Chat (agent): ticket=%s confidence=%.3f action=%s tool=%s",
+            request.ticket_id, decision.confidence, action, decision.tool,
         )
+
+        # Sources come from agent metadata if the agent ran retrieval
+        sources = decision.metadata.get("sources", [])
 
         return ChatResponse(
             ticket_id=request.ticket_id,
-            message=result["response"],
-            confidence=confidence,
+            message=decision.message,
+            confidence=decision.confidence,
             action=action,
-            sources=result["sources"],
-            metadata={"usage": result.get("usage", {})},
+            sources=sources,
+            metadata={
+                "usage": decision.metadata.get("metrics", {}),
+                "reasoning": decision.reasoning,
+                "tool": decision.tool,
+                "tool_result": decision.tool_result,
+            },
         )
 
     # ── SSE streaming ─────────────────────────────────────────────────────
@@ -175,7 +180,23 @@ class ChatService:
 
         return round(min(1.0, max(0.0, confidence)), 4)
 
+    @staticmethod
+    def _map_action(agent_action: str) -> str:
+        """
+        Translate AgentAction values to the ChatResponse action vocabulary.
+
+        ChatResponse callers (API Gateway) understand:
+          auto_resolve | suggest | escalate | none
+        """
+        return {
+            "respond": "none",
+            "tool_call": "none",   # tool was already executed by the agent
+            "escalate": "escalate",
+            "suggest": "suggest",
+        }.get(agent_action, "none")
+
     def _decide_action(self, confidence: float) -> str:
+        """Legacy threshold-based decision — kept for reference and fallback."""
         if confidence >= settings.confidence_auto_resolve:
             return "auto_resolve"
         if confidence >= settings.confidence_suggest:

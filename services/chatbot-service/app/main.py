@@ -40,6 +40,9 @@ async def lifespan(app: FastAPI):
     await ticket_memory.close()
     await summarizer.close()
     await feedback_service.close()
+    # Close agent action gateway client
+    from app.agent.gateway import action_gateway
+    await action_gateway.close()
     logger.info("Chatbot service shutdown complete")
 
 

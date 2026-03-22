@@ -1,0 +1,1 @@
+- [Unified Agent Layer](project_agent_layer.md) — Agent layer implementation details, file locations, integration points, and API Gateway TODOs

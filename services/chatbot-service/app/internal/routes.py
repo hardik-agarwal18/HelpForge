@@ -2,12 +2,19 @@
 Internal Routes
 ────────────────
 These endpoints are NOT exposed publicly.  They are called exclusively by the
-Node.js chatbot bridge worker after consuming a BullMQ job.
+Node.js chatbot bridge worker after consuming a BullMQ job, or by the API
+Gateway's AI modules via service-to-service calls.
 
-Security: three-layer auth via require_internal_auth (see app/security/internal_auth.py):
+Security: four-layer auth via require_internal_auth (see app/security/internal_auth.py):
   1. X-Internal-Token shared secret (supports rotation via previous token)
   2. IP allowlist (CIDR-based, Docker-bridge-aware)
   3. HMAC-SHA256 request signature (replay-attack prevention)
+  4. Nonce cache (replay attack prevention)
+
+Agent endpoints added:
+  POST /internal/agent/run           — unified agent (any mode)
+  POST /internal/agent/automation    — convenience wrapper for AUTOMATION mode
+  POST /internal/agent/augmentation  — convenience wrapper for AUGMENTATION mode
 """
 
 import logging
@@ -15,6 +22,8 @@ import logging
 from fastapi import APIRouter, Depends
 
 from app.models.schemas import (
+    AgentRequest,
+    AgentResponse,
     AnalyzeFeedbackRequest,
     AnalyzeFeedbackResponse,
     EmbedRequest,
@@ -94,3 +103,91 @@ async def re_embed_org(request: ReEmbedOrgRequest) -> ReEmbedOrgResponse:
     and returns counts for observability.
     """
     return await migration_service.run_migration(request)
+
+
+# ── Unified Agent Endpoints ────────────────────────────────────────────────────
+
+@router.post(
+    "/agent/run",
+    response_model=AgentResponse,
+    dependencies=_INTERNAL,
+)
+async def agent_run(request: AgentRequest) -> AgentResponse:
+    """
+    General-purpose unified agent endpoint.
+    Accepts any mode: chat | automation | augmentation.
+
+    Called by:
+      • API Gateway automation module (mode=automation)
+      • API Gateway augmentation module (mode=augmentation)
+      • Direct service-to-service calls that need agent decisions
+    """
+    from app.agent.agent import unified_agent
+    from app.agent.schema import AgentInput, AgentMode
+
+    inp = AgentInput(
+        mode=AgentMode(request.mode),
+        org_id=request.org_id,
+        ticket_id=request.ticket_id,
+        user_id=request.user_id,
+        query=request.query,
+        ticket_context=request.ticket_context,
+        rag_context=request.rag_context,
+        history=request.history,
+        extra=request.extra,
+    )
+
+    decision = await unified_agent.run(inp)
+
+    logger.info(
+        "Agent run: org=%s ticket=%s mode=%s action=%s confidence=%.3f",
+        request.org_id,
+        request.ticket_id,
+        decision.mode,
+        decision.action,
+        decision.confidence,
+    )
+
+    return AgentResponse(
+        mode=decision.mode.value,
+        action=decision.action.value,
+        tool=decision.tool,
+        tool_input=decision.tool_input,
+        confidence=decision.confidence,
+        reasoning=decision.reasoning,
+        message=decision.message,
+        tool_result=decision.tool_result,
+        metadata=decision.metadata,
+    )
+
+
+@router.post(
+    "/agent/automation",
+    response_model=AgentResponse,
+    dependencies=_INTERNAL,
+)
+async def agent_automation(request: AgentRequest) -> AgentResponse:
+    """
+    Convenience endpoint that forces mode=automation.
+    Called by BullMQ bridge worker on every ticket comment event.
+
+    The request.mode field is ignored — automation is always set.
+    """
+    request.mode = "automation"
+    return await agent_run(request)
+
+
+@router.post(
+    "/agent/augmentation",
+    response_model=AgentResponse,
+    dependencies=_INTERNAL,
+)
+async def agent_augmentation(request: AgentRequest) -> AgentResponse:
+    """
+    Convenience endpoint that forces mode=augmentation.
+    Called by API Gateway when a human agent opens a ticket for review.
+
+    The request.mode field is ignored — augmentation is always set.
+    """
+    request.mode = "augmentation"
+    return await agent_run(request)
