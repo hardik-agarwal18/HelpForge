@@ -10,16 +10,21 @@ class Settings(BaseSettings):
 
     # ── API Gateway (all LLM calls go through here) ───────────────────────
     api_gateway_url: str = "http://api-gateway:3000"
-    internal_service_token: str = "change-me-in-production"
 
     # ── Internal API security ─────────────────────────────────────────────
-    # Token rotation: set INTERNAL_PREVIOUS_TOKEN to the old secret during
-    # a rotation window so both tokens are valid simultaneously.
-    internal_previous_token: str = ""
+    # Service registry — comma-separated "service-id:secret" pairs.
+    # Each calling service gets its own identity and token; lets you revoke
+    # or rotate one service without touching others.
+    # Format: "chatbot-bridge-worker:secret1,admin-cli:secret2"
+    # When empty, internal_service_token is used as the global fallback.
+    internal_service_secrets: str = ""
+    # Global fallback token (used when internal_service_secrets is not set).
+    # Keep for backward-compat with dev environments.
+    internal_service_token: str = "change-me-in-production"
     # IP allowlist: comma-separated CIDRs/IPs (e.g. "172.18.0.0/16,10.0.0.1").
     # Empty string disables the check (suitable for local dev).
     internal_allowed_ips: str = ""
-    # HMAC signing: verifies each request was signed by the Node bridge worker.
+    # HMAC signing: verifies each request was signed by the calling service.
     # Disable only in local dev/test — always True in staging/production.
     internal_hmac_enabled: bool = True
     # How many seconds a request timestamp may differ from server time.

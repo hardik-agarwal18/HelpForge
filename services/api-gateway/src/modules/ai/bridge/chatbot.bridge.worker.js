@@ -27,23 +27,27 @@ import {
 
 const CHATBOT_URL = config.services.chatbot || "http://chatbot-service:8000";
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || "change-me-shared-secret";
+const SERVICE_ID = "chatbot-bridge-worker";
 const HMAC_ENABLED = process.env.INTERNAL_HMAC_ENABLED !== "false";
 
 // ── HMAC signing ──────────────────────────────────────────────────────────────
 
 /**
  * Sign a request with HMAC-SHA256.
- * Payload: METHOD\nPATH\nTIMESTAMP_MS\nSHA256(body)
  *
- * The Python service verifies this signature and rejects requests that are:
- *   - missing the headers
- *   - older than INTERNAL_TIMESTAMP_TOLERANCE_SECONDS (default 30 s)
- *   - signed with a different key
+ * Payload: METHOD\nPATH\nSERVICE_ID\nTIMESTAMP_MS\nSHA256(body)
+ *
+ * SERVICE_ID is included so the signature is bound to this service's identity.
+ * A stolen token from another service cannot forge requests as us.
+ *
+ * The Python service verifies the signature and also checks:
+ *   - timestamp freshness (±INTERNAL_TIMESTAMP_TOLERANCE_SECONDS, default 30 s)
+ *   - nonce uniqueness via Redis SET NX (prevents replay within the window)
  */
 const signRequest = (method, path, bodyStr) => {
   const timestampMs = Date.now().toString();
   const bodyHash = createHash("sha256").update(bodyStr).digest("hex");
-  const payload = `${method.toUpperCase()}\n${path}\n${timestampMs}\n${bodyHash}`;
+  const payload = `${method.toUpperCase()}\n${path}\n${SERVICE_ID}\n${timestampMs}\n${bodyHash}`;
   const signature = createHmac("sha256", INTERNAL_TOKEN).update(payload).digest("hex");
   return { timestampMs, signature };
 };
@@ -56,6 +60,7 @@ const callChatbot = async (path, body) => {
 
   const headers = {
     "Content-Type": "application/json",
+    "X-Service-Id": SERVICE_ID,
     "X-Internal-Token": INTERNAL_TOKEN,
   };
 
