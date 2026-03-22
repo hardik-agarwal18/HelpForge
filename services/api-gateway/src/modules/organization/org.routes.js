@@ -1,4 +1,6 @@
 import express from "express";
+import { authenticate } from "../../middleware/auth.middleware.js";
+import { validate } from "../../middleware/validation.middleware.js";
 import {
   createOrganizationController,
   deleteOrganizationController,
@@ -9,54 +11,50 @@ import {
   updateOrganizationController,
   viewAllMembersInOrganizationController,
 } from "./org.controller.js";
-import { validate } from "../../middleware/validation.middleware.js";
-import {
-  createOrganizationSchema,
-  inviteMemberSchema,
-  updateMemberRoleSchema,
-  updateOrganizationSchema,
-} from "./org.validator.js";
-import { authenticate } from "../../middleware/auth.middleware.js";
 import {
   verifyOrganizationMembership,
   requireOwner,
   requireOwnerOrAdmin,
 } from "./org.middleware.js";
+import {
+  createOrganizationSchema,
+  deleteOrganizationSchema,
+  inviteMemberSchema,
+  updateMemberRoleSchema,
+  updateOrganizationSchema,
+} from "./org.validator.js";
 
 const router = express.Router();
 
-router.post(
-  "/",
-  authenticate,
-  validate(createOrganizationSchema),
-  createOrganizationController,
-);
+// Organization CRUD
 router.get("/", authenticate, getOrganizationsByUserIdController);
-router.get(
-  "/:orgId",
-  authenticate,
-  verifyOrganizationMembership,
-  getOrganizationByIdController,
-);
+router.post("/", authenticate, validate(createOrganizationSchema), createOrganizationController);
+
+router.get("/:orgId", authenticate, verifyOrganizationMembership, getOrganizationByIdController);
 router.patch(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
-  requireOwnerOrAdmin,
+  requireOwner,
   validate(updateOrganizationSchema),
   updateOrganizationController,
 );
-
 router.delete(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
   requireOwner,
+  validate(deleteOrganizationSchema),
   deleteOrganizationController,
 );
 
-//Organization Member Routes
-
+// Organization Member Routes
+router.get(
+  "/:orgId/members",
+  authenticate,
+  verifyOrganizationMembership,
+  viewAllMembersInOrganizationController,
+);
 router.post(
   "/:orgId/members",
   authenticate,
@@ -65,14 +63,6 @@ router.post(
   validate(inviteMemberSchema),
   inviteMemberInOrganizationController,
 );
-
-router.get(
-  "/:orgId/members",
-  authenticate,
-  verifyOrganizationMembership,
-  viewAllMembersInOrganizationController,
-);
-
 router.patch(
   "/:orgId/members/:userId",
   authenticate,

@@ -1,4 +1,4 @@
-import prisma from "../../config/database.config.js";
+import { getUserMembershipInOrganization } from "./org.repo.js";
 
 /**
  * Middleware to verify user membership in an organization
@@ -16,17 +16,7 @@ export const verifyOrganizationMembership = async (req, res, next) => {
       });
     }
 
-    const membership = await prisma.membership.findUnique({
-      where: {
-        userId_organizationId: {
-          userId,
-          organizationId: orgId,
-        },
-      },
-      include: {
-        organization: true,
-      },
-    });
+    const membership = await getUserMembershipInOrganization({ userId, orgId });
 
     if (!membership) {
       return res.status(403).json({

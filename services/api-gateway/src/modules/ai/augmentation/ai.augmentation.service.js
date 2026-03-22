@@ -469,9 +469,7 @@ const generateTimeline = (ticket) => {
  * @private
  */
 const analyzeCustomerSentiment = (comments) => {
-  const userComments = getTicketComments({ comments }).filter(
-    (c) => c.authorType === "USER",
-  );
+  const userComments = comments.filter((c) => c.authorType === "USER");
 
   if (userComments.length === 0) return "neutral";
 

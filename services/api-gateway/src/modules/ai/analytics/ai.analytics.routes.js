@@ -1,5 +1,5 @@
 import express from "express";
-import { getStats } from "./ai.analytics.controller";
+import { getStats } from "./ai.analytics.controller.js";
 
 const router = express.Router();
 

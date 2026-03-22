@@ -265,18 +265,13 @@ export const incrementAIMessageCount = async (ticketId) => {
  */
 export const bulkUpdateTickets = async (updates) => {
   try {
-    let count = 0;
-    for (const { id, data } of updates) {
-      await prisma.ticket.update({
-        where: { id },
-        data,
-      });
-      count++;
-    }
+    await prisma.$transaction(
+      updates.map(({ id, data }) => prisma.ticket.update({ where: { id }, data })),
+    );
 
-    logger.debug({ updateCount: count }, "Bulk updated tickets");
+    logger.debug({ updateCount: updates.length }, "Bulk updated tickets");
 
-    return count;
+    return updates.length;
   } catch (error) {
     logger.error(
       { error, updateCount: updates.length },

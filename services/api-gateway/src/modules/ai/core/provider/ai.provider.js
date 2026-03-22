@@ -105,21 +105,10 @@ export const generateSummary = async (comments) => {
 
 const callOpenAISummary = async (comments) => {
   const summaryContext = buildSummaryContext(comments);
-
-  // Placeholder for OpenAI summary call using summaryContext
-  if (!summaryContext) {
-    const content = "Ticket summary placeholder";
-
-    return {
-      content,
-      aiUsage: buildAIUsage("", content),
-    };
-  }
-
   const content = "Ticket summary placeholder";
 
   return {
     content,
-    aiUsage: buildAIUsage(summaryContext, content),
+    aiUsage: buildAIUsage(summaryContext || "", content),
   };
 };
