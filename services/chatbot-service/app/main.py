@@ -17,6 +17,7 @@ from app.embeddings.embedder import embedder
 from app.internal.routes import router as internal_router
 from app.llm.gateway_client import gateway_client
 from app.memory.ticket_memory import ticket_memory
+from app.memory.summarizer import summarizer
 from app.services.feedback_service import feedback_service
 
 logging.basicConfig(
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
     await gateway_client.close()
     await embedder.close()
     await ticket_memory.close()
+    await summarizer.close()
     await feedback_service.close()
     logger.info("Chatbot service shutdown complete")
 
