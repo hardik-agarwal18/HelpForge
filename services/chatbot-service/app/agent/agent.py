@@ -37,6 +37,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional, Union
 
+import time
+
 from app.agent.executor import tool_executor
 from app.agent.modes.augmentation_mode import AugmentationMode
 from app.agent.modes.automation_mode import AutomationMode
@@ -47,6 +49,8 @@ from app.agent.schema import (
     AgentDecision,
     AgentInput,
     AgentMode,
+    DryRunStep,
+    DryRunTrace,
 )
 from app.agent.utils import build_fallback_decision_dict, extract_json
 from app.agent.validator import ValidationError, agent_validator
@@ -124,6 +128,9 @@ class UnifiedAgent:
     async def _run_inner(
         self, inp: AgentInput, m: MetricsCollector
     ) -> AgentDecision:
+        is_dry_run = inp.dry_run
+        trace_steps: list[DryRunStep] = []  # populated only when dry_run=True
+        run_start = time.perf_counter()
 
         # ── 1. Input guard ────────────────────────────────────────────────
         m.start("guard_input")
@@ -139,7 +146,17 @@ class UnifiedAgent:
             fallback = build_fallback_decision_dict(
                 inp.mode.value, f"Input blocked: {guard.reason}"
             )
-            decision = AgentDecision(**{**fallback, "message": guard.safe_value or fallback["message"]})
+            decision = AgentDecision(
+                **{**fallback, "message": guard.safe_value or fallback["message"]}
+            )
+            if is_dry_run:
+                trace_steps.append(DryRunStep(
+                    step=0, step_type="guard_block",
+                    detail=f"Input blocked: {guard.reason}",
+                ))
+                decision.metadata["dry_run_trace"] = self._build_trace(
+                    inp, trace_steps, decision
+                ).model_dump()
             self._emit_metrics(m, inp, decision, tool_calls=0, agent_steps=0)
             return decision
 
@@ -152,11 +169,12 @@ class UnifiedAgent:
 
         # ── 3. Dispatch to mode handler ───────────────────────────────────
         mode_handler = self._modes[inp.mode]
-        # Use available_tool_descriptions() — injects status (ACTIVE/DISABLED/DEGRADED)
-        # and cost tier so the LLM makes informed, cost-aware tool choices.
+        # available_tool_descriptions() injects ACTIVE/DISABLED/DEGRADED + cost
+        # so the LLM makes informed, cost-aware decisions.
         tool_descs = tool_executor.available_tool_descriptions()
 
         # ── 4. First LLM call — decision ──────────────────────────────────
+        t0 = time.perf_counter()
         m.start("llm_step_0")
         messages, system_prompt = mode_handler.build_messages(inp, ctx, tool_descs)
         raw_result = await gateway_client.generate(
@@ -165,21 +183,27 @@ class UnifiedAgent:
             system_prompt=system_prompt,
         )
         m.stop("llm_step_0")
+        step0_ms = (time.perf_counter() - t0) * 1000
         m.record("llm_tokens", raw_result.get("usage", {}).get("tokensUsed", 0))
 
         # ── 5. Parse + validate decision ──────────────────────────────────
         decision = self._parse_and_validate(raw_result.get("content", ""), inp.mode)
 
+        if is_dry_run:
+            trace_steps.append(DryRunStep(
+                step=0, step_type="llm_decision",
+                action=decision.action.value,
+                confidence=decision.confidence,
+                reasoning=decision.reasoning,
+                message=decision.message,
+                tool=decision.tool,
+                tool_input=decision.tool_input or None,
+                latency_ms=round(step0_ms, 2),
+            ))
+
         # ── 6. Reasoning loop ─────────────────────────────────────────────
-        # Each iteration: execute tool → full LLM re-decision (not just format).
-        # The LLM may chain tools, retry with a different tool, or escalate.
-        #
-        # Termination conditions:
-        #   • decision.action != TOOL_CALL (respond / escalate / suggest)
-        #   • agent_step >= MAX_AGENT_STEPS → forced ESCALATE
-        #   • executor internal limit (MAX_TOOL_CALLS_PER_RUN)
-        agent_step = 0   # counts LLM followup calls (post-tool re-decisions)
-        tool_calls = 0   # counts actual tool executions (for metrics)
+        agent_step = 0
+        tool_calls = 0
 
         while decision.action == AgentAction.TOOL_CALL and decision.tool:
             if agent_step >= MAX_AGENT_STEPS:
@@ -188,6 +212,11 @@ class UnifiedAgent:
                     MAX_AGENT_STEPS, inp.org_id, inp.ticket_id,
                 )
                 m.increment("step_limit_hit")
+                if is_dry_run:
+                    trace_steps.append(DryRunStep(
+                        step=agent_step + 1, step_type="step_limit",
+                        detail=f"MAX_AGENT_STEPS ({MAX_AGENT_STEPS}) reached — escalating",
+                    ))
                 decision = AgentDecision(
                     **build_fallback_decision_dict(
                         inp.mode.value,
@@ -196,31 +225,52 @@ class UnifiedAgent:
                 )
                 break
 
-            # Execute the tool
-            m.start(f"tool_{decision.tool}_{agent_step}")
-            tool_result = await tool_executor.execute(
-                decision.tool, decision.tool_input
+            tool_name = decision.tool
+            tool_input = decision.tool_input
+            tool_cost = getattr(
+                tool_executor._registry.get(tool_name), "cost", None
             )
-            m.stop(f"tool_{decision.tool}_{agent_step}")
+            tool_cost_str = tool_cost.value if tool_cost else "UNKNOWN"
+
+            # ── Execute (real) or Simulate (dry run) ──────────────────────
+            t_tool = time.perf_counter()
+            m.start(f"tool_{tool_name}_{agent_step}")
+
+            if is_dry_run:
+                tool_result = tool_executor.simulate(tool_name, tool_input)
+                logger.info(
+                    "DRY RUN — simulated tool: org=%s ticket=%s tool=%s cost=%s",
+                    inp.org_id, inp.ticket_id, tool_name, tool_cost_str,
+                )
+            else:
+                tool_result = await tool_executor.execute(tool_name, tool_input)
+                logger.info(
+                    "Agent step %d: org=%s ticket=%s tool=%s success=%s cost=%s",
+                    agent_step + 1, inp.org_id, inp.ticket_id,
+                    tool_name, tool_result.get("success"), tool_cost_str,
+                )
+
+            m.stop(f"tool_{tool_name}_{agent_step}")
+            tool_ms = (time.perf_counter() - t_tool) * 1000
             m.increment("tool_calls")
             tool_calls += 1
             agent_step += 1
 
-            # Stash result on decision for callers + followup context
             decision.tool_result = tool_result
 
-            logger.info(
-                "Agent step %d: org=%s ticket=%s tool=%s success=%s",
-                agent_step, inp.org_id, inp.ticket_id,
-                decision.tool, tool_result.get("success"),
-            )
+            if is_dry_run:
+                trace_steps.append(DryRunStep(
+                    step=agent_step, step_type="tool_simulated",
+                    tool=tool_name,
+                    tool_input=tool_input,
+                    tool_cost=tool_cost_str,
+                    simulated_result=tool_result,
+                    latency_ms=round(tool_ms, 2),
+                ))
 
-            # Inject step metadata so the mode handler can include it in the
-            # followup prompt (consumed and popped inside build_followup_messages)
+            # Full LLM re-decision
             enriched_result = {**tool_result, "_step": agent_step}
-
-            # Full LLM re-decision — the LLM sees the tool result and decides
-            # whether to respond, call another tool, or escalate.
+            t_llm = time.perf_counter()
             m.start(f"llm_step_{agent_step}")
             followup_messages, _ = mode_handler.build_followup_messages(
                 inp, ctx, decision, enriched_result, tool_descs
@@ -231,6 +281,7 @@ class UnifiedAgent:
                 system_prompt=system_prompt,
             )
             m.stop(f"llm_step_{agent_step}")
+            llm_ms = (time.perf_counter() - t_llm) * 1000
             m.record(
                 f"llm_tokens_step_{agent_step}",
                 followup_raw.get("usage", {}).get("tokensUsed", 0),
@@ -240,9 +291,20 @@ class UnifiedAgent:
             decision = self._parse_and_validate(
                 followup_raw.get("content", ""), inp.mode
             )
-            # Re-attach last tool result so callers always have it
             if decision.tool_result is None:
                 decision.tool_result = prev_tool_result
+
+            if is_dry_run:
+                trace_steps.append(DryRunStep(
+                    step=agent_step, step_type="llm_followup",
+                    action=decision.action.value,
+                    confidence=decision.confidence,
+                    reasoning=decision.reasoning,
+                    message=decision.message,
+                    tool=decision.tool,
+                    tool_input=decision.tool_input or None,
+                    latency_ms=round(llm_ms, 2),
+                ))
 
         # ── 7. Output guard ───────────────────────────────────────────────
         m.start("guard_output")
@@ -256,6 +318,23 @@ class UnifiedAgent:
         # ── 8. Emit metrics ───────────────────────────────────────────────
         metrics = self._emit_metrics(m, inp, decision, tool_calls, agent_step)
         decision.metadata["metrics"] = metrics
+
+        # ── 9. Attach dry run trace ───────────────────────────────────────
+        if is_dry_run:
+            total_ms = (time.perf_counter() - run_start) * 1000
+            trace = self._build_trace(inp, trace_steps, decision)
+            trace.total_latency_ms = round(total_ms, 2)
+            trace.total_llm_calls = agent_step + 1  # initial + followups
+            trace.total_tool_calls = tool_calls
+            trace.simulated_tools = [
+                s.tool for s in trace_steps
+                if s.step_type == "tool_simulated" and s.tool
+            ]
+            decision.metadata["dry_run_trace"] = trace.model_dump()
+            logger.info(
+                "DRY RUN complete: org=%s ticket=%s steps=%d tools=%d latency=%.0fms",
+                inp.org_id, inp.ticket_id, len(trace_steps), tool_calls, total_ms,
+            )
 
         return decision
 
@@ -375,6 +454,24 @@ class UnifiedAgent:
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _build_trace(
+        inp: AgentInput,
+        steps: list[DryRunStep],
+        final: AgentDecision,
+    ) -> DryRunTrace:
+        return DryRunTrace(
+            dry_run=True,
+            mode=inp.mode.value,
+            org_id=inp.org_id,
+            ticket_id=inp.ticket_id,
+            query=inp.query,
+            steps=steps,
+            final_action=final.action.value,
+            final_confidence=final.confidence,
+            final_message=final.message,
+        )
 
     @staticmethod
     def _safe_refusal(mode: AgentMode, message: str) -> AgentDecision:

@@ -134,6 +134,115 @@ class ToolExecutor:
             lines.append(tool.to_prompt_description(status=status.value))
         return "\n".join(lines)
 
+    # ── Dry run simulation ────────────────────────────────────────────────
+
+    def simulate(
+        self,
+        tool_name: str,
+        tool_input: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Return a realistic mock result for `tool_name` without executing it.
+
+        Used exclusively in dry run mode — the agent's reasoning pipeline
+        runs for real (real LLM calls) but tool side-effects are skipped.
+        The mock includes the actual input fields so the trace is meaningful.
+        """
+        tool = self._registry.get(tool_name)
+        if tool is None:
+            return {
+                "success": False,
+                "error": f"Unknown tool: '{tool_name}'",
+                "simulated": True,
+            }
+
+        status = self._statuses.get(tool_name, ToolStatus.ACTIVE)
+        if status == ToolStatus.DISABLED:
+            return {
+                "success": False,
+                "error": f"Tool '{tool_name}' is DISABLED",
+                "tool_status": "DISABLED",
+                "simulated": True,
+            }
+
+        # Build a realistic mock based on the tool name and actual inputs
+        ticket_id = tool_input.get("ticket_id", "[dry-run-ticket]")
+        org_id = tool_input.get("org_id", "[dry-run-org]")
+
+        mocks: Dict[str, Dict[str, Any]] = {
+            "create_ticket": {
+                "success": True,
+                "ticket_id": "DRY-RUN-001",
+                "ticket": {
+                    "id": "DRY-RUN-001",
+                    "subject": tool_input.get("subject", "[simulated]"),
+                    "status": "OPEN",
+                    "priority": tool_input.get("priority", "MEDIUM"),
+                },
+            },
+            "update_ticket": {
+                "success": True,
+                "ticket_id": ticket_id,
+                "updated_fields": [k for k in tool_input if k not in ("ticket_id", "org_id")],
+                "ticket": {"id": ticket_id, "status": tool_input.get("status", "OPEN")},
+            },
+            "fetch_ticket": {
+                "success": True,
+                "ticket": {
+                    "id": ticket_id,
+                    "org_id": org_id,
+                    "subject": "[simulated ticket subject]",
+                    "status": "OPEN",
+                    "priority": "MEDIUM",
+                    "comments": [{"role": "user", "content": "[simulated comment]"}],
+                },
+            },
+            "assign_agent": {
+                "success": True,
+                "ticket_id": ticket_id,
+                "assigned_to": tool_input.get("agent_id", "[simulated-agent-id]"),
+                "result": {"status": "IN_PROGRESS"},
+            },
+            "escalate_ticket": {
+                "success": True,
+                "ticket_id": ticket_id,
+                "urgency": tool_input.get("urgency", "NORMAL"),
+                "result": {"escalated": True, "notified": True},
+            },
+            "search_docs": {
+                "success": True,
+                "query": tool_input.get("query", "[query]"),
+                "result_count": 3,
+                "results": [
+                    {"excerpt": "[Simulated doc 1] — relevant knowledge base article"},
+                    {"excerpt": "[Simulated doc 2] — related FAQ entry"},
+                    {"excerpt": "[Simulated doc 3] — troubleshooting guide"},
+                ],
+                "context": "[Simulated RAG context — 3 documents found]",
+            },
+            "summarize_ticket": {
+                "success": True,
+                "ticket_id": ticket_id,
+                "summary": (
+                    "[Simulated summary] User reported an issue. "
+                    "Multiple troubleshooting steps attempted. Resolution pending."
+                ),
+            },
+            "classify_ticket": {
+                "success": True,
+                "ticket_id": ticket_id,
+                "category": "Technical",
+                "sub_category": "Bug Report",
+                "severity": "MEDIUM",
+                "classification": {"confidence": 0.87},
+            },
+        }
+
+        result = mocks.get(tool_name, {"success": True, "simulated": True, "tool": tool_name})
+        result["simulated"] = True
+        result["_dry_run"] = True
+        return result
+
     # ── Execution ─────────────────────────────────────────────────────────
 
     def reset_call_count(self) -> None:

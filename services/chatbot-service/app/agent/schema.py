@@ -10,7 +10,7 @@ this same structure so downstream consumers only need to handle one shape.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -94,6 +94,66 @@ class AgentInput(BaseModel):
 
     # Mode-specific extras: automation event_type, augmentation agent_id, etc.
     extra: Dict[str, Any] = Field(default_factory=dict)
+
+    # When True: LLM decisions are real, tool executions are SIMULATED.
+    # Full reasoning trace is captured and returned in metadata["dry_run_trace"].
+    dry_run: bool = False
+
+
+# ── Dry Run Trace ─────────────────────────────────────────────────────────────
+
+
+class DryRunStep(BaseModel):
+    """
+    One step captured during a dry run agent execution.
+
+    step_type values:
+      "llm_decision"    — initial LLM decision call (step 0)
+      "llm_followup"    — LLM re-decision after a tool call
+      "tool_simulated"  — tool that WOULD have been called (dry run, not executed)
+      "guard_block"     — input or output guard blocked execution
+      "step_limit"      — MAX_AGENT_STEPS ceiling hit
+    """
+
+    step: int
+    step_type: Literal[
+        "llm_decision", "llm_followup", "tool_simulated", "guard_block", "step_limit"
+    ]
+    # LLM decision fields (populated for llm_decision / llm_followup)
+    action: Optional[str] = None
+    confidence: Optional[float] = None
+    reasoning: Optional[str] = None
+    message: Optional[str] = None
+    # Tool fields (populated for tool_simulated)
+    tool: Optional[str] = None
+    tool_input: Optional[Dict[str, Any]] = None
+    tool_cost: Optional[str] = None
+    simulated_result: Optional[Dict[str, Any]] = None
+    # Timing
+    latency_ms: Optional[float] = None
+    # Any extra context
+    detail: Optional[str] = None
+
+
+class DryRunTrace(BaseModel):
+    """
+    Complete dry run execution trace — attached to AgentDecision.metadata["dry_run_trace"]
+    and returned directly from the playground endpoint.
+    """
+
+    dry_run: bool = True
+    mode: str
+    org_id: str
+    ticket_id: str
+    query: str
+    steps: List[DryRunStep] = Field(default_factory=list)
+    final_action: str = ""
+    final_confidence: float = 0.0
+    final_message: str = ""
+    total_llm_calls: int = 0
+    total_tool_calls: int = 0
+    simulated_tools: List[str] = Field(default_factory=list)
+    total_latency_ms: float = 0.0
 
 
 class AgentContext(BaseModel):
