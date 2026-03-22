@@ -54,7 +54,12 @@ const signRequest = (method, path, bodyStr) => {
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
-const callChatbot = async (path, body) => {
+/**
+ * @param {string} path
+ * @param {Object} body
+ * @param {string} [requestId]  BullMQ job.id — shared trace ID for both Node and Python logs
+ */
+const callChatbot = async (path, body, requestId) => {
   const url = `${CHATBOT_URL}${path}`;
   const bodyStr = JSON.stringify(body);
 
@@ -63,6 +68,11 @@ const callChatbot = async (path, body) => {
     "X-Service-Id": SERVICE_ID,
     "X-Internal-Token": INTERNAL_TOKEN,
   };
+
+  // Propagate the trace ID so Python logs carry the same ID as Node logs.
+  if (requestId) {
+    headers["X-Request-ID"] = requestId;
+  }
 
   if (HMAC_ENABLED) {
     const { timestampMs, signature } = signRequest("POST", path, bodyStr);
@@ -87,25 +97,27 @@ const callChatbot = async (path, body) => {
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
 
+// Each handler receives (data, job) — job.id is used as X-Request-ID so
+// Node and Python logs for the same BullMQ job carry the same trace ID.
 const handlers = {
-  [JOB_PROCESS_DOCUMENT]: async (data) => {
-    logger.info({ orgId: data.org_id, documentId: data.document_id }, "Processing document");
-    return callChatbot("/internal/process-document", data);
+  [JOB_PROCESS_DOCUMENT]: async (data, job) => {
+    logger.info({ orgId: data.org_id, documentId: data.document_id, requestId: job.id }, "Processing document");
+    return callChatbot("/internal/process-document", data, job.id);
   },
 
-  [JOB_EMBED_TEXTS]: async (data) => {
-    logger.info({ orgId: data.org_id, count: data.texts?.length }, "Embedding texts");
-    return callChatbot("/internal/embed", data);
+  [JOB_EMBED_TEXTS]: async (data, job) => {
+    logger.info({ orgId: data.org_id, count: data.texts?.length, requestId: job.id }, "Embedding texts");
+    return callChatbot("/internal/embed", data, job.id);
   },
 
-  [JOB_ANALYZE_FEEDBACK]: async (data) => {
-    logger.info({ orgId: data.org_id }, "Analyzing feedback");
-    return callChatbot("/internal/analyze-feedback", data);
+  [JOB_ANALYZE_FEEDBACK]: async (data, job) => {
+    logger.info({ orgId: data.org_id, requestId: job.id }, "Analyzing feedback");
+    return callChatbot("/internal/analyze-feedback", data, job.id);
   },
 
-  [JOB_RE_EMBED_ORG]: async (data) => {
-    logger.info({ orgId: data.org_id, targetVersion: data.target_version }, "Re-embedding stale vectors");
-    return callChatbot("/internal/re-embed-org", data);
+  [JOB_RE_EMBED_ORG]: async (data, job) => {
+    logger.info({ orgId: data.org_id, targetVersion: data.target_version, requestId: job.id }, "Re-embedding stale vectors");
+    return callChatbot("/internal/re-embed-org", data, job.id);
   },
 };
 
@@ -136,7 +148,7 @@ export const startChatbotBridgeWorker = () => {
         return;
       }
 
-      const result = await handler(job.data);
+      const result = await handler(job.data, job);
       logger.debug({ jobId: job.id, jobName: job.name }, "Chatbot bridge job completed");
       return result;
     },

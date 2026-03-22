@@ -18,12 +18,15 @@ from app.internal.routes import router as internal_router
 from app.llm.gateway_client import gateway_client
 from app.memory.ticket_memory import ticket_memory
 from app.memory.summarizer import summarizer
+from app.middleware.request_id import RequestIDFilter, RequestIDMiddleware
 from app.services.feedback_service import feedback_service
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] — %(message)s",
 )
+# Inject request_id into every log record across all loggers
+logging.getLogger().addFilter(RequestIDFilter())
 logger = logging.getLogger(__name__)
 
 
@@ -48,6 +51,9 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,   # hide Swagger in production
     redoc_url=None,
 )
+
+# ── Middleware ─────────────────────────────────────────────────────────────────
+app.add_middleware(RequestIDMiddleware)
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(chat_router)

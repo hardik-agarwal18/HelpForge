@@ -17,6 +17,7 @@ from typing import AsyncGenerator, Any
 import httpx
 
 from app.config.settings import settings
+from app.middleware.request_id import request_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,12 @@ _GATEWAY_HEADERS = {
     "X-Internal-Token": settings.internal_service_token,
     "Content-Type": "application/json",
 }
+
+
+def _request_headers() -> dict[str, str]:
+    """Per-request headers — adds X-Request-ID so traces cross service boundaries."""
+    req_id = request_id_var.get("")
+    return {"X-Request-ID": req_id} if req_id else {}
 
 
 class GatewayClient:
@@ -70,7 +77,11 @@ class GatewayClient:
         last_error: Exception | None = None
         for attempt in range(settings.llm_max_retries):
             try:
-                resp = await self.client.post("/api/ai/internal/generate", json=payload)
+                resp = await self.client.post(
+                    "/api/ai/internal/generate",
+                    json=payload,
+                    headers=_request_headers(),
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.TimeoutException as exc:
@@ -114,7 +125,9 @@ class GatewayClient:
         }
 
         async with self.client.stream(
-            "POST", "/api/ai/internal/generate/stream", json=payload
+            "POST", "/api/ai/internal/generate/stream",
+            json=payload,
+            headers=_request_headers(),
         ) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
@@ -137,6 +150,7 @@ class GatewayClient:
         resp = await self.client.post(
             "/api/ai/internal/embeddings",
             json={"orgId": org_id, "texts": texts},
+            headers=_request_headers(),
         )
         resp.raise_for_status()
         return resp.json()["embeddings"]
