@@ -8,13 +8,14 @@ import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import aiAutomationRoutes from "./modules/ai/automation/ai.automation.routes.js";
 import aiAugmentationRoutes from "./modules/ai/augmentation/ai.augmentation.routes.js";
 import aiConfigRoutes from "./modules/ai/config/ai.config.routes.js";
+import aiInternalRoutes from "./modules/ai/internal/ai.internal.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 
 const app = express();
 
 app.use(express.json());
 
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.send("Hello from API Gateway!");
 });
 
@@ -27,6 +28,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/ai/automation", aiAutomationRoutes);
 app.use("/api/ai/augmentation", aiAugmentationRoutes);
 app.use("/api/ai/config", aiConfigRoutes);
+app.use("/api/ai/internal", aiInternalRoutes);
 
 // Error handler middleware (must be last)
 app.use(errorHandler);
