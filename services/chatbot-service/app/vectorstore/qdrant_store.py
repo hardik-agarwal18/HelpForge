@@ -1,13 +1,15 @@
 """
-Qdrant Vector Store — multi-tenant, strict org isolation
-─────────────────────────────────────────────────────────
-Strategy: one collection per org  →  `org_{org_id}`
+Qdrant Vector Store — multi-tenant + hybrid search
+────────────────────────────────────────────────────
+Isolation strategy: one collection per org  →  `org_{org_id}`
 
-Why separate collections (not metadata filter)?
-  ✓ Zero cross-tenant bleed — a misconfigured filter cannot leak data
-  ✓ Simpler RBAC — delete the collection to wipe an org
-  ✓ Smaller per-collection index → faster search
-  ✗ Collection creation overhead on first document upload (acceptable)
+Hybrid search (new):
+  Dense path:   cosine vector similarity  (semantic)
+  Keyword path: dense vectors filtered by MatchText on `text` payload field
+  Merge:        Reciprocal Rank Fusion (RRF) — no score-space normalisation needed
+
+Text index is created automatically on first collection creation.
+Existing collections without the index will get it on next ensure_collection() call.
 """
 
 import logging
@@ -19,7 +21,9 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchText,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -48,7 +52,7 @@ class QdrantVectorStore:
         return f"org_{org_id}"
 
     async def ensure_collection(self, org_id: str) -> None:
-        """Create per-org collection if it does not yet exist."""
+        """Create per-org collection + text index if not yet present."""
         name = self._collection(org_id)
         existing = await self.client.get_collections()
         existing_names = {c.name for c in existing.collections}
@@ -62,6 +66,18 @@ class QdrantVectorStore:
                 ),
             )
             logger.info("Created Qdrant collection: %s", name)
+
+        # Ensure full-text index on `text` payload field for keyword search.
+        # create_payload_index is idempotent — safe to call every time.
+        try:
+            await self.client.create_payload_index(
+                collection_name=name,
+                field_name="text",
+                field_schema=PayloadSchemaType.TEXT,
+            )
+        except Exception:
+            # Index may already exist — Qdrant raises on duplicate, just ignore
+            pass
 
     # ── Write ──────────────────────────────────────────────────────────────
 
@@ -78,16 +94,12 @@ class QdrantVectorStore:
             ids = [str(uuid.uuid4()) for _ in vectors]
 
         points = [
-            PointStruct(id=point_id, vector=vec, payload=payload)
-            for point_id, vec, payload in zip(ids, vectors, payloads)
+            PointStruct(id=pid, vector=vec, payload=payload)
+            for pid, vec, payload in zip(ids, vectors, payloads)
         ]
+        await self.client.upsert(collection_name=self._collection(org_id), points=points)
 
-        await self.client.upsert(
-            collection_name=self._collection(org_id),
-            points=points,
-        )
-
-    # ── Read ───────────────────────────────────────────────────────────────
+    # ── Dense search ───────────────────────────────────────────────────────
 
     async def search(
         self,
@@ -96,15 +108,7 @@ class QdrantVectorStore:
         top_k: int = 5,
         filter_conditions: Optional[dict[str, Any]] = None,
     ) -> list[dict[str, Any]]:
-        qdrant_filter: Optional[Filter] = None
-        if filter_conditions:
-            qdrant_filter = Filter(
-                must=[
-                    FieldCondition(key=k, match=MatchValue(value=v))
-                    for k, v in filter_conditions.items()
-                ]
-            )
-
+        qdrant_filter = self._build_filter(filter_conditions)
         hits = await self.client.search(
             collection_name=self._collection(org_id),
             query_vector=query_vector,
@@ -112,25 +116,75 @@ class QdrantVectorStore:
             query_filter=qdrant_filter,
             with_payload=True,
         )
+        return [{"id": str(h.id), "score": h.score, "payload": h.payload or {}} for h in hits]
 
-        return [
-            {"id": str(h.id), "score": h.score, "payload": h.payload or {}}
-            for h in hits
-        ]
+    # ── Keyword-boosted search ─────────────────────────────────────────────
+
+    async def keyword_search(
+        self,
+        org_id: str,
+        query_vector: list[float],
+        keywords: list[str],
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """
+        Vector search filtered to documents whose `text` payload contains
+        at least one of the provided keywords (full-text match).
+
+        This surfaces exact-match results (error codes, product names, IDs)
+        that may be semantically distant but lexically important.
+        """
+        if not keywords:
+            return []
+
+        # OR across all keywords: must match at least one
+        keyword_filter = Filter(
+            should=[
+                FieldCondition(key="text", match=MatchText(text=kw))
+                for kw in keywords
+            ]
+        )
+
+        try:
+            hits = await self.client.search(
+                collection_name=self._collection(org_id),
+                query_vector=query_vector,
+                limit=top_k,
+                query_filter=keyword_filter,
+                with_payload=True,
+            )
+            return [
+                {"id": str(h.id), "score": h.score, "payload": h.payload or {}}
+                for h in hits
+            ]
+        except Exception as exc:
+            # Collection may not have text index yet — degrade gracefully
+            logger.debug("Keyword search unavailable: %s", exc)
+            return []
 
     # ── Delete ─────────────────────────────────────────────────────────────
 
     async def delete_by_document(self, org_id: str, document_id: str) -> None:
-        """Remove all vectors for a given document (used on re-index)."""
         await self.client.delete(
             collection_name=self._collection(org_id),
             points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="document_id", match=MatchValue(value=document_id)
-                    )
-                ]
+                must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
             ),
+        )
+
+    # ── Helpers ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _build_filter(
+        conditions: Optional[dict[str, Any]],
+    ) -> Optional[Filter]:
+        if not conditions:
+            return None
+        return Filter(
+            must=[
+                FieldCondition(key=k, match=MatchValue(value=v))
+                for k, v in conditions.items()
+            ]
         )
 
 
