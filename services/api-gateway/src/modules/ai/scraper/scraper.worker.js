@@ -32,6 +32,7 @@ import {
   JOB_SCRAPE_PAGE,
   SCRAPER_QUEUE,
 } from "./scraper.queue.js";
+import { closePuppeteerBrowser } from "./scraper.puppeteer.js";
 import {
   deleteStalePages,
   processScrapeJob,
@@ -163,4 +164,16 @@ export const startScraperWorker = () => {
   return worker;
 };
 
-export default { startScraperWorker };
+/**
+ * Graceful shutdown: drain the BullMQ worker then close the Puppeteer browser.
+ * Call this from server.js during SIGTERM/SIGINT handling.
+ */
+export const stopScraperWorker = async () => {
+  if (worker) {
+    await worker.close();
+    worker = null;
+  }
+  await closePuppeteerBrowser();
+};
+
+export default { startScraperWorker, stopScraperWorker };

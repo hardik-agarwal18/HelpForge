@@ -48,6 +48,10 @@ import {
 import { scraperCache, hashUrl } from "./scraper.cache.js";
 import { enqueueScrapingJob } from "./scraper.queue.js";
 import { buildEmbeddingText, parseHtml } from "./scraper.parser.js";
+import {
+  isSpaWithThinContent,
+  puppeteerFetchPage,
+} from "./scraper.puppeteer.js";
 import { ScraperValidationError, validateUrl } from "./scraper.validator.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -220,7 +224,45 @@ export const processScrapeJob = async (job) => {
   }
 
   // ── 4. Parse HTML ─────────────────────────────────────────────────────────
-  const parsed = parseHtml(html, url);
+  let parsed = parseHtml(html, url);
+  let fetchType = "static";
+
+  // ── 4b. Puppeteer fallback for JS-rendered SPAs ───────────────────────────
+  // Only fires when: content is thin AND raw HTML contains SPA framework signals.
+  // Fails gracefully — if Puppeteer is disabled or errors, static result is used.
+  if (isSpaWithThinContent(parsed, html)) {
+    logger.info(
+      { jobId: job.id, orgId, url, wordCount: parsed.wordCount },
+      "scraper: thin SPA content detected — attempting Puppeteer re-fetch",
+    );
+    try {
+      const { html: renderedHtml, byteLength: renderedBytes } =
+        await puppeteerFetchPage(url);
+      const renderedParsed = parseHtml(renderedHtml, url);
+
+      if (renderedParsed.wordCount > parsed.wordCount) {
+        html       = renderedHtml;
+        byteLength = renderedBytes;
+        parsed     = renderedParsed;
+        fetchType  = "puppeteer";
+        logger.info(
+          { jobId: job.id, orgId, url, wordCount: parsed.wordCount },
+          "scraper: Puppeteer yielded richer content — using rendered DOM",
+        );
+      } else {
+        logger.debug(
+          { jobId: job.id, orgId, url, staticWords: parsed.wordCount, renderedWords: renderedParsed.wordCount },
+          "scraper: Puppeteer did not improve content — keeping static result",
+        );
+      }
+    } catch (puppeteerErr) {
+      logger.warn(
+        { jobId: job.id, orgId, url, err: puppeteerErr.message },
+        "scraper: Puppeteer fallback failed — continuing with static result",
+      );
+    }
+  }
+
   if (!parsed.body && !parsed.title) {
     const msg = "No meaningful content extracted from page";
     await upsertScrapedPage(orgId, url, urlHash, { status: "FAILED", errorMessage: msg });
@@ -285,13 +327,13 @@ export const processScrapeJob = async (job) => {
   const elapsedMs = Date.now() - startMs;
   logger.info(
     {
-      jobId: job.id, orgId, url, contentHash,
+      jobId: job.id, orgId, url, contentHash, fetchType,
       wordCount: parsed.wordCount, byteLength, elapsedMs, embedJobId,
     },
     "scraper: completed",
   );
 
-  return { success: true, contentHash, wordCount: parsed.wordCount, elapsedMs };
+  return { success: true, contentHash, wordCount: parsed.wordCount, elapsedMs, fetchType };
 };
 
 /**

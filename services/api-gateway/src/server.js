@@ -11,7 +11,7 @@ import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automa
 import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
 import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
-import { startScraperWorker } from "./modules/ai/scraper/scraper.worker.js";
+import { startScraperWorker, stopScraperWorker } from "./modules/ai/scraper/scraper.worker.js";
 import { scheduleScrapeCleanup, stopScrapeCleanup } from "./modules/ai/scraper/scraper.cleanup.cron.js";
 
 const PORT = config.port;
@@ -47,6 +47,7 @@ const gracefulShutdown = async (signal) => {
       }
 
       stopScrapeCleanup();
+      await stopScraperWorker();
       logger.info("API Gateway shutdown complete");
       process.exit(0);
     } catch (error) {
