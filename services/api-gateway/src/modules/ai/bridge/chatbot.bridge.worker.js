@@ -24,6 +24,7 @@ import {
   JOB_PROCESS_DOCUMENT,
   JOB_RE_EMBED_ORG,
 } from "./chatbot.bridge.queue.js";
+import { CircuitOpenError, chatbotCircuit } from "./chatbot.circuit.js";
 
 const CHATBOT_URL = config.services.chatbot || "http://chatbot-service:8000";
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || "change-me-shared-secret";
@@ -80,19 +81,21 @@ const callChatbot = async (path, body, requestId) => {
     headers["X-Signature"] = signature;
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: bodyStr,
-    signal: AbortSignal.timeout(60_000),  // 60 s timeout per job
+  return chatbotCircuit.fire(async () => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: bodyStr,
+      signal: AbortSignal.timeout(60_000),  // 60 s timeout per job
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Chatbot ${path} returned ${res.status}: ${text}`);
+    }
+
+    return res.json();
   });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Chatbot ${path} returned ${res.status}: ${text}`);
-  }
-
-  return res.json();
 };
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
@@ -141,16 +144,32 @@ export const startChatbotBridgeWorker = () => {
 
   worker = new Worker(
     CHATBOT_BRIDGE_QUEUE,
-    async (job) => {
+    // BullMQ passes the lock token as the second arg — required for moveToDelayed
+    async (job, token) => {
       const handler = handlers[job.name];
       if (!handler) {
         logger.warn({ jobName: job.name }, "No handler for chatbot bridge job");
         return;
       }
 
-      const result = await handler(job.data, job);
-      logger.debug({ jobId: job.id, jobName: job.name }, "Chatbot bridge job completed");
-      return result;
+      try {
+        const result = await handler(job.data, job);
+        logger.debug({ jobId: job.id, jobName: job.name }, "Chatbot bridge job completed");
+        return result;
+      } catch (err) {
+        if (err instanceof CircuitOpenError) {
+          // Service is down — preserve the job by delaying it past the circuit's
+          // recovery window instead of burning through BullMQ retry attempts.
+          const delayMs = err.remainingMs + 5_000;
+          await job.moveToDelayed(Date.now() + delayMs, token);
+          logger.warn(
+            { jobId: job.id, jobName: job.name, delayMs, circuit: chatbotCircuit.state },
+            "Job delayed — chatbot circuit is OPEN",
+          );
+          return; // returning (not throwing) tells BullMQ the job was handled
+        }
+        throw err; // real errors → normal BullMQ retry + backoff
+      }
     },
     {
       connection,
