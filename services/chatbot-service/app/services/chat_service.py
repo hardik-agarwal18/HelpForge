@@ -44,6 +44,7 @@ the stage when appropriate.
 """
 
 import logging
+import time
 from typing import Any, AsyncGenerator
 
 from app.config.settings import settings
@@ -52,6 +53,7 @@ from app.conversation.entity_extractor import entity_extractor
 from app.conversation.escalation_detector import escalation_detector
 from app.conversation.intent_detector import intent_detector
 from app.models.schemas import ChatRequest, ChatResponse
+from app.observability.traces import agent_tracer
 from app.rag.pipeline import rag_pipeline
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,8 @@ class ChatService:
         from app.agent.agent import unified_agent
         from app.agent.schema import AgentInput, AgentMode
 
+        turn_start = time.perf_counter()
+
         # ── 1. Load conversation state ─────────────────────────────────────
         state = await conv_state_store.get_or_create(
             request.org_id, request.ticket_id
@@ -131,6 +135,19 @@ class ChatService:
                 severity=escalation.severity.value,
                 agent_action="escalate",
             )
+
+            # Emit a minimal trace (no LLM calls were made)
+            pre_trace = agent_tracer.build_pre_escalation(
+                org_id=request.org_id,
+                ticket_id=request.ticket_id,
+                mode="chat",
+                started_at=turn_start,
+                conv_intent=intent_result.intent.value,
+                conv_stage=state.stage.value,
+                conv_severity=escalation.severity.value,
+            )
+            await agent_tracer.emit(pre_trace)
+
             return ChatResponse(
                 ticket_id=request.ticket_id,
                 message=escalation.escalation_message or (
@@ -145,6 +162,7 @@ class ChatService:
                     "conv_score": escalation.score,
                     "conv_intent": intent_result.intent.value,
                     "conv_stage": state.stage.value,
+                    "trace_id": pre_trace.trace_id,
                 },
             )
 
@@ -180,12 +198,31 @@ class ChatService:
             agent_action=decision.action.value,
         )
 
+        # ── Build + emit full agent trace ──────────────────────────────────
+        trace = agent_tracer.build(
+            org_id=request.org_id,
+            ticket_id=request.ticket_id,
+            mode="chat",
+            started_at=turn_start,
+            decision_metadata=decision.metadata.get("metrics", {}),
+            final_action=decision.action.value,
+            final_confidence=decision.confidence,
+            conv_intent=intent_result.intent.value,
+            conv_stage=state.stage.value,
+            conv_severity=escalation.severity.value,
+            escalated_pre_agent=False,
+            error=decision.metadata.get("error"),
+        )
+        await agent_tracer.emit(trace)
+
         # Map AgentAction → ChatResponse.action
         action = self._map_action(decision.action.value)
 
         logger.info(
-            "Chat (agent): ticket=%s confidence=%.3f action=%s tool=%s",
+            "Chat (agent): ticket=%s confidence=%.3f action=%s tool=%s "
+            "tokens=%d cost_usd=%.8f trace=%s",
             request.ticket_id, decision.confidence, action, decision.tool,
+            trace.tokens_total, trace.cost_usd, trace.trace_id,
         )
 
         # Sources come from agent metadata if the agent ran retrieval
@@ -206,6 +243,9 @@ class ChatService:
                 "conv_stage": state.stage.value,
                 "conv_severity": escalation.severity.value,
                 "conv_entities": entity_result.entity_map,
+                "trace_id": trace.trace_id,
+                "tokens": trace.tokens_total,
+                "cost_usd": trace.cost_usd,
             },
         )
 
