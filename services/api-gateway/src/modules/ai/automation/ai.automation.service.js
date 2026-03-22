@@ -17,6 +17,7 @@ import {
   updateTicket,
   getAvailableAgents,
 } from "./ai.automation.repo.js";
+import { getAIConfigByOrg } from "../config/ai.config.repo.js";
 
 const { idempotencyTtlSeconds, processingLockTtlSeconds } = aiConfig.automation;
 
@@ -86,6 +87,18 @@ export const handleCommentAdded = async (payload) => {
       return;
     }
 
+    // Fetch org-level AI config (falls back to system defaults when null)
+    const orgConfig = await getAIConfigByOrg(ticket.organizationId);
+
+    // Short-circuit if AI is disabled at org level
+    if (orgConfig && !orgConfig.aiEnabled) {
+      logger.info(
+        { ticketId, organizationId: ticket.organizationId },
+        "AI processing skipped: disabled by org config",
+      );
+      return;
+    }
+
     // Get the newly added comment
     const newComment = ticket.comments.find((c) => c.id === commentId);
     if (!newComment) {
@@ -103,7 +116,7 @@ export const handleCommentAdded = async (payload) => {
     }
 
     // ✅ SINGLE GUARD LAYER - All checks in one place
-    const guardResult = shouldProcessAI(ticket);
+    const guardResult = shouldProcessAI(ticket, orgConfig);
     if (!guardResult.canProcess) {
       logger.info(
         { ticketId, reason: guardResult.reason },
@@ -127,7 +140,7 @@ export const handleCommentAdded = async (payload) => {
     }
 
     // Generate AI response
-    await generateAndStoreAIResponse(ticket, newComment);
+    await generateAndStoreAIResponse(ticket, newComment, orgConfig);
 
     if (usingIdempotency) {
       await aiUtils.markCommentAsProcessed(commentId, idempotencyTtlSeconds);
@@ -147,8 +160,9 @@ export const handleCommentAdded = async (payload) => {
  * PHASE 2: Handles auto-resolution, smart assignment, and routing
  * @param {Object} ticket - Ticket object with full context
  * @param {Object} latestComment - Latest user comment
+ * @param {Object|null} orgConfig - Org-level AIConfig (null = use system defaults)
  */
-export const generateAndStoreAIResponse = async (ticket, latestComment) => {
+export const generateAndStoreAIResponse = async (ticket, latestComment, orgConfig = null) => {
   try {
     logger.info({ ticketId: ticket.id }, "Generating AI response");
 
@@ -182,10 +196,20 @@ export const generateAndStoreAIResponse = async (ticket, latestComment) => {
       descriptionLength: ticket.description?.length || 0,
     });
 
-    // PHASE 2: Get detailed action decision
-    const action = decisionEngine.decideAction(confidenceData.confidence, {
+    // Build org-level threshold overrides for the decision engine
+    const decisionOptions = {
       canAssign: !ticket.assignedToId, // Can only assign if not already assigned
-    });
+    };
+    if (orgConfig) {
+      decisionOptions.enableAutoResolve = orgConfig.enableAutoResolve;
+      decisionOptions.enableSmartAssign = orgConfig.enableSmartAssign;
+      decisionOptions.autoResolveThreshold = orgConfig.autoResolveThreshold;
+      decisionOptions.suggestThreshold = orgConfig.suggestThreshold;
+      decisionOptions.smartAssignThreshold = orgConfig.smartAssignThreshold;
+    }
+
+    // PHASE 2: Get detailed action decision
+    const action = decisionEngine.decideAction(confidenceData.confidence, decisionOptions);
 
     logger.info(
       {

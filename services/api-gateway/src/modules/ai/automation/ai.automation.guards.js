@@ -9,22 +9,24 @@ import {
  * Combines: aiActive, message budget, cooldown, and assignment state
  *
  * @param {Object} ticket - Ticket object with comments, aiActive, assignedToId, status
+ * @param {Object|null} orgConfig - Org-level AIConfig (null = use system defaults)
  * @returns {Object} { canProcess: boolean, reason: string }
  */
-export const shouldProcessAI = (ticket) => {
+export const shouldProcessAI = (ticket, orgConfig = null) => {
   // Guard 1: Check if AI is enabled for this ticket
   if (!ticket.aiActive) {
     logger.info({ ticketId: ticket.id }, "AI guard: AI disabled for ticket");
     return { canProcess: false, reason: "AI_DISABLED" };
   }
 
-  // Guard 2: Check message budget
+  // Guard 2: Check message budget (org config overrides system default)
+  const maxMessages = orgConfig?.maxAIResponses ?? AI_MAX_MESSAGES_PER_TICKET;
   const aiResponseCount =
     typeof ticket.aiMessageCount === "number"
       ? ticket.aiMessageCount
       : ticket.comments.filter((c) => c.authorType === "AI").length;
 
-  if (aiResponseCount >= AI_MAX_MESSAGES_PER_TICKET) {
+  if (aiResponseCount >= maxMessages) {
     logger.info(
       { ticketId: ticket.id, aiResponseCount },
       "AI guard: max messages reached",

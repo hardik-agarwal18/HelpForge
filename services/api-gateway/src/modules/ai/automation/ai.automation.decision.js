@@ -117,6 +117,17 @@ export const calculateConfidence = (context) => {
  * @returns {Object} Action decision with details
  */
 export const decideAction = (confidence, options = {}) => {
+  // Use org-level thresholds when provided, fall back to system constants
+  const autoResolveThreshold =
+    options.autoResolveThreshold ?? DECISION_RULES.CONFIDENCE_THRESHOLD_AUTO_CLOSE;
+  const smartAssignThreshold =
+    options.smartAssignThreshold ?? DECISION_RULES.SMART_ASSIGN_THRESHOLD;
+  const suggestThreshold =
+    options.suggestThreshold ?? DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST;
+
+  const enableAutoResolve = options.enableAutoResolve ?? true;
+  const enableSmartAssign = options.enableSmartAssign ?? true;
+
   const action = {
     type: null,
     confidence,
@@ -126,19 +137,20 @@ export const decideAction = (confidence, options = {}) => {
     reasoning: "",
   };
 
-  if (confidence >= DECISION_RULES.CONFIDENCE_THRESHOLD_AUTO_CLOSE) {
+  if (enableAutoResolve && confidence >= autoResolveThreshold) {
     action.type = "auto_resolve";
     action.shouldAutoResolve = true;
     action.reasoning = "High confidence - can auto-resolve ticket";
   } else if (
-    confidence >= DECISION_RULES.SMART_ASSIGN_THRESHOLD &&
+    enableSmartAssign &&
+    confidence >= smartAssignThreshold &&
     options.canAssign
   ) {
     action.type = "smart_assign";
     action.shouldAssign = true;
     action.reasoning =
       "Moderate confidence - suggest assignment to available agent";
-  } else if (confidence >= DECISION_RULES.CONFIDENCE_THRESHOLD_SUGGEST) {
+  } else if (confidence >= suggestThreshold) {
     action.type = "suggest";
     action.shouldSuggest = true;
     action.reasoning = "Medium confidence - suggest to user, wait for feedback";

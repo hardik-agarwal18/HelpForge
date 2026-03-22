@@ -7,6 +7,7 @@ import agentRoutes from "./modules/tickets/ticket.agent.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import aiAutomationRoutes from "./modules/ai/automation/ai.automation.routes.js";
 import aiAugmentationRoutes from "./modules/ai/augmentation/ai.augmentation.routes.js";
+import aiConfigRoutes from "./modules/ai/config/ai.config.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 
 const app = express();
@@ -25,6 +26,7 @@ app.use("/api/tickets", ticketRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/ai/automation", aiAutomationRoutes);
 app.use("/api/ai/augmentation", aiAugmentationRoutes);
+app.use("/api/ai/config", aiConfigRoutes);
 
 // Error handler middleware (must be last)
 app.use(errorHandler);

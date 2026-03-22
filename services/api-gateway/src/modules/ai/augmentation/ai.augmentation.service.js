@@ -15,6 +15,7 @@ import {
   toLowerText,
   resolveDays,
 } from "./ai.augmentation.utils.js";
+import { getAIConfigByOrg } from "../config/ai.config.repo.js";
 
 /**
  * AI Augmentation Service - PHASE 3
@@ -35,6 +36,12 @@ export const generateAgentSuggestion = async (ticketId) => {
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for suggestion");
+      return null;
+    }
+
+    const orgConfig = await getAIConfigByOrg(ticket.organizationId);
+    if (orgConfig && !orgConfig.aiEnabled) {
+      logger.info({ ticketId }, "Agent suggestion skipped: AI disabled by org config");
       return null;
     }
 
@@ -110,6 +117,12 @@ export const generateTicketSummary = async (ticketId) => {
 
     if (!ticket) {
       logger.warn({ ticketId }, "Ticket not found for summary");
+      return null;
+    }
+
+    const orgConfig = await getAIConfigByOrg(ticket.organizationId);
+    if (orgConfig && !orgConfig.aiEnabled) {
+      logger.info({ ticketId }, "Ticket summary skipped: AI disabled by org config");
       return null;
     }
 
