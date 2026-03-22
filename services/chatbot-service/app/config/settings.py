@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     chunk_overlap: int = 64
     min_retrieval_score: float = 0.70  # Only surfaces high-confidence chunks
 
+    # ── FAQ matching (embedding-only short-circuit, no LLM) ───────────────
+    faq_similarity_threshold: float = 0.92  # cosine similarity required to return FAQ answer directly
+
     # ── LLM ───────────────────────────────────────────────────────────────
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 3

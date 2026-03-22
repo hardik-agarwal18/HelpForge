@@ -25,6 +25,7 @@ from app.llm.gateway_client import gateway_client
 from app.memory.summarizer import summarizer
 from app.memory.ticket_memory import ticket_memory
 from app.observability.metrics import MetricsCollector
+from app.rag.faq_matcher import faq_matcher
 from app.rag.prompt_builder import prompt_builder
 from app.rag.query_router import QueryType, query_router
 from app.rag.reranker import reranker
@@ -89,6 +90,35 @@ class RAGPipeline:
                 "usage": {},
                 "query_type": route.query_type.value,
                 "action": route.extracted_action,
+                "reranked_docs": [],
+            }
+
+        # ── 2.5. FAQ short-circuit (embedding only, no LLM) ──────────────
+        m.start("faq_match")
+        faq_match = await faq_matcher.match(org_id, clean_message)
+        m.stop("faq_match")
+
+        if faq_match.matched:
+            await ticket_memory.add_message(org_id, ticket_id, "user", clean_message)
+            await ticket_memory.add_message(org_id, ticket_id, "assistant", faq_match.answer)
+            m.increment("faq_hit")
+            m.emit(
+                org_id=org_id, ticket_id=ticket_id,
+                query_type=route.query_type.value,
+                faq_score=faq_match.score,
+            )
+            return {
+                "response": faq_match.answer,
+                "sources": [{
+                    "id": faq_match.faq_id,
+                    "score": faq_match.score,
+                    "source": "faq",
+                    "excerpt": faq_match.question[:200],
+                }],
+                "usage": {},
+                "query_type": route.query_type.value,
+                "action": route.extracted_action,
+                "faq_hit": True,
                 "reranked_docs": [],
             }
 
@@ -221,6 +251,14 @@ class RAGPipeline:
             await ticket_memory.add_message(org_id, ticket_id, "user", clean_message)
             await ticket_memory.add_message(org_id, ticket_id, "assistant", canned)
             yield canned
+            return
+
+        # FAQ short-circuit (same logic as run())
+        faq_match = await faq_matcher.match(org_id, clean_message)
+        if faq_match.matched:
+            await ticket_memory.add_message(org_id, ticket_id, "user", clean_message)
+            await ticket_memory.add_message(org_id, ticket_id, "assistant", faq_match.answer)
+            yield faq_match.answer
             return
 
         # Retrieval + re-rank (same as run())

@@ -140,6 +140,25 @@ class DeleteScrapedDocumentsResponse(BaseModel):
     status:            str
 
 
+# ─── FAQ ingestion (called by internal faq/upsert route) ─────────────────────
+
+class FAQEntry(BaseModel):
+    faq_id: str                   # stable identifier (e.g. "faq_reset_password")
+    question: str                 # the canonical question text — embedded for similarity
+    answer: str                   # the answer returned verbatim on a match
+
+
+class UpsertFAQRequest(BaseModel):
+    org_id: str
+    faqs: List[FAQEntry]
+
+
+class UpsertFAQResponse(BaseModel):
+    org_id: str
+    upserted: int
+    status: str
+
+
 class AgentResponse(BaseModel):
     """
     Unified agent decision result.

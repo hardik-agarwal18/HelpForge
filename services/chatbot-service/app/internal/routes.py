@@ -34,6 +34,8 @@ from app.models.schemas import (
     ProcessDocumentResponse,
     ReEmbedOrgRequest,
     ReEmbedOrgResponse,
+    UpsertFAQRequest,
+    UpsertFAQResponse,
 )
 from app.security.internal_auth import require_internal_auth
 from app.services.document_service import document_service
@@ -105,6 +107,35 @@ async def re_embed_org(request: ReEmbedOrgRequest) -> ReEmbedOrgResponse:
     and returns counts for observability.
     """
     return await migration_service.run_migration(request)
+
+
+# ── FAQ Endpoints ──────────────────────────────────────────────────────────────
+
+@router.post(
+    "/faq/upsert",
+    response_model=UpsertFAQResponse,
+    dependencies=_INTERNAL,
+)
+async def upsert_faq(request: UpsertFAQRequest) -> UpsertFAQResponse:
+    """
+    Index FAQ entries for an org so the FAQMatcher can short-circuit LLM calls.
+
+    Each entry embeds the question text and stores the answer in Qdrant with
+    source_type="faq".  Re-posting the same faq_id overwrites the entry
+    (idempotent).
+
+    Body:
+      {
+        "org_id": "acme",
+        "faqs": [
+          { "faq_id": "faq_reset_password",
+            "question": "How do I reset my password?",
+            "answer": "Go to Settings → Security → Reset password." },
+          ...
+        ]
+      }
+    """
+    return await document_service.upsert_faqs(request)
 
 
 # ── Unified Agent Endpoints ────────────────────────────────────────────────────

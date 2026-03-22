@@ -22,6 +22,8 @@ from app.models.schemas import (
     EmbedResponse,
     ProcessDocumentRequest,
     ProcessDocumentResponse,
+    UpsertFAQRequest,
+    UpsertFAQResponse,
 )
 from app.rag.chunker import chunker
 from app.vectorstore.qdrant_store import vector_store
@@ -101,6 +103,61 @@ class DocumentService:
         )
 
         return EmbedResponse(embedded=len(vectors), status="success")
+
+    async def upsert_faqs(self, request: UpsertFAQRequest) -> UpsertFAQResponse:
+        """
+        Index a list of FAQ entries into Qdrant so the FAQMatcher can find them.
+
+        Each entry embeds the *question* (for similarity search) and stores the
+        *answer* in the payload (returned verbatim on match).  The faq_id is used
+        as the Qdrant point ID so re-upserts are idempotent.
+
+        Payload shape:
+          source_type      = "faq"
+          document_id      = entry.faq_id
+          question         = entry.question
+          answer           = entry.answer
+          text             = entry.question   ← used by keyword search + text index
+          org_id           = request.org_id
+          embedding_version = settings.embedding_version
+        """
+        if not request.faqs:
+            return UpsertFAQResponse(org_id=request.org_id, upserted=0, status="success")
+
+        questions = [e.question for e in request.faqs]
+        vectors = await embedder.embed_many(request.org_id, questions)
+
+        payloads = [
+            {
+                "source_type": "faq",
+                "document_id": entry.faq_id,
+                "question": entry.question,
+                "answer": entry.answer,
+                "text": entry.question,       # full-text index key
+                "org_id": request.org_id,
+                "embedding_version": settings.embedding_version,
+            }
+            for entry in request.faqs
+        ]
+        ids = [entry.faq_id for entry in request.faqs]
+
+        await vector_store.upsert(
+            org_id=request.org_id,
+            vectors=vectors,
+            payloads=payloads,
+            ids=ids,
+        )
+
+        logger.info(
+            "FAQ entries upserted: org=%s, count=%d",
+            request.org_id,
+            len(request.faqs),
+        )
+        return UpsertFAQResponse(
+            org_id=request.org_id,
+            upserted=len(request.faqs),
+            status="success",
+        )
 
     async def delete_scraped_documents(
         self, request: DeleteScrapedDocumentsRequest
