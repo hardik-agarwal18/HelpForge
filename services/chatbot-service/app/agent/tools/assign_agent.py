@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class _Input(BaseModel):
 class AssignAgentTool(BaseTool):
     name = "assign_agent"
     description = "Assign a support ticket to a specific human agent"
+    cost = ToolCost.LOW  # DB write + notification trigger
     input_fields = [
         ("ticket_id", "str", "ID of the ticket to assign"),
         ("org_id", "str", "Organisation ID"),

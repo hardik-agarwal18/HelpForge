@@ -15,7 +15,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ class _Input(BaseModel):
 class FetchTicketTool(BaseTool):
     name = "fetch_ticket"
     description = "Retrieve full ticket details including all comments and metadata"
+    cost = ToolCost.LOW  # Read-only DB query
     input_fields = [
         ("ticket_id", "str", "ID of the ticket to fetch"),
         ("org_id", "str", "Organisation ID (for tenancy isolation)"),

@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class _Input(BaseModel):
 class SearchDocsTool(BaseTool):
     name = "search_docs"
     description = "Search the organisation's knowledge base for relevant documents"
+    cost = ToolCost.MEDIUM  # Embedding call + Qdrant search
     input_fields = [
         ("org_id", "str", "Organisation ID (scopes the search to org's collection)"),
         ("query", "str", "Search query — 3 to 500 chars"),

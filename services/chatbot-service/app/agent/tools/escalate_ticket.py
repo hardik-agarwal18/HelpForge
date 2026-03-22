@@ -21,7 +21,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field, field_validator
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ class _Input(BaseModel):
 class EscalateTicketTool(BaseTool):
     name = "escalate_ticket"
     description = "Escalate a ticket to senior support with a reason and urgency level"
+    cost = ToolCost.MEDIUM  # Triggers notifications + priority changes
     input_fields = [
         ("ticket_id", "str", "ID of the ticket to escalate"),
         ("org_id", "str", "Organisation ID"),

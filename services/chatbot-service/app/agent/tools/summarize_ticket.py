@@ -16,7 +16,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class _Input(BaseModel):
 class SummarizeTicketTool(BaseTool):
     name = "summarize_ticket"
     description = "Generate a concise summary of a ticket's full conversation history"
+    cost = ToolCost.HIGH  # Full LLM call over entire ticket history
     input_fields = [
         ("ticket_id", "str", "ID of the ticket to summarize"),
         ("org_id", "str", "Organisation ID"),

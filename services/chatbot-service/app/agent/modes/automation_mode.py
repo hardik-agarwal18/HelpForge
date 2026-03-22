@@ -74,7 +74,12 @@ class AutomationMode:
         tool_result: Dict[str, Any],
         tool_descriptions: str,
     ) -> Tuple[List[Dict[str, str]], str]:
-        """Returns (messages, system_prompt) for the post-tool follow-up call."""
+        """
+        Returns (messages, system_prompt) for the post-tool decision call.
+
+        Asks for a FULL JSON decision — the agent loop decides whether to
+        execute another tool, respond with an AI comment, or escalate.
+        """
         event_type = inp.extra.get("event_type", "ticket_event")
         event_description = f"Event type: {event_type}\nDescription: {inp.query}"
 
@@ -88,18 +93,29 @@ class AutomationMode:
             tool_descriptions=tool_descriptions,
         )
 
-        tool_result_text = truncate_to_tokens(
-            f"Tool '{decision.tool}' result: {tool_result}", _TOOL_RESULT_TOKEN_BUDGET
-        )
+        step = tool_result.pop("_step", "?")
+        success = tool_result.get("success", False)
+        tool_result_text = truncate_to_tokens(str(tool_result), _TOOL_RESULT_TOKEN_BUDGET)
+
+        if success:
+            outcome_note = f"✓ Tool succeeded (step {step})"
+        else:
+            error = tool_result.get("error", "unknown error")
+            outcome_note = f"✗ Tool failed (step {step}): {error}"
 
         messages: List[Dict[str, str]] = [
             {
                 "role": "user",
                 "content": (
                     f"Ticket event:\n{event_description}\n\n"
-                    f"Tool executed: {decision.tool}\n"
-                    f"{tool_result_text}\n\n"
-                    "Now decide the final action and write the AI comment for the ticket. "
+                    f"You executed tool '{decision.tool}'.\n"
+                    f"{outcome_note}\n"
+                    f"Result: {tool_result_text}\n\n"
+                    "Analyze this result and decide your NEXT action:\n"
+                    "  • If the action resolved the ticket → action=respond, write the AI comment\n"
+                    "  • If another tool is needed → action=tool_call (prefer low-cost tools)\n"
+                    "  • If the tool failed or you cannot proceed → action=escalate\n"
+                    "  • NEVER call a DISABLED tool.\n\n"
                     "Respond ONLY with valid JSON."
                 ),
             }

@@ -14,7 +14,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field, field_validator
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ class _Input(BaseModel):
 class CreateTicketTool(BaseTool):
     name = "create_ticket"
     description = "Create a new support ticket on behalf of a user"
+    cost = ToolCost.MEDIUM  # DB write + validation
     input_fields = [
         ("org_id", "str", "Organisation ID (required)"),
         ("subject", "str", "Ticket subject — max 200 chars"),

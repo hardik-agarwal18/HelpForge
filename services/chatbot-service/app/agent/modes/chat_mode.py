@@ -77,8 +77,16 @@ class ChatMode:
         tool_descriptions: str,
     ) -> Tuple[List[Dict[str, str]], str]:
         """
-        Returns (messages, system_prompt) for the second LLM call that
-        produces the final user-facing response after a tool execution.
+        Returns (messages, system_prompt) for the post-tool decision LLM call.
+
+        IMPORTANT — this asks for a FULL JSON decision, not just a final response.
+        The agent loop inspects the new decision and may:
+          • action=respond   → produce final user message (loop ends)
+          • action=tool_call → execute another tool (loop continues)
+          • action=escalate  → hand off to human (loop ends)
+
+        This is what makes the tool execution a true reasoning loop rather than
+        a one-shot "format the result" step.
         """
         system_prompt = build_chat_system_prompt(
             ticket_context=format_ticket_context(inp.ticket_context),
@@ -89,18 +97,30 @@ class ChatMode:
             tool_descriptions=tool_descriptions,
         )
 
-        tool_result_text = truncate_to_tokens(
-            f"Tool '{decision.tool}' result: {tool_result}", _TOOL_RESULT_TOKEN_BUDGET
-        )
+        step = tool_result.pop("_step", "?")  # injected by agent.py for logging
+        success = tool_result.get("success", False)
+        tool_result_text = truncate_to_tokens(str(tool_result), _TOOL_RESULT_TOKEN_BUDGET)
+
+        if success:
+            outcome_note = f"✓ Tool succeeded (step {step})"
+        else:
+            error = tool_result.get("error", "unknown error")
+            outcome_note = f"✗ Tool failed (step {step}): {error}"
 
         messages: List[Dict[str, str]] = [
             {
                 "role": "user",
                 "content": (
                     f"User message: {inp.query}\n\n"
-                    f"You already executed: {decision.tool}\n"
-                    f"{tool_result_text}\n\n"
-                    "Now write the final response for the user. "
+                    f"You executed tool '{decision.tool}'.\n"
+                    f"{outcome_note}\n"
+                    f"Result: {tool_result_text}\n\n"
+                    "Analyze this result and decide your NEXT action:\n"
+                    "  • If the result resolves the user's issue → action=respond, write the final message\n"
+                    "  • If another tool is needed → action=tool_call with the next tool\n"
+                    "  • If the tool failed and you cannot recover → action=escalate\n"
+                    "  • Prefer low-cost tools for follow-up actions.\n"
+                    "  • NEVER call a DISABLED tool.\n\n"
                     "Respond ONLY with valid JSON."
                 ),
             }

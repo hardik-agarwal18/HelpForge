@@ -12,22 +12,25 @@ Execution flow for every call:
   2.  Context build        — RAG retrieval + memory load (or use pre-provided)
   3.  Mode dispatch        — select prompt template + message builder
   4.  LLM decision call    — first call → structured JSON decision
-  5.  Decision validation  — schema + semantic checks
-  6.  Tool execution loop  — up to MAX_TOOL_CALLS; each followed by optional
-                             second LLM call to produce the final response
+  5.  Decision validation  — schema + semantic checks (rejects DISABLED tool calls)
+  6.  Reasoning loop       — up to MAX_AGENT_STEPS total LLM calls:
+                               tool_call → execute → full LLM re-decision → repeat
+                             Each iteration is a real reasoning step, not just
+                             "format the result" — the LLM can chain tools,
+                             retry with a different tool, or escalate on failure.
   7.  Output guard         — scan final message for leakage
   8.  Metrics              — structured log with timing + counters
   9.  Return AgentDecision — fully typed, serialisable result
 
-Dependencies injected at import time (singletons):
-  gateway_client   — LLM generate calls
-  ticket_memory    — Redis conversation history
-  retriever        — Qdrant hybrid retrieval
-  reranker         — LLM-based re-ranker
-  prompt_builder   — RAG context + message formatting
-  tool_executor    — tool registry + execution
-  agent_validator  — decision JSON validation
-  guardrails       — input/output safety
+Loop termination:
+  • decision.action != TOOL_CALL → exits naturally
+  • agent_step >= MAX_AGENT_STEPS → forced ESCALATE (safety ceiling)
+  • executor.MAX_TOOL_CALLS_PER_RUN → tool skipped, agent responds/escalates
+
+Tool availability:
+  The executor exposes available_tool_descriptions() which tags each tool as
+  ✓ ACTIVE / ⚠ DEGRADED / ✗ DISABLED so the LLM never picks a broken tool.
+  The validator also rejects DISABLED tool calls before execution.
 """
 from __future__ import annotations
 
@@ -60,7 +63,12 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-MAX_TOOL_CALLS = 3        # Hard per-run limit enforced by executor too
+# Total LLM decision steps allowed per agent run (initial call + all followups).
+# Each tool_call iteration consumes one step.  Exceeding this forces ESCALATE.
+# Relationship to executor limit: MAX_AGENT_STEPS governs LLM calls;
+# executor.MAX_TOOL_CALLS_PER_RUN governs tool executions — both must pass.
+MAX_AGENT_STEPS = 5
+
 MEMORY_WINDOW = 10        # Recent messages loaded from Redis
 
 
@@ -132,7 +140,7 @@ class UnifiedAgent:
                 inp.mode.value, f"Input blocked: {guard.reason}"
             )
             decision = AgentDecision(**{**fallback, "message": guard.safe_value or fallback["message"]})
-            self._emit_metrics(m, inp, decision, tool_calls=0)
+            self._emit_metrics(m, inp, decision, tool_calls=0, agent_steps=0)
             return decision
 
         clean_query = guard.safe_value
@@ -144,63 +152,95 @@ class UnifiedAgent:
 
         # ── 3. Dispatch to mode handler ───────────────────────────────────
         mode_handler = self._modes[inp.mode]
-        tool_descs = tool_executor.tool_descriptions()
+        # Use available_tool_descriptions() — injects status (ACTIVE/DISABLED/DEGRADED)
+        # and cost tier so the LLM makes informed, cost-aware tool choices.
+        tool_descs = tool_executor.available_tool_descriptions()
 
         # ── 4. First LLM call — decision ──────────────────────────────────
-        m.start("llm_decision")
+        m.start("llm_step_0")
         messages, system_prompt = mode_handler.build_messages(inp, ctx, tool_descs)
         raw_result = await gateway_client.generate(
             org_id=inp.org_id,
             messages=messages,
             system_prompt=system_prompt,
         )
-        m.stop("llm_decision")
+        m.stop("llm_step_0")
         m.record("llm_tokens", raw_result.get("usage", {}).get("tokensUsed", 0))
 
         # ── 5. Parse + validate decision ──────────────────────────────────
         decision = self._parse_and_validate(raw_result.get("content", ""), inp.mode)
 
-        # ── 6. Tool execution loop ────────────────────────────────────────
-        tool_calls = 0
-        while (
-            decision.action == AgentAction.TOOL_CALL
-            and decision.tool
-            and tool_calls < MAX_TOOL_CALLS
-        ):
-            m.start(f"tool_{decision.tool}_{tool_calls}")
+        # ── 6. Reasoning loop ─────────────────────────────────────────────
+        # Each iteration: execute tool → full LLM re-decision (not just format).
+        # The LLM may chain tools, retry with a different tool, or escalate.
+        #
+        # Termination conditions:
+        #   • decision.action != TOOL_CALL (respond / escalate / suggest)
+        #   • agent_step >= MAX_AGENT_STEPS → forced ESCALATE
+        #   • executor internal limit (MAX_TOOL_CALLS_PER_RUN)
+        agent_step = 0   # counts LLM followup calls (post-tool re-decisions)
+        tool_calls = 0   # counts actual tool executions (for metrics)
+
+        while decision.action == AgentAction.TOOL_CALL and decision.tool:
+            if agent_step >= MAX_AGENT_STEPS:
+                logger.warning(
+                    "MAX_AGENT_STEPS (%d) reached: org=%s ticket=%s — forcing escalate",
+                    MAX_AGENT_STEPS, inp.org_id, inp.ticket_id,
+                )
+                m.increment("step_limit_hit")
+                decision = AgentDecision(
+                    **build_fallback_decision_dict(
+                        inp.mode.value,
+                        f"Max agent steps ({MAX_AGENT_STEPS}) reached without resolution",
+                    )
+                )
+                break
+
+            # Execute the tool
+            m.start(f"tool_{decision.tool}_{agent_step}")
             tool_result = await tool_executor.execute(
                 decision.tool, decision.tool_input
             )
-            m.stop(f"tool_{decision.tool}_{tool_calls}")
+            m.stop(f"tool_{decision.tool}_{agent_step}")
             m.increment("tool_calls")
             tool_calls += 1
+            agent_step += 1
 
+            # Stash result on decision for callers + followup context
             decision.tool_result = tool_result
 
             logger.info(
-                "Tool executed: org=%s ticket=%s tool=%s success=%s",
-                inp.org_id, inp.ticket_id,
+                "Agent step %d: org=%s ticket=%s tool=%s success=%s",
+                agent_step, inp.org_id, inp.ticket_id,
                 decision.tool, tool_result.get("success"),
             )
 
-            # Second LLM call — produce natural-language response from result
-            m.start(f"llm_followup_{tool_calls}")
+            # Inject step metadata so the mode handler can include it in the
+            # followup prompt (consumed and popped inside build_followup_messages)
+            enriched_result = {**tool_result, "_step": agent_step}
+
+            # Full LLM re-decision — the LLM sees the tool result and decides
+            # whether to respond, call another tool, or escalate.
+            m.start(f"llm_step_{agent_step}")
             followup_messages, _ = mode_handler.build_followup_messages(
-                inp, ctx, decision, tool_result, tool_descs
+                inp, ctx, decision, enriched_result, tool_descs
             )
             followup_raw = await gateway_client.generate(
                 org_id=inp.org_id,
                 messages=followup_messages,
                 system_prompt=system_prompt,
             )
-            m.stop(f"llm_followup_{tool_calls}")
-            m.record("llm_tokens_followup", followup_raw.get("usage", {}).get("tokensUsed", 0))
+            m.stop(f"llm_step_{agent_step}")
+            m.record(
+                f"llm_tokens_step_{agent_step}",
+                followup_raw.get("usage", {}).get("tokensUsed", 0),
+            )
 
-            prev_tool_result = tool_result  # preserve before possible overwrite
+            prev_tool_result = tool_result
             decision = self._parse_and_validate(
                 followup_raw.get("content", ""), inp.mode
             )
-            # Re-attach tool result so callers always have it
+            # Re-attach last tool result so callers always have it
             if decision.tool_result is None:
                 decision.tool_result = prev_tool_result
 
@@ -214,7 +254,7 @@ class UnifiedAgent:
         decision.message = out_guard.safe_value
 
         # ── 8. Emit metrics ───────────────────────────────────────────────
-        metrics = self._emit_metrics(m, inp, decision, tool_calls)
+        metrics = self._emit_metrics(m, inp, decision, tool_calls, agent_step)
         decision.metadata["metrics"] = metrics
 
         return decision
@@ -321,6 +361,7 @@ class UnifiedAgent:
         inp: AgentInput,
         decision: AgentDecision,
         tool_calls: int,
+        agent_steps: int = 0,
     ) -> Dict[str, Any]:
         return m.emit(
             org_id=inp.org_id,
@@ -329,6 +370,7 @@ class UnifiedAgent:
             action=decision.action.value,
             confidence=decision.confidence,
             tool_calls=tool_calls,
+            agent_steps=agent_steps,
             tool=decision.tool,
         )
 

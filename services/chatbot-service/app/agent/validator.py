@@ -39,19 +39,31 @@ class ValidationError(Exception):
 
 class AgentValidator:
     """
-    Validates raw LLM decision dicts before they are converted to AgentDecision.
+    Validates raw LLM decision dicts before they enter the execution pipeline.
 
-    Usage:
-        validator = AgentValidator(registered_tool_names={"create_ticket", ...})
-        validator.validate(raw_dict)  # raises ValidationError if invalid
+    Three tiers of tool name checks:
+      _all_tool_names    — every registered tool (existence check)
+      _active_tool_names — tools that are ACTIVE or DEGRADED (availability check)
+
+    If the LLM tries to call a DISABLED tool the validator rejects it with a
+    clear message, causing the agent to return a safe fallback rather than
+    attempting to execute a broken tool.
     """
 
     def __init__(self, registered_tool_names: Optional[Set[str]] = None) -> None:
-        self._tool_names = registered_tool_names or set()
+        self._all_tool_names: Set[str] = registered_tool_names or set()
+        self._active_tool_names: Set[str] = registered_tool_names or set()
 
     def update_tool_names(self, names: Set[str]) -> None:
-        """Called by executor after it builds the registry."""
-        self._tool_names = names
+        """Called by executor after building the registry (full set)."""
+        self._all_tool_names = names
+
+    def update_active_tools(self, names: Set[str]) -> None:
+        """
+        Called by executor whenever tool statuses change.
+        `names` should contain ACTIVE + DEGRADED tools only (not DISABLED).
+        """
+        self._active_tool_names = names
 
     def validate(self, data: Dict[str, Any], mode: str) -> None:
         """
@@ -83,15 +95,25 @@ class AgentValidator:
                 f"confidence {confidence} out of range [0.0, 1.0]"
             )
 
-        # ── Level 3: TOOL_CALL semantics ───────────────────────────────────
+        # ── Level 3: TOOL_CALL semantics ──────────────────────────────────
         if action == "tool_call":
             tool = data.get("tool")
             if not tool or not isinstance(tool, str):
                 raise ValidationError("action=tool_call requires a non-empty 'tool' string")
-            if self._tool_names and tool not in self._tool_names:
+
+            # 3a: tool must be registered
+            if self._all_tool_names and tool not in self._all_tool_names:
                 raise ValidationError(
-                    f"Unknown tool '{tool}'; registered tools: {sorted(self._tool_names)}"
+                    f"Unknown tool '{tool}'; registered: {sorted(self._all_tool_names)}"
                 )
+
+            # 3b: tool must not be DISABLED
+            if self._active_tool_names and tool not in self._active_tool_names:
+                raise ValidationError(
+                    f"Tool '{tool}' is currently DISABLED — "
+                    f"choose an active tool from: {sorted(self._active_tool_names)}"
+                )
+
             tool_input = data.get("tool_input", {})
             if not isinstance(tool_input, dict):
                 raise ValidationError("'tool_input' must be a JSON object (dict)")
@@ -106,6 +128,6 @@ class AgentValidator:
         )
 
 
-# Module-level singleton — the executor registers tool names after building
-# its registry, so validator sees the full set before any decision is made.
+# Module-level singleton — executor populates both name sets at startup and
+# calls update_active_tools() any time a status changes at runtime.
 agent_validator = AgentValidator()

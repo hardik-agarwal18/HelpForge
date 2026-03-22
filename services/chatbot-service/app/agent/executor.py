@@ -5,28 +5,43 @@ Central tool registry and execution engine for the unified agent layer.
 
 Responsibilities:
   • Maintain a registry of all available tools (name → BaseTool instance)
-  • Provide a formatted tool-description string for system prompt injection
-  • Execute tools with retry logic (up to MAX_RETRIES for retriable errors)
+  • Track per-tool runtime status (ACTIVE / DISABLED / DEGRADED)
+  • Provide available_tool_descriptions() for system prompt injection —
+    shows status + cost so the LLM makes informed, cost-aware decisions
+  • Execute tools with retry logic (retriable errors only)
   • Enforce per-run tool call limits (MAX_TOOL_CALLS_PER_RUN)
-  • Catch ToolExecutionError and return structured error dicts (never raises)
+  • Block execution of DISABLED tools immediately (no retry)
 
 Design principle: the executor is the ONLY place that runs tool code.
 The agent calls executor.execute() and receives a plain dict back.
-It never imports tool classes directly.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from enum import Enum
 from typing import Any, Dict, Optional, Set
 
 from app.agent.tools.base import BaseTool, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_CALLS_PER_RUN = 3   # Hard limit per agent run
+MAX_TOOL_CALLS_PER_RUN = 3   # Hard limit per agent run (also checked in agent.py)
 MAX_RETRIES = 2               # Retries for retriable ToolExecutionError
 RETRY_DELAY_SECONDS = 0.5     # Delay between retries (doubles each attempt)
+
+
+class ToolStatus(str, Enum):
+    """
+    Runtime availability state for each registered tool.
+
+      ACTIVE   — healthy, use freely
+      DEGRADED — working but slow/unreliable; prefer alternatives if available
+      DISABLED — do not call; executor rejects immediately without retry
+    """
+    ACTIVE = "ACTIVE"
+    DEGRADED = "DEGRADED"
+    DISABLED = "DISABLED"
 
 
 class ToolExecutor:
@@ -36,45 +51,88 @@ class ToolExecutor:
     Usage:
         executor = ToolExecutor()
         executor.register(CreateTicketTool())
-        ...
+        executor.set_tool_status("assign_agent", ToolStatus.DISABLED)
+
+        descriptions = executor.available_tool_descriptions()  # inject into prompt
         result = await executor.execute("create_ticket", {...})
-        descriptions = executor.tool_descriptions()
     """
 
     def __init__(self) -> None:
         self._registry: Dict[str, BaseTool] = {}
+        self._statuses: Dict[str, ToolStatus] = {}
         self._call_count: int = 0  # Resets per agent run via reset_call_count()
 
     # ── Registration ──────────────────────────────────────────────────────
 
     def register(self, tool: BaseTool) -> None:
-        """Register a tool. Raises ValueError if name is already taken."""
+        """Register a tool. Default status: ACTIVE."""
         if tool.name in self._registry:
             raise ValueError(f"Tool '{tool.name}' is already registered")
         self._registry[tool.name] = tool
-        logger.debug("Registered tool: %s", tool.name)
+        self._statuses[tool.name] = ToolStatus.ACTIVE
+        logger.debug("Registered tool: %s (cost=%s)", tool.name, tool.cost.value)
 
     def register_many(self, tools: list[BaseTool]) -> None:
         for tool in tools:
             self.register(tool)
 
+    # ── Status management ─────────────────────────────────────────────────
+
+    def set_tool_status(self, tool_name: str, status: ToolStatus) -> None:
+        """
+        Update the runtime status of a registered tool.
+        Called by health checks, feature flags, or circuit breakers.
+        """
+        if tool_name not in self._registry:
+            raise ValueError(f"Unknown tool: '{tool_name}'")
+        old = self._statuses.get(tool_name, ToolStatus.ACTIVE)
+        self._statuses[tool_name] = status
+        if old != status:
+            logger.info("Tool status changed: %s → %s", tool_name, status.value)
+
+    def get_tool_status(self, tool_name: str) -> ToolStatus:
+        return self._statuses.get(tool_name, ToolStatus.ACTIVE)
+
+    def disable_tool(self, tool_name: str) -> None:
+        self.set_tool_status(tool_name, ToolStatus.DISABLED)
+
+    def enable_tool(self, tool_name: str) -> None:
+        self.set_tool_status(tool_name, ToolStatus.ACTIVE)
+
     @property
     def registered_names(self) -> Set[str]:
         return set(self._registry.keys())
 
+    @property
+    def active_tool_names(self) -> Set[str]:
+        """Names of tools that are currently ACTIVE or DEGRADED (callable)."""
+        return {
+            name for name, status in self._statuses.items()
+            if status != ToolStatus.DISABLED
+        }
+
     # ── Prompt rendering ──────────────────────────────────────────────────
 
-    def tool_descriptions(self) -> str:
+    def available_tool_descriptions(self) -> str:
         """
-        Returns a formatted multi-line string of all tool one-liners,
-        ready to inject into the system prompt.
+        Returns a formatted multi-line string of all tools with their
+        current status and cost tier, ready to inject into the system prompt.
+
+        Example output:
+          - create_ticket(subject, description, priority): Create a new ticket  [✓ ACTIVE] [cost:MEDIUM]
+          - assign_agent(ticket_id, agent_id): Assign to agent  [⚠ DEGRADED] [cost:LOW]
+          - classify_ticket(ticket_id): Classify ticket  [✗ DISABLED] [cost:HIGH]
+
+        The LLM must NEVER call a DISABLED tool.
+        It may call DEGRADED tools but should prefer alternatives.
         """
         if not self._registry:
             return "(no tools registered)"
-        return "\n".join(
-            tool.to_prompt_description()
-            for tool in self._registry.values()
-        )
+        lines = []
+        for name, tool in self._registry.items():
+            status = self._statuses.get(name, ToolStatus.ACTIVE)
+            lines.append(tool.to_prompt_description(status=status.value))
+        return "\n".join(lines)
 
     # ── Execution ─────────────────────────────────────────────────────────
 
@@ -88,15 +146,13 @@ class ToolExecutor:
         tool_input: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Execute a registered tool by name with retry logic.
+        Execute a registered, non-disabled tool with retry logic.
 
-        Returns:
-            A plain dict with at minimum:
-              {"success": bool, ...tool-specific fields...}
-            On failure:
-              {"success": False, "error": "...", "retriable": bool}
+        Returns a plain dict:
+          Success: {"success": True, ...tool-specific fields...}
+          Failure: {"success": False, "error": "...", "retriable": bool}
 
-        Never raises — all exceptions are caught and returned as error dicts.
+        Never raises — all exceptions are returned as error dicts.
         """
         # ── Guard: max calls per run ───────────────────────────────────────
         if self._call_count >= MAX_TOOL_CALLS_PER_RUN:
@@ -120,6 +176,19 @@ class ToolExecutor:
                 "retriable": False,
             }
 
+        # ── Guard: tool availability ───────────────────────────────────────
+        status = self._statuses.get(tool_name, ToolStatus.ACTIVE)
+        if status == ToolStatus.DISABLED:
+            logger.warning("Blocked call to DISABLED tool: '%s'", tool_name)
+            return {
+                "success": False,
+                "error": f"Tool '{tool_name}' is currently DISABLED — choose an active tool",
+                "retriable": False,
+                "tool_status": "DISABLED",
+            }
+        if status == ToolStatus.DEGRADED:
+            logger.warning("Calling DEGRADED tool: '%s' — proceeding with caution", tool_name)
+
         # ── Execute with retry ─────────────────────────────────────────────
         last_error: Optional[ToolExecutionError] = None
         for attempt in range(MAX_RETRIES + 1):
@@ -127,8 +196,8 @@ class ToolExecutor:
                 self._call_count += 1
                 result = await tool.execute(tool_input)
                 logger.info(
-                    "Tool executed: tool=%s attempt=%d success=True",
-                    tool_name, attempt + 1,
+                    "Tool executed: tool=%s attempt=%d success=True cost=%s",
+                    tool_name, attempt + 1, tool.cost.value,
                 )
                 return result
 
@@ -143,7 +212,6 @@ class ToolExecutor:
                 await asyncio.sleep(RETRY_DELAY_SECONDS * (2 ** attempt))
 
             except Exception as exc:
-                # Unexpected exception — wrap and stop immediately
                 logger.exception("Unexpected error in tool '%s': %s", tool_name, exc)
                 return {
                     "success": False,
@@ -159,7 +227,6 @@ class ToolExecutor:
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
-# Built once at import time; populated by _build_executor() below.
 
 def _build_executor() -> ToolExecutor:
     """Instantiate executor and register all tools."""
@@ -169,10 +236,15 @@ def _build_executor() -> ToolExecutor:
     ex = ToolExecutor()
     ex.register_many(all_tools)
 
-    # Inform the validator of registered tool names so it can catch bad tool refs
+    # Inform the validator of active tool names so it can reject DISABLED refs
     agent_validator.update_tool_names(ex.registered_names)
+    agent_validator.update_active_tools(ex.active_tool_names)
 
-    logger.info("ToolExecutor built with %d tools: %s", len(ex.registered_names), sorted(ex.registered_names))
+    logger.info(
+        "ToolExecutor built: %d tools registered — %s",
+        len(ex.registered_names),
+        sorted(ex.registered_names),
+    )
     return ex
 
 

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.agent.gateway import action_gateway
-from app.agent.tools.base import BaseTool, ToolExecutionError
+from app.agent.tools.base import BaseTool, ToolCost, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class _Input(BaseModel):
 class UpdateTicketTool(BaseTool):
     name = "update_ticket"
     description = "Update an existing ticket's status, priority, tags, or category"
+    cost = ToolCost.LOW  # Simple DB write, no LLM
     input_fields = [
         ("ticket_id", "str", "ID of the ticket to update"),
         ("org_id", "str", "Organisation ID"),
