@@ -130,14 +130,49 @@ def format_history(history: List[Dict[str, Any]], max_messages: int = 10) -> str
 def format_ticket_context(ctx: Dict[str, Any]) -> str:
     """
     Render ticket metadata as a compact string for prompt injection.
-    Only includes fields relevant for agent decision-making.
+
+    Renders two sections:
+      1. Standard ticket fields  (ticket_id, priority, status, …)
+      2. Conversation intelligence fields injected by ChatService
+         (conv_intent, conv_stage, conv_severity, conv_entities, …)
+         — only rendered when present, fully backwards-compatible.
     """
-    fields = {
+    # ── Section 1: Standard ticket metadata ───────────────────────────────
+    ticket_fields = {
         "Ticket ID": ctx.get("ticket_id", "N/A"),
-        "Priority": ctx.get("priority", "MEDIUM"),
-        "Status": ctx.get("status", "OPEN"),
-        "Category": ctx.get("category", "General"),
+        "Priority":  ctx.get("priority", "MEDIUM"),
+        "Status":    ctx.get("status", "OPEN"),
+        "Category":  ctx.get("category", "General"),
         "Assigned To": ctx.get("assigned_to", "Unassigned"),
-        "Created": ctx.get("created_at", ""),
+        "Created":   ctx.get("created_at", ""),
     }
-    return "\n".join(f"  {k}: {v}" for k, v in fields.items() if v)
+    lines = [f"  {k}: {v}" for k, v in ticket_fields.items() if v]
+
+    # ── Section 2: Conversation intelligence (optional) ───────────────────
+    intent    = ctx.get("conv_intent")
+    stage     = ctx.get("conv_stage")
+    severity  = ctx.get("conv_severity")
+    turn      = ctx.get("conv_turn")
+    unres     = ctx.get("conv_unresolved_turns")
+    entities: Dict[str, Any] = ctx.get("conv_entities") or {}
+
+    has_conv_intel = any([intent, stage, severity, turn is not None, entities])
+    if has_conv_intel:
+        lines.append("")   # blank separator line
+        lines.append("  [Conversation Intelligence]")
+        if intent:
+            lines.append(f"  User Intent: {intent}")
+        if stage:
+            lines.append(f"  Conversation Stage: {stage}")
+        if severity:
+            lines.append(f"  User Sentiment: {severity}")
+        if turn is not None:
+            lines.append(f"  Turn Number: {turn}")
+        if unres:
+            lines.append(f"  Unresolved Turns: {unres}")
+        for etype, values in entities.items():
+            if values:
+                label = etype.replace("_", " ").title()
+                lines.append(f"  {label}: {', '.join(str(v) for v in values)}")
+
+    return "\n".join(lines)

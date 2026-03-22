@@ -21,12 +21,36 @@ Confidence is taken directly from AgentDecision.confidence — which is now
 set by the LLM itself (0–1 range) rather than computed from heuristics.
 The old threshold constants are preserved in settings for the automation
 service which still uses the legacy flow.
+
+Conversation Intelligence layer
+─────────────────────────────────
+Before calling the agent each turn, the service runs the Conversation
+Intelligence Engine (app/conversation/) to:
+  1. Detect the user's business intent (refund / billing / technical / …)
+  2. Extract structured entities (order ID, email, amount, date, …)
+  3. Load & evaluate the conversation state (stage, turn count, history)
+  4. Detect escalation signals (anger, frustration loops, abusive language)
+
+If the escalation detector fires a forced escalation the agent call is skipped
+entirely — saving one full LLM round-trip.
+
+In all other cases the enriched context is merged into ticket_context so the
+LLM prompt automatically includes intent, stage, severity, and extracted
+entities alongside the standard ticket metadata.
+
+After the agent responds, the conversation state is updated in Redis with the
+latest intent, entities, severity label, and the agent's action — advancing
+the stage when appropriate.
 """
 
 import logging
 from typing import Any, AsyncGenerator
 
 from app.config.settings import settings
+from app.conversation.conversation_state import conv_state_store
+from app.conversation.entity_extractor import entity_extractor
+from app.conversation.escalation_detector import escalation_detector
+from app.conversation.intent_detector import intent_detector
 from app.models.schemas import ChatRequest, ChatResponse
 from app.rag.pipeline import rag_pipeline
 
@@ -58,15 +82,83 @@ class ChatService:
 
     async def handle_message(self, request: ChatRequest) -> ChatResponse:
         """
-        Route through the unified agent in CHAT mode.
+        Route through the unified agent in CHAT mode with conversation
+        intelligence pre-processing and post-processing.
 
-        The agent handles: input guard → RAG → memory → LLM decision →
-        optional tool execution → output guard → metrics.
+        Full pipeline:
+          1. Load conversation state from Redis
+          2. Detect intent (rule-based + LLM fallback)
+          3. Extract entities (regex, zero cost)
+          4. Evaluate escalation signals
+          5a. [if forced escalation] Return early without calling the agent
+          5b. [otherwise] Enrich ticket_context → run agent → update state
         """
         from app.agent.agent import unified_agent
         from app.agent.schema import AgentInput, AgentMode
 
+        # ── 1. Load conversation state ─────────────────────────────────────
+        state = await conv_state_store.get_or_create(
+            request.org_id, request.ticket_id
+        )
+
+        # ── 2. Detect intent ───────────────────────────────────────────────
+        intent_result = await intent_detector.detect(request.org_id, request.message)
+
+        # ── 3. Extract entities ────────────────────────────────────────────
+        entity_result = entity_extractor.extract(request.message)
+
+        # ── 4. Evaluate escalation ─────────────────────────────────────────
+        escalation = escalation_detector.detect(request.message, state, intent_result)
+
+        logger.info(
+            "Conv intel: ticket=%s intent=%s stage=%s severity=%s "
+            "entities=%s escalate=%s turn=%d",
+            request.ticket_id,
+            intent_result.intent.value,
+            state.stage.value,
+            escalation.severity.value,
+            list(entity_result.entity_map.keys()),
+            escalation.should_escalate,
+            state.turn_count + 1,
+        )
+
+        # ── 5a. Pre-agent escalation gate ──────────────────────────────────
+        if escalation.should_escalate:
+            await conv_state_store.update(
+                request.org_id, request.ticket_id,
+                intent=intent_result.intent.value,
+                entities=entity_result.entity_map,
+                severity=escalation.severity.value,
+                agent_action="escalate",
+            )
+            return ChatResponse(
+                ticket_id=request.ticket_id,
+                message=escalation.escalation_message or (
+                    "I'll connect you with a human support agent who can "
+                    "assist you further. Please hold on."
+                ),
+                confidence=0.0,
+                action="escalate",
+                metadata={
+                    "conv_triggers": escalation.triggers,
+                    "conv_severity": escalation.severity.value,
+                    "conv_score": escalation.score,
+                    "conv_intent": intent_result.intent.value,
+                    "conv_stage": state.stage.value,
+                },
+            )
+
+        # ── 5b. Enrich ticket context with conversation intelligence ────────
         ticket_context = self._build_ticket_context(request)
+        ticket_context.update({
+            "conv_intent":           intent_result.intent.value,
+            "conv_intent_confidence": round(intent_result.confidence, 3),
+            "conv_stage":            state.stage.value,
+            "conv_severity":         escalation.severity.value,
+            "conv_turn":             state.turn_count + 1,
+            "conv_entities":         entity_result.entity_map,
+            "conv_unresolved_turns": state.unresolved_turns,
+        })
 
         inp = AgentInput(
             mode=AgentMode.CHAT,
@@ -78,6 +170,15 @@ class ChatService:
         )
 
         decision = await unified_agent.run(inp)
+
+        # ── Update conversation state after agent decision ─────────────────
+        await conv_state_store.update(
+            request.org_id, request.ticket_id,
+            intent=intent_result.intent.value,
+            entities=entity_result.entity_map,
+            severity=escalation.severity.value,
+            agent_action=decision.action.value,
+        )
 
         # Map AgentAction → ChatResponse.action
         action = self._map_action(decision.action.value)
@@ -101,6 +202,10 @@ class ChatService:
                 "reasoning": decision.reasoning,
                 "tool": decision.tool,
                 "tool_result": decision.tool_result,
+                "conv_intent": intent_result.intent.value,
+                "conv_stage": state.stage.value,
+                "conv_severity": escalation.severity.value,
+                "conv_entities": entity_result.entity_map,
             },
         )
 
