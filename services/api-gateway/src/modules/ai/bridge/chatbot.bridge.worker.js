@@ -20,6 +20,7 @@ import { createRedisClient } from "../../../config/redis.config.js";
 import {
   CHATBOT_BRIDGE_QUEUE,
   JOB_ANALYZE_FEEDBACK,
+  JOB_DELETE_DOCUMENTS,
   JOB_EMBED_TEXTS,
   JOB_PROCESS_DOCUMENT,
   JOB_RE_EMBED_ORG,
@@ -121,6 +122,11 @@ const handlers = {
   [JOB_RE_EMBED_ORG]: async (data, job) => {
     logger.info({ orgId: data.org_id, targetVersion: data.target_version, requestId: job.id }, "Re-embedding stale vectors");
     return callChatbot("/internal/re-embed-org", data, job.id);
+  },
+
+  [JOB_DELETE_DOCUMENTS]: async (data, job) => {
+    logger.info({ orgId: data.org_id, count: data.document_ids?.length, requestId: job.id }, "Deleting scraped-page vectors");
+    return callChatbot("/internal/scraper/delete-documents", data, job.id);
   },
 };
 

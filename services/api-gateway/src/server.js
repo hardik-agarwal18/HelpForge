@@ -11,6 +11,8 @@ import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automa
 import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
 import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
+import { startScraperWorker } from "./modules/ai/scraper/scraper.worker.js";
+import { scheduleScrapeCleanup, stopScrapeCleanup } from "./modules/ai/scraper/scraper.cleanup.cron.js";
 
 const PORT = config.port;
 
@@ -23,6 +25,8 @@ const startServer = async () => {
   startAIAutomationWorker();
   startChatbotBridgeWorker();
   startNotificationWorker();
+  startScraperWorker();
+  scheduleScrapeCleanup();
 
   server.listen(PORT, () => {
     logger.info({ port: PORT }, "API Gateway is running");
@@ -42,6 +46,7 @@ const gracefulShutdown = async (signal) => {
         logger.info("Redis connection closed gracefully");
       }
 
+      stopScrapeCleanup();
       logger.info("API Gateway shutdown complete");
       process.exit(0);
     } catch (error) {

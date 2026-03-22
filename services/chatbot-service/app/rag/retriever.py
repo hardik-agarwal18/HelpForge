@@ -59,17 +59,27 @@ class RAGRetriever:
         query: str,
         top_k: int | None = None,
         filter_conditions: Optional[dict[str, Any]] = None,
+        page_url: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """
-        Hybrid retrieval: dense + keyword → RRF merge → top_k results.
+        Hybrid retrieval: dense + keyword + (optional) URL-boosted path → RRF merge.
+
+        page_url (optional):
+            When provided, a third retrieval path is run filtered to vectors
+            whose `url` payload matches exactly.  Results from that path receive
+            an additional RRF pass-through, effectively boosting page-local
+            content to the top when the query relates to the page the user is on.
+
+            Example: user on /pricing asks "how much does the Pro plan cost?"
+            → RRF naturally prefers pricing-page chunks over generic FAQ chunks.
         """
         top_k = top_k or settings.top_k_retrieval
-        candidate_k = top_k * 2  # Fetch more candidates for each path before merge
+        candidate_k = top_k * 2
 
-        # Embed once — reused by both paths
+        # Embed once — reused by all paths
         query_vector = await embedder.embed_one(org_id, query)
 
-        # Path A: dense semantic search
+        # Path A: dense semantic search (global)
         dense_results = await vector_store.search(
             org_id=org_id,
             query_vector=query_vector,
@@ -88,19 +98,37 @@ class RAGRetriever:
                 top_k=candidate_k,
             )
 
-        # Merge
+        # Path C (optional): URL-scoped dense search for page-aware boost
+        url_results: list[dict[str, Any]] = []
+        if page_url:
+            try:
+                url_results = await vector_store.search(
+                    org_id=org_id,
+                    query_vector=query_vector,
+                    top_k=candidate_k,
+                    filter_conditions={"url": page_url},
+                )
+            except Exception as exc:
+                logger.debug("URL-boosted retrieval failed (non-fatal): %s", exc)
+
+        # Merge — include URL path twice to give it an RRF boost
+        result_lists = [dense_results]
         if keyword_results:
-            merged = self._rrf_merge([dense_results, keyword_results])
+            result_lists.append(keyword_results)
+        if url_results:
+            # Double-weight: appear in two separate lists so RRF score is additive
+            result_lists.append(url_results)
+            result_lists.append(url_results)
+
+        if len(result_lists) > 1:
+            merged = self._rrf_merge(result_lists)
             logger.debug(
-                "Hybrid retrieval: org=%s, dense=%d, keyword=%d, merged=%d, keywords=%s",
-                org_id, len(dense_results), len(keyword_results), len(merged), keywords,
+                "Hybrid retrieval: org=%s, dense=%d, keyword=%d, url=%d, merged=%d",
+                org_id, len(dense_results), len(keyword_results), len(url_results), len(merged),
             )
         else:
             merged = dense_results
-            logger.debug(
-                "Dense-only retrieval: org=%s, hits=%d",
-                org_id, len(merged),
-            )
+            logger.debug("Dense-only retrieval: org=%s, hits=%d", org_id, len(merged))
 
         return merged[:top_k]
 

@@ -123,6 +123,23 @@ class AgentRequest(BaseModel):
     extra: Dict[str, Any] = {}  # event_type, agent_id, etc.
 
 
+# ─── Scraper (called by bridge worker delete-documents job) ──────────────────
+
+class DeleteScrapedDocumentsRequest(BaseModel):
+    """
+    Batch-delete request sent by the scraper cleanup cron via the chatbot bridge.
+    document_ids are urlHash values (SHA-256 hex, 32 chars each).
+    """
+    org_id:       str
+    document_ids: List[str]
+
+
+class DeleteScrapedDocumentsResponse(BaseModel):
+    org_id:            str
+    documents_deleted: int
+    status:            str
+
+
 class AgentResponse(BaseModel):
     """
     Unified agent decision result.

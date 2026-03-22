@@ -68,11 +68,13 @@ class QdrantVectorStore:
             logger.info("Created Qdrant collection: %s", name)
 
         # Ensure full-text index on `text` payload field for keyword search.
-        # Ensure keyword index on `embedding_version` for stale-chunk scrolls.
-        # create_payload_index is idempotent — safe to call every time.
+        # Ensure keyword indices on `embedding_version` and `url` for fast
+        # scraper cleanup queries.  create_payload_index is idempotent.
         for field_name, schema in (
-            ("text", PayloadSchemaType.TEXT),
+            ("text",              PayloadSchemaType.TEXT),
             ("embedding_version", PayloadSchemaType.KEYWORD),
+            ("url",               PayloadSchemaType.KEYWORD),
+            ("source_type",       PayloadSchemaType.KEYWORD),
         ):
             try:
                 await self.client.create_payload_index(
@@ -174,6 +176,55 @@ class QdrantVectorStore:
             collection_name=self._collection(org_id),
             points_selector=Filter(
                 must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
+            ),
+        )
+
+    async def delete_by_documents(self, org_id: str, document_ids: list[str]) -> int:
+        """
+        Batch-delete all vectors whose `document_id` is in the given list.
+        More efficient than calling delete_by_document() in a loop because it
+        issues a single Qdrant request using a `should` (OR) filter.
+
+        Returns the number of document IDs processed (not individual vectors,
+        since Qdrant's delete API doesn't return a hit count).
+        """
+        if not document_ids:
+            return 0
+
+        collection = self._collection(org_id)
+        # Check collection exists before attempting delete
+        try:
+            existing = await self.client.get_collections()
+            names = {c.name for c in existing.collections}
+            if collection not in names:
+                return 0
+        except Exception as exc:
+            logger.warning("delete_by_documents: collection check failed: %s", exc)
+            return 0
+
+        # Batch in groups of 500 to keep the Qdrant payload small
+        batch_size = 500
+        for i in range(0, len(document_ids), batch_size):
+            batch = document_ids[i : i + batch_size]
+            await self.client.delete(
+                collection_name=collection,
+                points_selector=Filter(
+                    should=[
+                        FieldCondition(key="document_id", match=MatchValue(value=doc_id))
+                        for doc_id in batch
+                    ]
+                ),
+            )
+
+        return len(document_ids)
+
+    async def delete_by_url(self, org_id: str, url: str) -> None:
+        """Delete all vectors whose `url` payload matches the given URL exactly."""
+        collection = self._collection(org_id)
+        await self.client.delete(
+            collection_name=collection,
+            points_selector=Filter(
+                must=[FieldCondition(key="url", match=MatchValue(value=url))]
             ),
         )
 

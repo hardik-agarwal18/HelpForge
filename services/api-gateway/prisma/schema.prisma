@@ -69,6 +69,7 @@ model Organization {
   aiusages               AIUsage[]
   aiconfig               AIConfig?
   ticketSubmissionConfig TicketSubmissionConfig?
+  scrapedPages           ScrapedPage[]
 }
 
 model Membership {
@@ -502,4 +503,52 @@ enum SubmissionMode {
   STRICT // One detailed message required
   GUIDED // Ask follow-up questions
   FLEXIBLE // Free chat
+}
+
+// ── Web Scraper ───────────────────────────────────────────────────────────────
+
+enum ScrapeStatus {
+  PENDING     // Queued, not yet started
+  PROCESSING  // Worker has picked up the job
+  COMPLETED   // Successfully scraped and embedded
+  FAILED      // Permanent failure after all retries
+  STALE       // Marked stale by cleanup cron (vectors deleted)
+}
+
+model ScrapedPage {
+  id      String @id @default(uuid())
+
+  orgId   String
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// Original URL — displayed in dashboards and error messages
+  url     String
+
+  /// SHA-256 of url — used for fast unique-per-org lookup, avoids full URL index bloat
+  urlHash String
+
+  /// SHA-256 of the extracted text — deduplication gate (skip embedding if unchanged)
+  contentHash    String?
+
+  status         ScrapeStatus @default(PENDING)
+
+  /// Number of Qdrant chunks created for this page (0 when hash unchanged / not yet embedded)
+  chunkCount     Int      @default(0)
+
+  /// Last time the page was fetched (even if hash unchanged)
+  lastScrapedAt  DateTime?
+
+  /// Last time vectors were actually written to Qdrant
+  lastEmbeddedAt DateTime?
+
+  errorMessage   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, urlHash])
+  @@index([orgId])
+  @@index([orgId, status])
+  @@index([lastScrapedAt])
+  @@index([createdAt])          // used by cleanup cron
 }

@@ -26,6 +26,8 @@ from app.models.schemas import (
     AgentResponse,
     AnalyzeFeedbackRequest,
     AnalyzeFeedbackResponse,
+    DeleteScrapedDocumentsRequest,
+    DeleteScrapedDocumentsResponse,
     EmbedRequest,
     EmbedResponse,
     ProcessDocumentRequest,
@@ -191,3 +193,29 @@ async def agent_augmentation(request: AgentRequest) -> AgentResponse:
     """
     request.mode = "augmentation"
     return await agent_run(request)
+
+
+# ── Scraper Endpoints ──────────────────────────────────────────────────────────
+
+@router.post(
+    "/scraper/delete-documents",
+    response_model=DeleteScrapedDocumentsResponse,
+    dependencies=_INTERNAL,
+)
+async def delete_scraped_documents(
+    request: DeleteScrapedDocumentsRequest,
+) -> DeleteScrapedDocumentsResponse:
+    """
+    Batch-delete Qdrant vectors for expired scraped-page documents.
+
+    Called by the Node.js chatbot bridge worker after consuming a
+    `delete-documents` BullMQ job (triggered by the scraper cleanup cron).
+
+    Body:
+      { "org_id": "...", "document_ids": ["urlHash1", "urlHash2", ...] }
+
+    Uses Qdrant `should` filter to delete all chunks for each document_id
+    in a single query per batch, minimising round-trips to Qdrant.
+    """
+    return await document_service.delete_scraped_documents(request)
+

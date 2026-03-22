@@ -15,11 +15,13 @@ import logger from "../../../config/logger.js";
 import { getSharedBullmqConnection } from "../../../config/redis.config.js";
 
 // ── Job name constants ────────────────────────────────────────────────────────
-export const CHATBOT_BRIDGE_QUEUE = "chatbot-bridge";
-export const JOB_PROCESS_DOCUMENT = "process-document";
-export const JOB_EMBED_TEXTS = "embed-texts";
-export const JOB_ANALYZE_FEEDBACK = "analyze-feedback";
-export const JOB_RE_EMBED_ORG = "re-embed-org";
+export const CHATBOT_BRIDGE_QUEUE    = "chatbot-bridge";
+export const JOB_PROCESS_DOCUMENT    = "process-document";
+export const JOB_EMBED_TEXTS         = "embed-texts";
+export const JOB_ANALYZE_FEEDBACK    = "analyze-feedback";
+export const JOB_RE_EMBED_ORG        = "re-embed-org";
+/** Delete a batch of Qdrant documents by document_id (used by scraper cleanup). */
+export const JOB_DELETE_DOCUMENTS    = "delete-documents";
 
 // ── Queue singleton ───────────────────────────────────────────────────────────
 let queue;
@@ -140,5 +142,29 @@ export const enqueueReEmbedOrg = async (orgId, options = {}) => {
   );
 
   logger.info({ jobId: job.id, orgId }, "Queued re-embed-org job");
+  return { queued: true, jobId: job.id };
+};
+
+/**
+ * Queue a batch delete of scraped-page vectors from Qdrant.
+ * Called by the scraper cleanup cron when pages expire (30-day TTL).
+ *
+ * @param {string}   orgId
+ * @param {string[]} documentIds   List of document_ids (urlHash values) to delete
+ */
+export const enqueueDeleteDocuments = async (orgId, documentIds) => {
+  const q = getQueue();
+  if (!q) {
+    logger.warn("Chatbot bridge queue disabled — REDIS_URL not set");
+    return { queued: false };
+  }
+
+  const job = await q.add(
+    JOB_DELETE_DOCUMENTS,
+    { org_id: orgId, document_ids: documentIds },
+    { removeOnComplete: { count: 100 }, removeOnFail: { count: 100 } },
+  );
+
+  logger.info({ jobId: job.id, orgId, count: documentIds.length }, "Queued delete-documents job");
   return { queued: true, jobId: job.id };
 };

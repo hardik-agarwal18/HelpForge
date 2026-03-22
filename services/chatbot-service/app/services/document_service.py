@@ -5,13 +5,19 @@ Called exclusively by the Node.js chatbot bridge worker via internal HTTP.
 
 Pipeline:  raw text → chunk → embed → upsert into Qdrant (org-isolated)
 Re-indexing: existing vectors for the same document_id are deleted first.
+
+Scraped-page support (added):
+  delete_scraped_documents — batch-delete vectors by document_id list (cleanup cron)
 """
 
 import logging
+from typing import List
 
 from app.config.settings import settings
 from app.embeddings.embedder import embedder
 from app.models.schemas import (
+    DeleteScrapedDocumentsRequest,
+    DeleteScrapedDocumentsResponse,
     EmbedRequest,
     EmbedResponse,
     ProcessDocumentRequest,
@@ -95,6 +101,35 @@ class DocumentService:
         )
 
         return EmbedResponse(embedded=len(vectors), status="success")
+
+    async def delete_scraped_documents(
+        self, request: DeleteScrapedDocumentsRequest
+    ) -> DeleteScrapedDocumentsResponse:
+        """
+        Batch-delete Qdrant vectors for expired scraped-page documents.
+
+        Called by the scraper cleanup cron via the chatbot bridge worker
+        (`delete-documents` job → `POST /internal/scraper/delete-documents`).
+
+        Uses `document_id` values (urlHash strings) to locate and delete
+        all chunks belonging to each page.  Safe to call multiple times
+        (idempotent — deleting non-existent points is a no-op in Qdrant).
+        """
+        deleted = await vector_store.delete_by_documents(
+            request.org_id, request.document_ids
+        )
+
+        logger.info(
+            "Scraped-page vectors deleted: org=%s, documents=%d",
+            request.org_id,
+            deleted,
+        )
+
+        return DeleteScrapedDocumentsResponse(
+            org_id=request.org_id,
+            documents_deleted=deleted,
+            status="success",
+        )
 
 
 document_service = DocumentService()
