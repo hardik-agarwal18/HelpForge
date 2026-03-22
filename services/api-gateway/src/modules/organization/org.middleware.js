@@ -1,4 +1,4 @@
-import { getUserMembershipInOrganization } from "./repos/orgMembership.repo.js";
+import { getUserMembershipInOrganization } from "./org.repo.js";
 
 /**
  * Middleware to verify user membership in an organization

@@ -4,11 +4,79 @@ export const getOrganizationsByUserId = async (userId) => {
   return await prisma.organization.findMany({
     where: {
       memberships: {
-        some: {
+        some: { userId },
+      },
+    },
+  });
+};
+
+export const createOrganization = async ({ name, userId }) => {
+  return await prisma.organization.create({
+    data: {
+      name,
+      memberships: {
+        create: {
           userId,
+          role: "OWNER",
         },
       },
     },
+    include: {
+      memberships: true,
+    },
+  });
+};
+
+export const patchOrganization = async ({ orgId, name }) => {
+  return await prisma.organization.update({
+    where: { id: orgId },
+    data: { name },
+    include: { memberships: true },
+  });
+};
+
+export const findOrganizationByOwner = async ({ userId }) => {
+  return await prisma.organization.findFirst({
+    where: {
+      memberships: {
+        some: { userId, role: "OWNER" },
+      },
+    },
+  });
+};
+
+export const deleteOrganization = async ({ orgId }) => {
+  return await prisma.$transaction(async (tx) => {
+    await tx.membership.deleteMany({
+      where: { organizationId: orgId },
+    });
+    return await tx.organization.delete({
+      where: { id: orgId },
+    });
+  });
+};
+
+export const getOrganizationMembersById = async (orgId) => {
+  return await prisma.membership.findMany({
+    where: { organizationId: orgId },
+    include: { user: true },
+  });
+};
+
+export const getOrganizationMembershipByUserId = async (orgId, userId) => {
+  return await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: { userId, organizationId: orgId },
+    },
+  });
+};
+
+export const getUserMembershipInOrganization = async ({ userId, orgId }) => {
+  return await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: { userId, organizationId: orgId },
+    },
+    include: { organization: true },
   });
 };
 
@@ -22,35 +90,10 @@ export const inviteMemberInOrganization = async (orgId, userId, role) => {
   });
 };
 
-export const getOrganizationMembersById = async (orgId) => {
-  return await prisma.membership.findMany({
-    where: {
-      organizationId: orgId,
-    },
-    include: {
-      user: true,
-    },
-  });
-};
-
-export const getOrganizationMembershipByUserId = async (orgId, userId) => {
-  return await prisma.membership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId,
-        organizationId: orgId,
-      },
-    },
-  });
-};
-
 export const updateMembershipRole = (orgId, userId, role) => {
   return prisma.membership.update({
     where: {
-      userId_organizationId: {
-        userId,
-        organizationId: orgId,
-      },
+      userId_organizationId: { userId, organizationId: orgId },
     },
     data: { role },
   });

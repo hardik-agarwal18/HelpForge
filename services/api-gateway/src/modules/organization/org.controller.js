@@ -1,15 +1,16 @@
 import {
+  createOrganizationService,
   deleteOrganizationService,
   getOrganizationByUserIdService,
   inviteMemberInOrganizationService,
   updateMemberFromOrganizationService,
+  updateOrganizationService,
   viewAllMembersInOrganizationService,
 } from "./org.service.js";
 
 export const getOrganizationsByUserIdController = async (req, res, next) => {
   try {
     const userId = req.user.id;
-
     const organizations = await getOrganizationByUserIdService(userId);
 
     return res.status(200).json({
@@ -32,13 +33,73 @@ export const getOrganizationByIdController = async (req, res, next) => {
   }
 };
 
+export const createOrganizationController = async (req, res, next) => {
+  try {
+    const organization = await createOrganizationService({
+      name: req.body.name,
+      userId: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: { organization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateOrganizationController = async (req, res, next) => {
+  try {
+    const updatedOrganization = await updateOrganizationService({
+      orgId: req.params.orgId,
+      name: req.body.name,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { organization: updatedOrganization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteOrganizationController = async (req, res, next) => {
+  try {
+    const deletedOrganization = await deleteOrganizationService({
+      orgId: req.params.orgId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Organization deleted successfully",
+      data: { organization: deletedOrganization },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const viewAllMembersInOrganizationController = async (req, res, next) => {
+  try {
+    const members = await viewAllMembersInOrganizationService(req.params.orgId);
+
+    return res.status(200).json({
+      success: true,
+      data: { members },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const inviteMemberInOrganizationController = async (req, res, next) => {
   try {
-    const orgId = req.params.orgId;
     const { userId, role } = req.body;
 
     const membership = await inviteMemberInOrganizationService(
-      orgId,
+      req.params.orgId,
       userId,
       role,
       req.membership,
@@ -53,37 +114,12 @@ export const inviteMemberInOrganizationController = async (req, res, next) => {
   }
 };
 
-export const viewAllMembersInOrganizationController = async (
-  req,
-  res,
-  next,
-) => {
+export const updateMemberFromOrganizationController = async (req, res, next) => {
   try {
-    const orgId = req.params.orgId;
-    const members = await viewAllMembersInOrganizationService(orgId);
-
-    return res.status(200).json({
-      success: true,
-      data: { members },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const updateMemberFromOrganizationController = async (
-  req,
-  res,
-  next,
-) => {
-  try {
-    const orgId = req.params.orgId;
-    const userId = req.params.userId;
-    const { role } = req.body;
     const updatedMembership = await updateMemberFromOrganizationService(
-      orgId,
-      userId,
-      role,
+      req.params.orgId,
+      req.params.userId,
+      req.body.role,
       req.membership,
     );
 
