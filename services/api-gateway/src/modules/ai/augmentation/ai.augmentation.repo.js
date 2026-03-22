@@ -43,8 +43,3 @@ export const getAugmentationAgentTickets = async (agentId, since) => {
   }
 };
 
-export default {
-  getAugmentationTicket,
-  getAugmentationTicketWithComments,
-  getAugmentationAgentTickets,
-};

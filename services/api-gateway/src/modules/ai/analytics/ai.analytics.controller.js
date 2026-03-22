@@ -1,5 +1,5 @@
-import { organizationIdParamSchema } from "./ai.analytics.validator";
-import { getAIStats } from "./ai.analytics.service";
+import { organizationIdParamSchema } from "./ai.analytics.validator.js";
+import { getAIStats } from "./ai.analytics.service.js";
 import logger from "../../../config/logger.js";
 
 export const getStats = async (req, res, next) => {

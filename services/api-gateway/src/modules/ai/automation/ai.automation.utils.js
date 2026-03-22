@@ -287,31 +287,13 @@ export const isAgedTicket = (createdAt) => {
 // ============================================================================
 
 /**
- * Get cache key for processed comment tracking
- * @param {string} commentId - Comment ID
- * @returns {string} Cache key
- */
-export const getProcessedCommentCacheKey = (commentId) => {
-  return buildAICommentProcessedCacheKey(commentId);
-};
-
-/**
- * Get cache key for comment processing lock
- * @param {string} commentId - Comment ID
- * @returns {string} Cache key
- */
-export const getCommentProcessingLockCacheKey = (commentId) => {
-  return buildAICommentProcessingLockKey(commentId);
-};
-
-/**
  * Check if comment has already been processed
  * @param {string} commentId - Comment ID
  * @returns {Promise<boolean>} True if processed
  */
 export const hasCommentBeenProcessed = async (commentId) => {
   const processedValue = await getCacheValue(
-    getProcessedCommentCacheKey(commentId),
+    buildAICommentProcessedCacheKey(commentId),
   );
   return processedValue === "1";
 };
@@ -324,7 +306,7 @@ export const hasCommentBeenProcessed = async (commentId) => {
  */
 export const acquireCommentProcessingLock = async (commentId, ttlSeconds) => {
   return setCacheValueIfAbsent(
-    getCommentProcessingLockCacheKey(commentId),
+    buildAICommentProcessingLockKey(commentId),
     "1",
     ttlSeconds,
   );
@@ -337,7 +319,7 @@ export const acquireCommentProcessingLock = async (commentId, ttlSeconds) => {
  * @returns {Promise<void>}
  */
 export const markCommentAsProcessed = async (commentId, ttlSeconds) => {
-  await setCacheValue(getProcessedCommentCacheKey(commentId), "1", ttlSeconds);
+  await setCacheValue(buildAICommentProcessedCacheKey(commentId), "1", ttlSeconds);
 };
 
 /**
@@ -346,7 +328,7 @@ export const markCommentAsProcessed = async (commentId, ttlSeconds) => {
  * @returns {Promise<void>}
  */
 export const releaseCommentProcessingLock = async (commentId) => {
-  await deleteCacheValue(getCommentProcessingLockCacheKey(commentId));
+  await deleteCacheValue(buildAICommentProcessingLockKey(commentId));
 };
 
 // ============================================================================
@@ -417,8 +399,10 @@ export const isAIComment = (comment) => {
 export const analyzeTicket = (ticket) => {
   const comments = ticket.comments || [];
 
+  const aiCommentCount = countAIResponses(comments);
+
   return {
-    aiResponseCount: countAIResponses(comments),
+    aiResponseCount: aiCommentCount,
     lastAIComment: getLastAIComment(comments),
     lastUserComment: getLastUserComment(comments),
     isFollowUp: isFollowUpTicket(comments),
@@ -428,7 +412,7 @@ export const analyzeTicket = (ticket) => {
     isAged: isAgedTicket(ticket.createdAt),
     totalComments: comments.length,
     userCommentCount: comments.filter((c) => c.authorType === "USER").length,
-    aiCommentCount: countAIResponses(comments),
+    aiCommentCount,
   };
 };
 
@@ -487,42 +471,3 @@ export const logActionDecision = (ticket, action = {}, confidenceData = {}) => {
   );
 };
 
-/**
- * Prepare ticket update payload based on action
- * @param {Object} ticket - Current ticket
- * @param {Object} action - Action decision
- * @param {Object} aiData - AI analysis data
- * @returns {Object} Update payload
- */
-export const prepareTicketUpdate = (ticket, action = {}, aiData = {}) => {
-  const update = {
-    // Common updates
-    aiMessageCount: (ticket.aiMessageCount || 0) + 1,
-    lastAIInteraction: new Date(),
-  };
-
-  // Action-specific updates
-  switch (action.type) {
-    case "auto_resolve":
-      update.status = "RESOLVED";
-      update.resolvedBy = "AI";
-      update.resolvedAt = new Date();
-      break;
-
-    case "smart_assign":
-      // Will be handled by assignment logic
-      update.status = "IN_PROGRESS";
-      break;
-
-    case "suggest":
-      update.status = "AWAITING_FEEDBACK";
-      break;
-
-    case "store_and_wait":
-    default:
-      // No status change
-      break;
-  }
-
-  return update;
-};
