@@ -140,6 +140,35 @@ class DeleteScrapedDocumentsResponse(BaseModel):
     status:            str
 
 
+# ─── Template engine (called by internal template/upsert route) ──────────────
+
+class TemplateEntry(BaseModel):
+    intent: str                   # intent key, e.g. "refund_request", "cancellation"
+    response: str                 # template text with optional {variable} placeholders
+    org_id: str = "global"        # "global" = fallback for all orgs; specific org_id = override
+    ttl_seconds: Optional[int] = None  # omit for no expiry
+
+
+class UpsertTemplateRequest(BaseModel):
+    templates: List[TemplateEntry]
+
+
+class UpsertTemplateResponse(BaseModel):
+    upserted: int
+    keys: List[str]               # Redis keys that were written
+    status: str
+
+
+class DeleteTemplateRequest(BaseModel):
+    org_id: str
+    intent: str
+
+
+class DeleteTemplateResponse(BaseModel):
+    deleted: bool
+    status: str
+
+
 # ─── FAQ ingestion (called by internal faq/upsert route) ─────────────────────
 
 class FAQEntry(BaseModel):

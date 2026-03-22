@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # ── FAQ matching (embedding-only short-circuit, no LLM) ───────────────
     faq_similarity_threshold: float = 0.92  # cosine similarity required to return FAQ answer directly
 
+    # ── Template engine (intent-based short-circuit, no embedding/LLM) ───
+    template_intent_confidence_threshold: float = 0.80  # min intent confidence to apply a template
+
     # ── LLM ───────────────────────────────────────────────────────────────
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 3

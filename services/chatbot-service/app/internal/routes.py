@@ -28,6 +28,8 @@ from app.models.schemas import (
     AnalyzeFeedbackResponse,
     DeleteScrapedDocumentsRequest,
     DeleteScrapedDocumentsResponse,
+    DeleteTemplateRequest,
+    DeleteTemplateResponse,
     EmbedRequest,
     EmbedResponse,
     ProcessDocumentRequest,
@@ -36,11 +38,14 @@ from app.models.schemas import (
     ReEmbedOrgResponse,
     UpsertFAQRequest,
     UpsertFAQResponse,
+    UpsertTemplateRequest,
+    UpsertTemplateResponse,
 )
 from app.security.internal_auth import require_internal_auth
 from app.services.document_service import document_service
 from app.services.feedback_service import feedback_service
 from app.services.migration_service import migration_service
+from app.templates.template_engine import template_engine
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 logger = logging.getLogger(__name__)
@@ -107,6 +112,66 @@ async def re_embed_org(request: ReEmbedOrgRequest) -> ReEmbedOrgResponse:
     and returns counts for observability.
     """
     return await migration_service.run_migration(request)
+
+
+# ── Template Endpoints ─────────────────────────────────────────────────────────
+
+@router.post(
+    "/template/upsert",
+    response_model=UpsertTemplateResponse,
+    dependencies=_INTERNAL,
+)
+async def upsert_templates(request: UpsertTemplateRequest) -> UpsertTemplateResponse:
+    """
+    Store intent-response templates so the TemplateEngine can short-circuit
+    LLM calls when a known intent is detected with sufficient confidence.
+
+    Set org_id="global" to create a fallback used by all orgs.
+    Org-specific entries override global ones.
+
+    Supports {variable} placeholders filled from extracted entities and
+    ticket_context at match time (e.g. {reset_url}, {order_id}, {org_name}).
+
+    Body:
+      {
+        "templates": [
+          {
+            "org_id": "acme",
+            "intent": "refund_request",
+            "response": "To request a refund for order {order_id}, please visit {refund_url}."
+          },
+          {
+            "org_id": "global",
+            "intent": "cancellation",
+            "response": "You can cancel your subscription at any time from Account → Billing."
+          }
+        ]
+      }
+    """
+    keys: list[str] = []
+    for entry in request.templates:
+        key = await template_engine.upsert(
+            org_id=entry.org_id,
+            intent=entry.intent,
+            response_template=entry.response,
+            ttl_seconds=entry.ttl_seconds,
+        )
+        keys.append(key)
+    return UpsertTemplateResponse(upserted=len(keys), keys=keys, status="success")
+
+
+@router.post(
+    "/template/delete",
+    response_model=DeleteTemplateResponse,
+    dependencies=_INTERNAL,
+)
+async def delete_template(request: DeleteTemplateRequest) -> DeleteTemplateResponse:
+    """Remove a single template by org_id + intent."""
+    deleted = await template_engine.delete(request.org_id, request.intent)
+    return DeleteTemplateResponse(
+        deleted=deleted,
+        status="success" if deleted else "not_found",
+    )
 
 
 # ── FAQ Endpoints ──────────────────────────────────────────────────────────────

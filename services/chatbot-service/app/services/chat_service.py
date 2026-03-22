@@ -55,6 +55,7 @@ from app.conversation.intent_detector import intent_detector
 from app.models.schemas import ChatRequest, ChatResponse
 from app.observability.traces import agent_tracer
 from app.rag.pipeline import rag_pipeline
+from app.templates.template_engine import template_engine
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,41 @@ class ChatService:
                     "conv_intent": intent_result.intent.value,
                     "conv_stage": state.stage.value,
                     "trace_id": pre_trace.trace_id,
+                },
+            )
+
+        # ── 4.5. Template short-circuit (Redis lookup, no embedding/LLM) ────
+        tmpl = await template_engine.match(
+            org_id=request.org_id,
+            intent=intent_result.intent.value,
+            confidence=intent_result.confidence,
+            entities=entity_result.entity_map,
+            context=self._build_ticket_context(request),
+        )
+        if tmpl.matched:
+            await conv_state_store.update(
+                request.org_id, request.ticket_id,
+                intent=intent_result.intent.value,
+                entities=entity_result.entity_map,
+                severity=escalation.severity.value,
+                agent_action="respond",
+            )
+            logger.info(
+                "Template hit: ticket=%s intent=%s key=%s",
+                request.ticket_id, tmpl.intent, tmpl.template_key,
+            )
+            return ChatResponse(
+                ticket_id=request.ticket_id,
+                message=tmpl.response,
+                confidence=1.0,
+                action="none",
+                sources=[],
+                metadata={
+                    "template_hit": True,
+                    "template_key": tmpl.template_key,
+                    "conv_intent": intent_result.intent.value,
+                    "conv_stage": state.stage.value,
+                    "conv_entities": entity_result.entity_map,
                 },
             )
 
