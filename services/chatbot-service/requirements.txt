@@ -1,0 +1,16 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.7.0
+
+# Async HTTP (calls to API Gateway)
+httpx==0.28.1
+
+# Redis (memory + embedding cache)
+redis[hiredis]==5.2.1
+
+# Qdrant vector store
+qdrant-client==1.12.1
+
+# Misc
+python-multipart==0.0.20
