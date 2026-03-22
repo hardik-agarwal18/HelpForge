@@ -4,16 +4,16 @@ Internal Routes
 These endpoints are NOT exposed publicly.  They are called exclusively by the
 Node.js chatbot bridge worker after consuming a BullMQ job.
 
-Security: every request must carry the shared `X-Internal-Token` header.
-The token is validated via FastAPI dependency injection — the check happens
-before any handler body executes.
+Security: three-layer auth via require_internal_auth (see app/security/internal_auth.py):
+  1. X-Internal-Token shared secret (supports rotation via previous token)
+  2. IP allowlist (CIDR-based, Docker-bridge-aware)
+  3. HMAC-SHA256 request signature (replay-attack prevention)
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends
 
-from app.config.settings import settings
 from app.models.schemas import (
     AnalyzeFeedbackRequest,
     AnalyzeFeedbackResponse,
@@ -24,6 +24,7 @@ from app.models.schemas import (
     ReEmbedOrgRequest,
     ReEmbedOrgResponse,
 )
+from app.security.internal_auth import require_internal_auth
 from app.services.document_service import document_service
 from app.services.feedback_service import feedback_service
 from app.services.migration_service import migration_service
@@ -31,18 +32,7 @@ from app.services.migration_service import migration_service
 router = APIRouter(prefix="/internal", tags=["internal"])
 logger = logging.getLogger(__name__)
 
-
-# ── Auth dependency ───────────────────────────────────────────────────────────
-
-async def require_internal_token(
-    x_internal_token: str = Header(..., alias="X-Internal-Token"),
-) -> None:
-    if x_internal_token != settings.internal_service_token:
-        logger.warning("Rejected internal request: invalid token")
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-
-_INTERNAL = [Depends(require_internal_token)]
+_INTERNAL = [Depends(require_internal_auth)]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

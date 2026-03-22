@@ -12,6 +12,7 @@
  *   BullMQ → this worker → POST /internal/<endpoint> → chatbot-service (Python)
  */
 
+import { createHash, createHmac } from "node:crypto";
 import { Worker } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
@@ -26,20 +27,48 @@ import {
 
 const CHATBOT_URL = config.services.chatbot || "http://chatbot-service:8000";
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || "change-me-shared-secret";
+const HMAC_ENABLED = process.env.INTERNAL_HMAC_ENABLED !== "false";
 
-const INTERNAL_HEADERS = {
-  "Content-Type": "application/json",
-  "X-Internal-Token": INTERNAL_TOKEN,
+// ── HMAC signing ──────────────────────────────────────────────────────────────
+
+/**
+ * Sign a request with HMAC-SHA256.
+ * Payload: METHOD\nPATH\nTIMESTAMP_MS\nSHA256(body)
+ *
+ * The Python service verifies this signature and rejects requests that are:
+ *   - missing the headers
+ *   - older than INTERNAL_TIMESTAMP_TOLERANCE_SECONDS (default 30 s)
+ *   - signed with a different key
+ */
+const signRequest = (method, path, bodyStr) => {
+  const timestampMs = Date.now().toString();
+  const bodyHash = createHash("sha256").update(bodyStr).digest("hex");
+  const payload = `${method.toUpperCase()}\n${path}\n${timestampMs}\n${bodyHash}`;
+  const signature = createHmac("sha256", INTERNAL_TOKEN).update(payload).digest("hex");
+  return { timestampMs, signature };
 };
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
 const callChatbot = async (path, body) => {
   const url = `${CHATBOT_URL}${path}`;
+  const bodyStr = JSON.stringify(body);
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Internal-Token": INTERNAL_TOKEN,
+  };
+
+  if (HMAC_ENABLED) {
+    const { timestampMs, signature } = signRequest("POST", path, bodyStr);
+    headers["X-Timestamp"] = timestampMs;
+    headers["X-Signature"] = signature;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: INTERNAL_HEADERS,
-    body: JSON.stringify(body),
+    headers,
+    body: bodyStr,
     signal: AbortSignal.timeout(60_000),  // 60 s timeout per job
   });
 
