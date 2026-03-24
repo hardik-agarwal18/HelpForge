@@ -1198,7 +1198,7 @@ describe("Ticket Service", () => {
       await expect(
         autoAssignTicketService("ticket-1", "user-1"),
       ).rejects.toMatchObject({
-        statusCode: 409,
+        statusCode: 422,
         message: "No available agent found for auto-assignment",
       });
     });

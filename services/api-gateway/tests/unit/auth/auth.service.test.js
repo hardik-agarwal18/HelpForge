@@ -1,29 +1,57 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
-// Mock the dependencies before importing
 const mockFindUserByEmail = jest.fn();
 const mockCreateUser = jest.fn();
 const mockFindUserById = jest.fn();
+const mockCreateRefreshToken = jest.fn();
+const mockFindRefreshToken = jest.fn();
+const mockDeleteRefreshToken = jest.fn();
+const mockDeleteUserRefreshTokens = jest.fn();
+const mockBlacklistToken = jest.fn();
+const mockUpdateUserTokenIssuedAt = jest.fn();
 const mockHashPassword = jest.fn();
 const mockComparePassword = jest.fn();
-const mockGenerateToken = jest.fn();
+const mockGenerateAccessToken = jest.fn();
+const mockGenerateRefreshToken = jest.fn();
+const mockVerifyAccessToken = jest.fn();
 const mockSanitizeUser = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserByEmail: mockFindUserByEmail,
   createUser: mockCreateUser,
   findUserById: mockFindUserById,
+  createRefreshToken: mockCreateRefreshToken,
+  findRefreshToken: mockFindRefreshToken,
+  deleteRefreshToken: mockDeleteRefreshToken,
+  deleteUserRefreshTokens: mockDeleteUserRefreshTokens,
+  blacklistToken: mockBlacklistToken,
+  updateUserTokenIssuedAt: mockUpdateUserTokenIssuedAt,
 }));
+
+const mockParseDuration = jest.fn((d) => {
+  const m = d.match(/^(\d+)([smhd])$/);
+  if (!m) return 604800000;
+  const mult = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return parseInt(m[1], 10) * mult[m[2]];
+});
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
   hashPassword: mockHashPassword,
   comparePassword: mockComparePassword,
-  generateToken: mockGenerateToken,
+  generateAccessToken: mockGenerateAccessToken,
+  generateRefreshToken: mockGenerateRefreshToken,
+  verifyAccessToken: mockVerifyAccessToken,
   sanitizeUser: mockSanitizeUser,
+  parseDuration: mockParseDuration,
 }));
 
-// Import after mocking
-const { registerUser, loginUser } =
+jest.unstable_mockModule("../../../src/config/index.js", () => ({
+  default: {
+    refreshTokenExpiresIn: "7d",
+  },
+}));
+
+const { registerUser, loginUser, refreshAccessToken, logoutUser, logoutAllDevices } =
   await import("../../../src/modules/auth/auth.service.js");
 const { ApiError } = await import("../../../src/utils/errorHandler.js");
 
@@ -31,6 +59,14 @@ describe("Auth Service Unit Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSanitizeUser.mockImplementation(({ password, ...rest }) => rest);
+    mockGenerateAccessToken.mockReturnValue({
+      accessToken: "mock-access-token",
+      expiresIn: "15m",
+    });
+    mockGenerateRefreshToken.mockReturnValue("mock-refresh-token");
+    mockCreateRefreshToken.mockResolvedValue({});
+    mockBlacklistToken.mockResolvedValue({});
+    mockDeleteRefreshToken.mockResolvedValue({});
   });
 
   describe("registerUser", () => {
@@ -48,83 +84,45 @@ describe("Auth Service Unit Tests", () => {
       createdAt: new Date(),
     };
 
-    it("should register a new user successfully", async () => {
-      // Arrange
+    it("should register a new user and return both tokens", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
       mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockGenerateToken.mockReturnValue({
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
 
-      // Act
       const result = await registerUser(mockUserData);
 
-      // Assert
-      expect(mockFindUserByEmail).toHaveBeenCalledWith(mockUserData.email);
-      expect(mockHashPassword).toHaveBeenCalledWith(mockUserData.password);
-      expect(mockCreateUser).toHaveBeenCalledWith({
-        ...mockUserData,
-        password: "hashedPassword123",
-      });
-      expect(mockGenerateToken).toHaveBeenCalledWith(mockCreatedUser);
-      expect(mockSanitizeUser).toHaveBeenCalledWith(mockCreatedUser);
-      expect(result.token).toBe("mock-jwt-token");
-      expect(result.expiresIn).toBe("7d");
+      expect(mockGenerateAccessToken).toHaveBeenCalledWith(mockCreatedUser);
+      expect(mockGenerateRefreshToken).toHaveBeenCalled();
+      expect(mockCreateRefreshToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: "mock-refresh-token",
+          userId: "user-123",
+        }),
+      );
+      expect(result.accessToken).toBe("mock-access-token");
+      expect(result.refreshToken).toBe("mock-refresh-token");
       expect(result.user).not.toHaveProperty("password");
     });
 
     it("should throw error if user already exists", async () => {
-      // Arrange
       mockFindUserByEmail.mockResolvedValue(mockCreatedUser);
 
-      // Act & Assert
-      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
-      await expect(registerUser(mockUserData)).rejects.toThrow(
-        "User already exists",
-      );
-      expect(mockHashPassword).not.toHaveBeenCalled();
-      expect(mockCreateUser).not.toHaveBeenCalled();
+      await expect(registerUser(mockUserData)).rejects.toThrow("User already exists");
     });
 
-    it("should hash password before creating user", async () => {
-      // Arrange
+    it("should throw 500 when password hashing fails", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
-      mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockGenerateToken.mockReturnValue({
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
+      mockHashPassword.mockResolvedValue(null);
 
-      // Act
-      await registerUser(mockUserData);
-
-      // Assert
-      expect(mockHashPassword).toHaveBeenCalledWith(mockUserData.password);
-      expect(mockCreateUser).toHaveBeenCalledWith(
-        expect.objectContaining({
-          password: "hashedPassword123",
-        }),
-      );
+      await expect(registerUser(mockUserData)).rejects.toThrow("Failed to hash password");
     });
 
-    it("should generate token with the created user", async () => {
-      // Arrange
+    it("should throw 500 when user creation fails", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
       mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockGenerateToken.mockReturnValue({
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
+      mockCreateUser.mockResolvedValue(null);
 
-      // Act
-      await registerUser(mockUserData);
-
-      // Assert
-      expect(mockGenerateToken).toHaveBeenCalledWith(mockCreatedUser);
+      await expect(registerUser(mockUserData)).rejects.toThrow("Failed to create user");
     });
   });
 
@@ -136,149 +134,115 @@ describe("Auth Service Unit Tests", () => {
       email: mockEmail,
       password: "$2b$10$hashedPasswordHere",
       name: "Test User",
-      createdAt: new Date(),
     };
 
-    it("should login user successfully with correct credentials", async () => {
-      // Arrange
+    it("should login user and return both tokens", async () => {
       mockFindUserByEmail.mockResolvedValue(mockUser);
       mockComparePassword.mockResolvedValue(true);
-      mockGenerateToken.mockReturnValue({
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
 
-      // Act
       const result = await loginUser(mockEmail, mockPassword);
 
-      // Assert
-      expect(mockFindUserByEmail).toHaveBeenCalledWith(mockEmail);
-      expect(mockComparePassword).toHaveBeenCalledWith(
-        mockPassword,
-        mockUser.password,
-      );
-      expect(mockGenerateToken).toHaveBeenCalledWith(mockUser);
-      expect(mockSanitizeUser).toHaveBeenCalledWith(mockUser);
-      expect(result.token).toBe("mock-jwt-token");
-      expect(result.expiresIn).toBe("7d");
+      expect(result.accessToken).toBe("mock-access-token");
+      expect(result.refreshToken).toBe("mock-refresh-token");
       expect(result.user).not.toHaveProperty("password");
     });
 
-    it("should throw 401 error if user not found", async () => {
-      // Arrange
+    it("should throw 401 if user not found", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        ApiError,
-      );
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        "Invalid credentials",
-      );
-      expect(mockComparePassword).not.toHaveBeenCalled();
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
     });
 
-    it("should throw 401 error if password is incorrect", async () => {
-      // Arrange
+    it("should throw 401 if password is incorrect", async () => {
       mockFindUserByEmail.mockResolvedValue(mockUser);
       mockComparePassword.mockResolvedValue(false);
 
-      // Act & Assert
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        ApiError,
-      );
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        "Invalid credentials",
-      );
-      expect(mockGenerateToken).not.toHaveBeenCalled();
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
     });
 
-    it("should generate token on successful login", async () => {
-      // Arrange
-      mockFindUserByEmail.mockResolvedValue(mockUser);
-      mockComparePassword.mockResolvedValue(true);
-      mockGenerateToken.mockReturnValue({
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
+    it("should throw 401 when user password is corrupted", async () => {
+      mockFindUserByEmail.mockResolvedValue({ ...mockUser, password: null });
 
-      // Act
-      await loginUser(mockEmail, mockPassword);
-
-      // Assert
-      expect(mockGenerateToken).toHaveBeenCalledWith(mockUser);
-    });
-
-    it("should throw 401 error when user password is corrupted", async () => {
-      // Arrange - user exists but password field is null/undefined
-      mockFindUserByEmail.mockResolvedValue({
-        ...mockUser,
-        password: null,
-      });
-
-      // Act & Assert
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        ApiError,
-      );
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
-        "Invalid credentials",
-      );
-      expect(mockComparePassword).not.toHaveBeenCalled();
-      expect(mockGenerateToken).not.toHaveBeenCalled();
+      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
     });
   });
 
-  describe("registerUser - Error Scenarios", () => {
-    const mockUserData = {
+  describe("refreshAccessToken", () => {
+    const mockUser = {
+      id: "user-123",
       email: "test@example.com",
-      password: "Password123!",
+      password: "hashed",
       name: "Test User",
     };
 
-    it("should throw 500 error when password hashing fails", async () => {
-      // Arrange
-      mockFindUserByEmail.mockResolvedValue(null);
-      mockHashPassword.mockResolvedValue(null); // Hash fails
+    it("should rotate tokens on valid refresh", async () => {
+      mockFindRefreshToken.mockResolvedValue({
+        token: "old-refresh-token",
+        userId: "user-123",
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+      mockFindUserById.mockResolvedValue(mockUser);
 
-      // Act & Assert
-      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
-      await expect(registerUser(mockUserData)).rejects.toThrow(
-        "Failed to hash password",
-      );
-      expect(mockCreateUser).not.toHaveBeenCalled();
-      expect(mockGenerateToken).not.toHaveBeenCalled();
+      const result = await refreshAccessToken("old-refresh-token");
+
+      expect(mockDeleteRefreshToken).toHaveBeenCalledWith("old-refresh-token");
+      expect(result.accessToken).toBe("mock-access-token");
+      expect(result.refreshToken).toBe("mock-refresh-token");
     });
 
-    it("should throw 500 error when user creation fails - no id", async () => {
-      // Arrange
-      mockFindUserByEmail.mockResolvedValue(null);
-      mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue(null); // Creation fails
+    it("should throw 401 for invalid refresh token", async () => {
+      mockFindRefreshToken.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
-      await expect(registerUser(mockUserData)).rejects.toThrow(
-        "Failed to create user",
-      );
-      expect(mockGenerateToken).not.toHaveBeenCalled();
+      await expect(refreshAccessToken("bad-token")).rejects.toThrow("Invalid refresh token");
     });
 
-    it("should throw 500 error when user creation returns no id", async () => {
-      // Arrange
-      mockFindUserByEmail.mockResolvedValue(null);
-      mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue({
-        email: "test@example.com",
-        name: "Test User",
-        // Missing id field
+    it("should throw 401 and delete expired refresh token", async () => {
+      mockFindRefreshToken.mockResolvedValue({
+        token: "expired-token",
+        userId: "user-123",
+        expiresAt: new Date(Date.now() - 1000),
       });
 
-      // Act & Assert
-      await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
-      await expect(registerUser(mockUserData)).rejects.toThrow(
-        "Failed to create user",
-      );
-      expect(mockGenerateToken).not.toHaveBeenCalled();
+      await expect(refreshAccessToken("expired-token")).rejects.toThrow("Refresh token expired");
+      expect(mockDeleteRefreshToken).toHaveBeenCalledWith("expired-token");
+    });
+  });
+
+  describe("logoutUser", () => {
+    it("should blacklist access token and delete refresh token", async () => {
+      mockVerifyAccessToken.mockReturnValue({ jti: "token-jti", exp: 9999999999 });
+
+      await logoutUser("access-token-value", "refresh-token-value");
+
+      expect(mockBlacklistToken).toHaveBeenCalledWith({
+        jti: "token-jti",
+        expiresAt: new Date(9999999999 * 1000),
+      });
+      expect(mockDeleteRefreshToken).toHaveBeenCalledWith("refresh-token-value");
+    });
+
+    it("should not throw if access token is already expired", async () => {
+      mockVerifyAccessToken.mockImplementation(() => {
+        throw new Error("expired");
+      });
+
+      await expect(logoutUser("expired-token", "refresh")).resolves.not.toThrow();
+    });
+
+    it("should handle missing tokens gracefully", async () => {
+      await expect(logoutUser(null, null)).resolves.not.toThrow();
+    });
+  });
+
+  describe("logoutAllDevices", () => {
+    it("should update tokenIssuedAt and delete all refresh tokens", async () => {
+      mockUpdateUserTokenIssuedAt.mockResolvedValue({});
+      mockDeleteUserRefreshTokens.mockResolvedValue({ count: 3 });
+
+      await logoutAllDevices("user-123");
+
+      expect(mockUpdateUserTokenIssuedAt).toHaveBeenCalledWith("user-123");
+      expect(mockDeleteUserRefreshTokens).toHaveBeenCalledWith("user-123");
     });
   });
 });

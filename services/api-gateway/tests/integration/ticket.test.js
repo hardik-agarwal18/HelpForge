@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "@jest/globals";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import request from "supertest";
 import app from "../../src/app.js";
@@ -45,9 +46,9 @@ describe("Ticket API Integration Tests", () => {
   let organization;
 
   const signToken = (user) =>
-    jwt.sign({ sub: user.id }, config.jwtSecret, {
+    jwt.sign({ sub: user.id, type: "access", jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1000) }, config.jwtSecret, {
       algorithm: "HS256",
-      expiresIn: "7d",
+      expiresIn: "15m",
       issuer: "helpforge-api",
       audience: "helpforge-users",
     });
@@ -1121,7 +1122,7 @@ describe("Ticket API Integration Tests", () => {
       const response = await request(app)
         .post(`/api/tickets/${ticket.id}/auto-assign`)
         .set("Authorization", `Bearer ${user1Token}`)
-        .expect(409);
+        .expect(422);
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe(

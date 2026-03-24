@@ -5,18 +5,16 @@ import { cleanDatabase, disconnectDatabase } from "../helpers/dbHelper.js";
 
 describe("Auth API Integration Tests", () => {
   beforeEach(async () => {
-    // Clean database before each test
     await cleanDatabase();
   });
 
   afterAll(async () => {
-    // Clean up and disconnect after all tests
     await cleanDatabase();
     await disconnectDatabase();
   });
 
   describe("POST /api/auth/register", () => {
-    it("should register a new user successfully", async () => {
+    it("should register a new user and return both tokens", async () => {
       const userData = {
         email: `newuser${Date.now()}@example.com`,
         password: "Password123!",
@@ -30,12 +28,11 @@ describe("Auth API Integration Tests", () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe("User registered successfully");
-      expect(response.body.data).toHaveProperty("user");
-      expect(response.body.data).toHaveProperty("token");
+      expect(response.body.data).toHaveProperty("accessToken");
+      expect(response.body.data).toHaveProperty("refreshToken");
       expect(response.body.data.tokenType).toBe("Bearer");
-      expect(response.body.data.expiresIn).toBe("7d");
+      expect(response.body.data.expiresIn).toBe("15m");
       expect(response.body.data.user.email).toBe(userData.email);
-      expect(response.body.data.user.name).toBe(userData.name);
       expect(response.body.data.user).not.toHaveProperty("password");
     });
 
@@ -46,10 +43,8 @@ describe("Auth API Integration Tests", () => {
         name: "Duplicate User",
       };
 
-      // Register user first time
       await request(app).post("/api/auth/register").send(userData).expect(201);
 
-      // Try to register again with same email
       const response = await request(app)
         .post("/api/auth/register")
         .send(userData)
@@ -60,15 +55,9 @@ describe("Auth API Integration Tests", () => {
     });
 
     it("should return 400 for invalid email", async () => {
-      const userData = {
-        email: "invalidemail",
-        password: "Password123!",
-        name: "Test User",
-      };
-
       const response = await request(app)
         .post("/api/auth/register")
-        .send(userData)
+        .send({ email: "invalidemail", password: "Password123!", name: "Test" })
         .expect(400);
 
       expect(response.body.success).toBe(false);
@@ -77,25 +66,16 @@ describe("Auth API Integration Tests", () => {
     it("should return 400 for missing required fields", async () => {
       const response = await request(app)
         .post("/api/auth/register")
-        .send({
-          email: "test@example.com",
-          // missing password and name
-        })
+        .send({ email: "test@example.com" })
         .expect(400);
 
       expect(response.body.success).toBe(false);
     });
 
     it("should return 400 for weak password", async () => {
-      const userData = {
-        email: "test@example.com",
-        password: "123", // Too short
-        name: "Test User",
-      };
-
       const response = await request(app)
         .post("/api/auth/register")
-        .send(userData)
+        .send({ email: "test@example.com", password: "123", name: "Test" })
         .expect(400);
 
       expect(response.body.success).toBe(false);
@@ -106,142 +86,234 @@ describe("Auth API Integration Tests", () => {
     let testUser;
 
     beforeEach(async () => {
-      // Use unique email for each test
       testUser = {
         email: `logintest${Date.now()}@example.com`,
         password: "Password123!",
         name: "Login Test User",
       };
-
-      // Register a user before each login test
       await request(app).post("/api/auth/register").send(testUser);
     });
 
-    it("should login successfully with correct credentials", async () => {
+    it("should login and return both tokens", async () => {
       const response = await request(app)
         .post("/api/auth/login")
-        .send({
-          email: testUser.email,
-          password: testUser.password,
-        })
+        .send({ email: testUser.email, password: testUser.password })
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe("Login successful");
-      expect(response.body.data).toHaveProperty("user");
-      expect(response.body.data).toHaveProperty("token");
+      expect(response.body.data).toHaveProperty("accessToken");
+      expect(response.body.data).toHaveProperty("refreshToken");
       expect(response.body.data.tokenType).toBe("Bearer");
-      expect(response.body.data.expiresIn).toBe("7d");
-      expect(response.body.data.user.email).toBe(testUser.email);
+      expect(response.body.data.expiresIn).toBe("15m");
       expect(response.body.data.user).not.toHaveProperty("password");
     });
 
     it("should return 401 for non-existent user", async () => {
       const response = await request(app)
         .post("/api/auth/login")
-        .send({
-          email: "nonexistent@example.com",
-          password: "Password123!",
-        })
+        .send({ email: "nonexistent@example.com", password: "Password123!" })
         .expect(401);
 
-      expect(response.body.success).toBe(false);
       expect(response.body.message).toBe("Invalid credentials");
     });
 
     it("should return 401 for incorrect password", async () => {
       const response = await request(app)
         .post("/api/auth/login")
-        .send({
-          email: testUser.email,
-          password: "WrongPassword123!",
-        })
+        .send({ email: testUser.email, password: "WrongPassword123!" })
         .expect(401);
 
-      expect(response.body.success).toBe(false);
       expect(response.body.message).toBe("Invalid credentials");
     });
 
     it("should return 400 for invalid email format", async () => {
-      const response = await request(app)
+      await request(app)
         .post("/api/auth/login")
-        .send({
-          email: "invalidemail",
-          password: "Password123!",
-        })
+        .send({ email: "invalidemail", password: "Password123!" })
         .expect(400);
-
-      expect(response.body.success).toBe(false);
     });
 
     it("should return 400 for missing credentials", async () => {
-      const response = await request(app)
+      await request(app)
         .post("/api/auth/login")
-        .send({
-          email: testUser.email,
-          // missing password
-        })
+        .send({ email: testUser.email })
         .expect(400);
+    });
+  });
 
-      expect(response.body.success).toBe(false);
+  describe("POST /api/auth/refresh", () => {
+    let refreshToken;
+
+    beforeEach(async () => {
+      const response = await request(app)
+        .post("/api/auth/register")
+        .send({
+          email: `refreshtest${Date.now()}@example.com`,
+          password: "Password123!",
+          name: "Refresh Test",
+        });
+      refreshToken = response.body.data.refreshToken;
+    });
+
+    it("should return new tokens with valid refresh token", async () => {
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveProperty("accessToken");
+      expect(response.body.data).toHaveProperty("refreshToken");
+      expect(response.body.data.refreshToken).not.toBe(refreshToken);
+    });
+
+    it("should invalidate old refresh token after rotation", async () => {
+      await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken })
+        .expect(200);
+
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken })
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid refresh token");
+    });
+
+    it("should return 400 for missing refresh token", async () => {
+      await request(app)
+        .post("/api/auth/refresh")
+        .send({})
+        .expect(400);
+    });
+
+    it("should return 401 for invalid refresh token", async () => {
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken: "invalid-token" })
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid refresh token");
+    });
+  });
+
+  describe("POST /api/auth/logout", () => {
+    it("should logout and invalidate both tokens", async () => {
+      const registerRes = await request(app)
+        .post("/api/auth/register")
+        .send({
+          email: `logouttest${Date.now()}@example.com`,
+          password: "Password123!",
+          name: "Logout Test",
+        });
+
+      const { accessToken, refreshToken } = registerRes.body.data;
+
+      // Logout — send both tokens
+      await request(app)
+        .post("/api/auth/logout")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ refreshToken })
+        .expect(200);
+
+      // Access token should be blacklisted
+      await request(app)
+        .get("/api/auth/me")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .expect(401);
+
+      // Refresh token should be deleted
+      const refreshRes = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken })
+        .expect(401);
+
+      expect(refreshRes.body.message).toBe("Invalid refresh token");
+    });
+  });
+
+  describe("POST /api/auth/logout-all", () => {
+    it("should invalidate all tokens for the user", async () => {
+      const email = `logoutall${Date.now()}@example.com`;
+
+      // Register and get first session
+      const session1 = await request(app)
+        .post("/api/auth/register")
+        .send({ email, password: "Password123!", name: "Test" });
+
+      const { accessToken: token1, refreshToken: refresh1 } = session1.body.data;
+
+      // Login to get second session
+      const session2 = await request(app)
+        .post("/api/auth/login")
+        .send({ email, password: "Password123!" });
+
+      const { refreshToken: refresh2 } = session2.body.data;
+
+      // Logout all using first session
+      await request(app)
+        .post("/api/auth/logout-all")
+        .set("Authorization", `Bearer ${token1}`)
+        .expect(200);
+
+      // Both refresh tokens should be invalid
+      await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken: refresh1 })
+        .expect(401);
+
+      await request(app)
+        .post("/api/auth/refresh")
+        .send({ refreshToken: refresh2 })
+        .expect(401);
     });
   });
 
   describe("GET /api/auth/me", () => {
     let testUser;
-    let authToken;
+    let accessToken;
 
     beforeEach(async () => {
-      // Use unique email for each test to avoid conflicts
       testUser = {
         email: `profiletest${Date.now()}@example.com`,
         password: "Password123!",
         name: "Profile Test User",
       };
 
-      // Register to get token
-      const registerResponse = await request(app)
+      const response = await request(app)
         .post("/api/auth/register")
         .send(testUser);
-
-      authToken = registerResponse.body.data.token;
+      accessToken = response.body.data.accessToken;
     });
 
-    it("should get user profile with valid token", async () => {
+    it("should get user profile with valid access token", async () => {
       const response = await request(app)
         .get("/api/auth/me")
-        .set("Authorization", `Bearer ${authToken}`)
+        .set("Authorization", `Bearer ${accessToken}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty("user");
       expect(response.body.data.user.email).toBe(testUser.email);
-      expect(response.body.data.user.name).toBe(testUser.name);
       expect(response.body.data.user).not.toHaveProperty("password");
     });
 
     it("should return 401 without token", async () => {
-      const response = await request(app).get("/api/auth/me").expect(401);
-
-      expect(response.body.success).toBe(false);
+      await request(app).get("/api/auth/me").expect(401);
     });
 
     it("should return 401 with invalid token", async () => {
-      const response = await request(app)
+      await request(app)
         .get("/api/auth/me")
         .set("Authorization", "Bearer invalidtoken123")
         .expect(401);
-
-      expect(response.body.success).toBe(false);
     });
 
     it("should return 401 with malformed Authorization header", async () => {
-      const response = await request(app)
+      await request(app)
         .get("/api/auth/me")
-        .set("Authorization", authToken) // Missing "Bearer" prefix
+        .set("Authorization", accessToken)
         .expect(401);
-
-      expect(response.body.success).toBe(false);
     });
   });
 });

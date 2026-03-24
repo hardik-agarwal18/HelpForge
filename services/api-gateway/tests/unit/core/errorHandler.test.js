@@ -63,6 +63,7 @@ describe("Error Handler Unit Tests", () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         message: "Internal server error",
+        code: "INTERNAL_ERROR",
       });
     });
 
@@ -76,6 +77,7 @@ describe("Error Handler Unit Tests", () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         message: "Internal server error",
+        code: "INTERNAL_ERROR",
       });
     });
 
@@ -89,6 +91,7 @@ describe("Error Handler Unit Tests", () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         message: "Internal server error",
+        code: "INTERNAL_ERROR",
       });
     });
   });

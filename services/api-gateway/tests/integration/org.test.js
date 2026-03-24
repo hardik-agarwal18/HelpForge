@@ -21,7 +21,7 @@ describe("Organization API Integration Tests", () => {
       password: "Password123!",
       name,
     });
-    return { token: response.body.data.token, id: response.body.data.user.id };
+    return { token: response.body.data.accessToken, id: response.body.data.user.id };
   };
 
   beforeEach(async () => {

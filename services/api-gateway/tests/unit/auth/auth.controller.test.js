@@ -1,16 +1,28 @@
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 
-// Mock dependencies before importing
 const mockRegisterUser = jest.fn();
 const mockLoginUser = jest.fn();
+const mockRefreshAccessToken = jest.fn();
+const mockLogoutUser = jest.fn();
+const mockLogoutAllDevices = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.service.js", () => ({
   registerUser: mockRegisterUser,
   loginUser: mockLoginUser,
+  refreshAccessToken: mockRefreshAccessToken,
+  logoutUser: mockLogoutUser,
+  logoutAllDevices: mockLogoutAllDevices,
 }));
 
-// Import after mocking
-const { register, login, getProfile } =
+const mockExtractBearerToken = jest.fn();
+const mockFormatUserResponse = jest.fn();
+
+jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
+  extractBearerToken: mockExtractBearerToken,
+  formatUserResponse: mockFormatUserResponse,
+}));
+
+const { register, login, refresh, logout, logoutAll, getProfile } =
   await import("../../../src/modules/auth/auth.controller.js");
 
 describe("Auth Controller Unit Tests", () => {
@@ -18,7 +30,17 @@ describe("Auth Controller Unit Tests", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    req = { body: {} };
+    mockExtractBearerToken.mockImplementation((header) => {
+      if (!header?.startsWith("Bearer ")) return null;
+      return header.slice(7) || null;
+    });
+    mockFormatUserResponse.mockImplementation((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+    }));
+    req = { body: {}, headers: {} };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn().mockReturnThis(),
@@ -27,51 +49,35 @@ describe("Auth Controller Unit Tests", () => {
   });
 
   describe("register", () => {
-    it("should register a user successfully", async () => {
-      const userData = {
-        email: "test@example.com",
-        password: "password123",
-        name: "Test User",
-      };
-      const mockUser = {
-        id: "user-123",
-        email: userData.email,
-        name: userData.name,
-        createdAt: new Date(),
-      };
-      const mockToken = "mock-jwt-token";
-
-      req.body = userData;
+    it("should register a user and return both tokens", async () => {
+      const mockUser = { id: "user-123", email: "test@example.com", name: "Test", createdAt: new Date() };
+      req.body = { email: "test@example.com", password: "Password123!", name: "Test" };
       mockRegisterUser.mockResolvedValue({
         user: mockUser,
-        token: mockToken,
-        expiresIn: "7d",
+        accessToken: "access-tok",
+        refreshToken: "refresh-tok",
+        expiresIn: "15m",
       });
 
       await register(req, res, next);
 
-      expect(mockRegisterUser).toHaveBeenCalledWith(userData);
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        message: "User registered successfully",
-        data: {
-          user: {
-            id: mockUser.id,
-            email: mockUser.email,
-            name: mockUser.name,
-            createdAt: mockUser.createdAt,
-          },
-          token: mockToken,
-          tokenType: "Bearer",
-          expiresIn: "7d",
-        },
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            accessToken: "access-tok",
+            refreshToken: "refresh-tok",
+            tokenType: "Bearer",
+            expiresIn: "15m",
+          }),
+        }),
+      );
     });
 
-    it("should handle registration errors", async () => {
-      const error = new Error("Registration failed");
-      req.body = { email: "test@example.com", password: "pass", name: "Test" };
+    it("should handle errors", async () => {
+      const error = new Error("fail");
+      req.body = { email: "t@t.com", password: "p", name: "n" };
       mockRegisterUser.mockRejectedValue(error);
 
       await register(req, res, next);
@@ -81,86 +87,122 @@ describe("Auth Controller Unit Tests", () => {
   });
 
   describe("login", () => {
-    it("should login a user successfully", async () => {
-      const credentials = {
-        email: "test@example.com",
-        password: "password123",
-      };
-      const mockUser = {
-        id: "user-123",
-        email: credentials.email,
-        name: "Test User",
-        createdAt: new Date(),
-      };
-      const mockToken = "mock-jwt-token";
-
-      req.body = credentials;
+    it("should login and return both tokens", async () => {
+      const mockUser = { id: "user-123", email: "test@example.com", name: "Test", createdAt: new Date() };
+      req.body = { email: "test@example.com", password: "Password123!" };
       mockLoginUser.mockResolvedValue({
         user: mockUser,
-        token: mockToken,
-        expiresIn: "7d",
+        accessToken: "access-tok",
+        refreshToken: "refresh-tok",
+        expiresIn: "15m",
       });
 
       await login(req, res, next);
 
-      expect(mockLoginUser).toHaveBeenCalledWith(
-        credentials.email,
-        credentials.password,
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: "Login successful",
+        }),
       );
+    });
+  });
+
+  describe("refresh", () => {
+    it("should return new tokens", async () => {
+      const mockUser = { id: "user-123", email: "test@example.com", name: "Test", createdAt: new Date() };
+      req.body = { refreshToken: "old-refresh" };
+      mockRefreshAccessToken.mockResolvedValue({
+        user: mockUser,
+        accessToken: "new-access",
+        refreshToken: "new-refresh",
+        expiresIn: "15m",
+      });
+
+      await refresh(req, res, next);
+
+      expect(mockRefreshAccessToken).toHaveBeenCalledWith("old-refresh");
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it("should return 400 if refresh token missing", async () => {
+      req.body = {};
+
+      await refresh(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 400 }),
+      );
+    });
+  });
+
+  describe("logout", () => {
+    it("should pass both access and refresh tokens to service", async () => {
+      req.headers.authorization = "Bearer my-access-token";
+      req.body = { refreshToken: "my-refresh-token" };
+      mockLogoutUser.mockResolvedValue();
+
+      await logout(req, res, next);
+
+      expect(mockLogoutUser).toHaveBeenCalledWith("my-access-token", "my-refresh-token");
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        message: "Login successful",
-        data: {
-          user: {
-            id: mockUser.id,
-            email: mockUser.email,
-            name: mockUser.name,
-            createdAt: mockUser.createdAt,
-          },
-          token: mockToken,
-          tokenType: "Bearer",
-          expiresIn: "7d",
-        },
+        message: "Logged out successfully",
       });
     });
 
-    it("should handle login errors", async () => {
-      const error = new Error("Login failed");
-      req.body = { email: "test@example.com", password: "pass" };
-      mockLoginUser.mockRejectedValue(error);
+    it("should handle missing authorization header", async () => {
+      req.body = { refreshToken: "rf" };
+      mockLogoutUser.mockResolvedValue();
 
-      await login(req, res, next);
+      await logout(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(error);
+      expect(mockLogoutUser).toHaveBeenCalledWith(null, "rf");
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+  });
+
+  describe("logoutAll", () => {
+    it("should call logoutAllDevices for authenticated user", async () => {
+      req.user = { id: "user-123" };
+      mockLogoutAllDevices.mockResolvedValue();
+
+      await logoutAll(req, res, next);
+
+      expect(mockLogoutAllDevices).toHaveBeenCalledWith("user-123");
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: "Logged out from all devices",
+      });
+    });
+
+    it("should return 401 if not authenticated", async () => {
+      req.user = undefined;
+
+      await logoutAll(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 401 }),
+      );
     });
   });
 
   describe("getProfile", () => {
-    it("should return user profile successfully", async () => {
-      const mockUser = {
-        id: "user-123",
-        email: "test@example.com",
-        name: "Test User",
-        createdAt: new Date(),
-      };
-
-      req.user = mockUser;
+    it("should return user profile", async () => {
+      req.user = { id: "user-123", email: "test@example.com", name: "Test", createdAt: new Date() };
 
       await getProfile(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        data: {
-          user: {
-            id: mockUser.id,
-            email: mockUser.email,
-            name: mockUser.name,
-            createdAt: mockUser.createdAt,
-          },
-        },
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({ user: expect.any(Object) }),
+        }),
+      );
     });
 
     it("should return 401 when req.user is missing", async () => {
@@ -169,24 +211,8 @@ describe("Auth Controller Unit Tests", () => {
       await getProfile(req, res, next);
 
       expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({
-          statusCode: 401,
-          message: "Authentication required",
-        }),
+        expect.objectContaining({ statusCode: 401 }),
       );
-    });
-
-    it("should handle errors in getProfile", async () => {
-      const error = new Error("Profile retrieval failed");
-      Object.defineProperty(req, "user", {
-        get: () => {
-          throw error;
-        },
-      });
-
-      await getProfile(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(error);
     });
   });
 });

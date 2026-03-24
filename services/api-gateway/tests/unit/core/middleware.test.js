@@ -3,14 +3,19 @@ import { z } from "zod";
 
 // Mock dependencies before importing
 const mockFindUserById = jest.fn();
-const mockVerifyToken = jest.fn();
+const mockIsTokenBlacklisted = jest.fn();
+const mockVerifyAccessToken = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserById: mockFindUserById,
+  isTokenBlacklisted: mockIsTokenBlacklisted,
 }));
 
+const mockExtractBearerToken = jest.fn();
+
 jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
-  verifyToken: mockVerifyToken,
+  verifyAccessToken: mockVerifyAccessToken,
+  extractBearerToken: mockExtractBearerToken,
 }));
 
 // Import after mocking
@@ -28,6 +33,10 @@ describe("Middleware Unit Tests", () => {
     let req, res, next;
 
     beforeEach(() => {
+      mockExtractBearerToken.mockImplementation((header) => {
+        if (!header?.startsWith("Bearer ")) return null;
+        return header.slice(7) || null;
+      });
       req = {
         headers: {},
       };
@@ -36,6 +45,7 @@ describe("Middleware Unit Tests", () => {
         json: jest.fn().mockReturnThis(),
       };
       next = jest.fn();
+      mockIsTokenBlacklisted.mockResolvedValue(false);
     });
 
     it("should authenticate user with valid token", async () => {
@@ -44,16 +54,17 @@ describe("Middleware Unit Tests", () => {
         id: "user-123",
         email: "test@example.com",
         name: "Test User",
+        tokenIssuedAt: null,
       };
       req.headers.authorization = "Bearer valid-token";
-      mockVerifyToken.mockReturnValue({ sub: "user-123" });
+      mockVerifyAccessToken.mockReturnValue({ sub: "user-123", jti: "jti-1", iat: Math.floor(Date.now() / 1000) });
       mockFindUserById.mockResolvedValue(mockUser);
 
       // Act
       await authenticate(req, res, next);
 
       // Assert
-      expect(mockVerifyToken).toHaveBeenCalledWith("valid-token");
+      expect(mockVerifyAccessToken).toHaveBeenCalledWith("valid-token");
       expect(mockFindUserById).toHaveBeenCalledWith("user-123");
       expect(req.user).toEqual(mockUser);
       expect(next).toHaveBeenCalledWith();
@@ -71,7 +82,7 @@ describe("Middleware Unit Tests", () => {
     it("should return 401 if token is invalid", async () => {
       // Arrange
       req.headers.authorization = "Bearer invalid-token";
-      mockVerifyToken.mockImplementation(() => {
+      mockVerifyAccessToken.mockImplementation(() => {
         const error = new Error("Invalid or expired token");
         error.statusCode = 401;
         throw error;
@@ -88,7 +99,7 @@ describe("Middleware Unit Tests", () => {
     it("should return 401 if user not found", async () => {
       // Arrange
       req.headers.authorization = "Bearer valid-token";
-      mockVerifyToken.mockReturnValue({ sub: "user-123" });
+      mockVerifyAccessToken.mockReturnValue({ sub: "user-123", jti: "jti-2", iat: Math.floor(Date.now() / 1000) });
       mockFindUserById.mockResolvedValue(null);
 
       // Act
