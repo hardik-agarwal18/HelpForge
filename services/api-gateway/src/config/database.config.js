@@ -2,8 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import config from "./index.js";
 import logger from "./logger.js";
 
+const SERVICE_NAME = "api-gateway";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+const CONNECT_TIMEOUT_MS = 10000;
 const HEALTH_CHECK_TIMEOUT_MS = 5000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,22 +23,27 @@ const getDatabaseUrl = (role) => {
 const connectWithRetry = async (client, role) => {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await client.$connect();
-      logger.info({ environment: config.nodeEnv, role }, `SQL database connected (${role})`);
+      await Promise.race([
+        client.$connect(),
+        sleep(CONNECT_TIMEOUT_MS).then(() => {
+          throw new Error(`Connection timed out after ${CONNECT_TIMEOUT_MS}ms (${role})`);
+        }),
+      ]);
+      logger.info({ service: SERVICE_NAME, environment: config.nodeEnv, role }, `SQL database connected (${role})`);
       return;
     } catch (error) {
       if (attempt === MAX_RETRIES) {
         logger.error(
-          { error: error.message, attempts: attempt, role },
+          { service: SERVICE_NAME, error: error.message, attempts: attempt, role },
           `Failed to connect to SQL database (${role}) after all retries`,
         );
         throw error;
       }
       logger.warn(
-        { error: error.message, attempt, maxRetries: MAX_RETRIES, role },
+        { service: SERVICE_NAME, error: error.message, attempt, maxRetries: MAX_RETRIES, role },
         `SQL database connection attempt failed (${role}), retrying`,
       );
-      await sleep(RETRY_DELAY_MS * attempt);
+      await sleep(RETRY_DELAY_MS * Math.pow(2, attempt));
     }
   }
 };
@@ -76,10 +83,10 @@ function createDatabaseManager() {
     ]) {
       try {
         await client.$disconnect();
-        logger.info({ role }, `SQL database disconnected (${role})`);
+        logger.info({ service: SERVICE_NAME, role }, `SQL database disconnected (${role})`);
       } catch (error) {
         logger.error(
-          { error: error.message, role },
+          { service: SERVICE_NAME, error: error.message, role },
           `Failed to disconnect from SQL database (${role})`,
         );
         errors.push(error);
@@ -95,7 +102,7 @@ function createDatabaseManager() {
     const check = async (client, role) => {
       try {
         await Promise.race([
-          client.$queryRaw`SELECT 1`,
+          client.$queryRaw`SELECT id FROM "User" LIMIT 1`,
           sleep(HEALTH_CHECK_TIMEOUT_MS).then(() => {
             throw new Error(`Health check timed out (${role})`);
           }),
@@ -103,7 +110,7 @@ function createDatabaseManager() {
         return true;
       } catch (error) {
         logger.warn(
-          { error: error.message, role },
+          { service: SERVICE_NAME, error: error.message, role },
           `Database health check failed (${role})`,
         );
         return false;
