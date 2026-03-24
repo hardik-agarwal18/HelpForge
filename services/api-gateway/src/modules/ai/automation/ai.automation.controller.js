@@ -105,7 +105,7 @@ export const toggleAI = async (req, res, next) => {
     const { aiActive } = req.body;
 
     if (typeof aiActive !== "boolean") {
-      throw new ApiError(400, "aiActive must be a boolean");
+      throw new ApiError(400, "aiActive must be a boolean", "INVALID_AI_ACTIVE");
     }
 
     const updated = await updateTicket(ticketId, { aiActive });

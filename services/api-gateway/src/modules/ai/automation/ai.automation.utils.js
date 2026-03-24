@@ -344,7 +344,7 @@ export const releaseCommentProcessingLock = async (commentId) => {
  */
 export const validateTicketExists = (ticket, ticketId) => {
   if (!ticket) {
-    throw new ApiError(404, `Ticket ${ticketId} not found`);
+    throw new ApiError(404, `Ticket ${ticketId} not found`, "TICKET_NOT_FOUND");
   }
   return ticket;
 };
@@ -358,7 +358,7 @@ export const validateTicketExists = (ticket, ticketId) => {
  */
 export const validateCommentExists = (comment, commentId) => {
   if (!comment) {
-    throw new ApiError(404, `Comment ${commentId} not found`);
+    throw new ApiError(404, `Comment ${commentId} not found`, "COMMENT_NOT_FOUND");
   }
   return comment;
 };

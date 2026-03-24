@@ -35,7 +35,7 @@ export async function generateSuggestion(req, res, next) {
       await augmentationService.generateAgentSuggestion(ticketId);
 
     if (!suggestion) {
-      throw new ApiError(404, "Could not generate suggestion");
+      throw new ApiError(422, "Could not generate suggestion", "SUGGESTION_GENERATION_FAILED");
     }
 
     res.json(mapSuggestionResponse(suggestion));
@@ -61,7 +61,7 @@ export async function getSummary(req, res, next) {
     const summary = await augmentationService.generateTicketSummary(ticketId);
 
     if (!summary) {
-      throw new ApiError(404, "Ticket not found");
+      throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
     }
 
     res.json(mapSummaryResponse(summary));
@@ -123,7 +123,7 @@ export async function getAgentStats(req, res, next) {
     );
 
     if (!stats) {
-      throw new ApiError(404, "Agent not found or no data");
+      throw new ApiError(404, "Agent not found or no data", "AGENT_NOT_FOUND");
     }
 
     res.json(stats);
@@ -151,7 +151,7 @@ export async function quickAssist(req, res, next) {
       await augmentationService.generateQuickAssist(ticketId);
 
     if (!quickAssistPayload) {
-      throw new ApiError(404, "Ticket not found");
+      throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
     }
 
     res.json(buildQuickAssistResponse(quickAssistPayload));

@@ -21,7 +21,7 @@ export const getAIConfigService = async (organizationId) => {
 export const createAIConfigService = async (organizationId, data) => {
   const existing = await aiConfigRepo.getAIConfigByOrg(organizationId);
   if (existing) {
-    throw new ApiError(409, "AI config already exists for this organization. Use PATCH to update.");
+    throw new ApiError(409, "AI config already exists for this organization. Use PATCH to update.", "AI_CONFIG_EXISTS");
   }
 
   return await aiConfigRepo.createAIConfig(organizationId, data);
@@ -37,7 +37,7 @@ export const createAIConfigService = async (organizationId, data) => {
 export const updateAIConfigService = async (organizationId, data) => {
   const existing = await aiConfigRepo.getAIConfigByOrg(organizationId);
   if (!existing) {
-    throw new ApiError(404, "AI config not found for this organization. Use POST to create.");
+    throw new ApiError(404, "AI config not found for this organization. Use POST to create.", "AI_CONFIG_NOT_FOUND");
   }
 
   return await aiConfigRepo.updateAIConfig(organizationId, data);

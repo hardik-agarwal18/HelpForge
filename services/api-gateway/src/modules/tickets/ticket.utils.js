@@ -43,7 +43,7 @@ export const parseDateFilter = (value, fieldName) => {
   const parsedDate = new Date(value);
 
   if (Number.isNaN(parsedDate.getTime())) {
-    throw new ApiError(400, `Invalid ${fieldName}`);
+    throw new ApiError(400, `Invalid ${fieldName}`, "INVALID_DATE");
   }
 
   return parsedDate;

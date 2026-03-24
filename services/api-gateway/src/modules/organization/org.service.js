@@ -21,13 +21,13 @@ export const createOrganizationService = async ({ name, userId }) => {
   const existingOrg = await findOrganizationByOwner({ userId });
 
   if (existingOrg) {
-    throw new ApiError(400, "User already owns an organization");
+    throw new ApiError(409, "User already owns an organization", "USER_ALREADY_OWNER");
   }
 
   const organization = await createOrganization({ name, userId });
 
   if (!organization || !organization.id) {
-    throw new ApiError(500, "Failed to create organization");
+    throw new ApiError(500, "Failed to create organization", "ORG_CREATION_FAILED");
   }
 
   return organization;
@@ -37,7 +37,7 @@ export const updateOrganizationService = async ({ orgId, name }) => {
   const updatedOrganization = await patchOrganization({ orgId, name });
 
   if (!updatedOrganization || !updatedOrganization.id) {
-    throw new ApiError(500, "Failed to update organization");
+    throw new ApiError(500, "Failed to update organization", "ORG_UPDATE_FAILED");
   }
 
   return updatedOrganization;
@@ -47,7 +47,7 @@ export const deleteOrganizationService = async ({ orgId }) => {
   const deletedOrganization = await deleteOrganization({ orgId });
 
   if (!deletedOrganization || !deletedOrganization.id) {
-    throw new ApiError(500, "Failed to delete organization");
+    throw new ApiError(500, "Failed to delete organization", "ORG_DELETE_FAILED");
   }
 
   return deletedOrganization;
@@ -70,7 +70,7 @@ export const inviteMemberInOrganizationService = async (
   const membership = await inviteMemberInOrganization(orgId, userId, normalizedRole);
 
   if (!membership || !membership.id) {
-    throw new ApiError(500, "Failed to invite member to organization");
+    throw new ApiError(500, "Failed to invite member to organization", "MEMBER_INVITE_FAILED");
   }
 
   return membership;
@@ -86,7 +86,7 @@ export const updateMemberFromOrganizationService = async (
   const targetMembership = await getOrganizationMembershipByUserId(orgId, userId);
 
   if (!targetMembership || !targetMembership.id) {
-    throw new ApiError(404, "Member not found in organization");
+    throw new ApiError(404, "Member not found in organization", "MEMBER_NOT_FOUND");
   }
 
   assertCanUpdateRole(actorMembership, targetMembership, normalizedRole);
@@ -94,7 +94,7 @@ export const updateMemberFromOrganizationService = async (
   const updatedMembership = await updateMembershipRole(orgId, userId, normalizedRole);
 
   if (!updatedMembership || !updatedMembership.id) {
-    throw new ApiError(500, "Failed to update member in organization");
+    throw new ApiError(500, "Failed to update member in organization", "MEMBER_UPDATE_FAILED");
   }
 
   return updatedMembership;

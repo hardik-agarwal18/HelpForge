@@ -103,7 +103,7 @@ export const autoAssignTicketForOrganization = async (ticket) => {
   );
 
   if (!autoAssignedUserId) {
-    throw new ApiError(409, "No available agent found for auto-assignment");
+    throw new ApiError(422, "No available agent found for auto-assignment", "NO_AGENT_AVAILABLE");
   }
 
   const autoAssignedTicket = await autoAssignTicket(
@@ -113,7 +113,7 @@ export const autoAssignTicketForOrganization = async (ticket) => {
   );
 
   if (!autoAssignedTicket || !autoAssignedTicket.id) {
-    throw new ApiError(500, "Failed to auto-assign ticket");
+    throw new ApiError(500, "Failed to auto-assign ticket", "AUTO_ASSIGN_FAILED");
   }
 
   return autoAssignedTicket;

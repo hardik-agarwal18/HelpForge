@@ -28,7 +28,7 @@ export const createInAppNotificationsService = async ({
   const dedupedRecipientIds = dedupeRecipients(recipientIds);
 
   if (!organizationId) {
-    throw new ApiError(400, "Organization ID is required");
+    throw new ApiError(400, "Organization ID is required", "ORG_ID_REQUIRED");
   }
 
   if (dedupedRecipientIds.length === 0) {
@@ -39,6 +39,7 @@ export const createInAppNotificationsService = async ({
     throw new ApiError(
       400,
       "Notification type, title, and message are required",
+      "NOTIFICATION_FIELDS_REQUIRED",
     );
   }
 
@@ -101,7 +102,7 @@ export const createTicketEventNotificationService = async ({
 
 export const listMyNotificationsService = async (recipientId, options = {}) => {
   if (!recipientId) {
-    throw new ApiError(400, "Recipient ID is required");
+    throw new ApiError(400, "Recipient ID is required", "RECIPIENT_ID_REQUIRED");
   }
 
   return await getNotificationsByRecipient(recipientId, options);
@@ -112,13 +113,13 @@ export const markNotificationAsReadService = async (
   recipientId,
 ) => {
   if (!notificationId || !recipientId) {
-    throw new ApiError(400, "Notification ID and recipient ID are required");
+    throw new ApiError(400, "Notification ID and recipient ID are required", "NOTIFICATION_PARAMS_REQUIRED");
   }
 
   const result = await markNotificationAsRead(notificationId, recipientId);
 
   if (result.count === 0) {
-    throw new ApiError(404, "Notification not found");
+    throw new ApiError(404, "Notification not found", "NOTIFICATION_NOT_FOUND");
   }
 
   return result;
@@ -126,7 +127,7 @@ export const markNotificationAsReadService = async (
 
 export const markAllNotificationsAsReadService = async (recipientId) => {
   if (!recipientId) {
-    throw new ApiError(400, "Recipient ID is required");
+    throw new ApiError(400, "Recipient ID is required", "RECIPIENT_ID_REQUIRED");
   }
 
   return await markAllNotificationsAsRead(recipientId);
@@ -134,7 +135,7 @@ export const markAllNotificationsAsReadService = async (recipientId) => {
 
 export const getMyNotificationPreferencesService = async (userId) => {
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+    throw new ApiError(400, "User ID is required", "USER_ID_REQUIRED");
   }
 
   const preference = await getNotificationPreferenceByUserId(userId);
@@ -154,7 +155,7 @@ export const updateMyNotificationPreferencesService = async (
   preferenceData,
 ) => {
   if (!userId) {
-    throw new ApiError(400, "User ID is required");
+    throw new ApiError(400, "User ID is required", "USER_ID_REQUIRED");
   }
 
   return await upsertNotificationPreferenceByUserId(userId, preferenceData);

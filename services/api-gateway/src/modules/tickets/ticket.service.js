@@ -105,6 +105,7 @@ const validateTicketAssignee = async (organizationId, assignedToId) => {
     throw new ApiError(
       400,
       "Assigned user must be a member of the organization",
+      "ASSIGNEE_NOT_MEMBER",
     );
   }
 };
@@ -120,6 +121,7 @@ export const createTicketService = async (ticketData, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to create tickets for this organization",
+      "FORBIDDEN",
     );
   }
 
@@ -134,7 +136,7 @@ export const createTicketService = async (ticketData, userId) => {
   });
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(500, "Failed to create ticket");
+    throw new ApiError(500, "Failed to create ticket", "TICKET_CREATION_FAILED");
   }
 
   emitTicketEvent(TICKET_CREATED_EVENT, {
@@ -153,7 +155,7 @@ export const createTicketService = async (ticketData, userId) => {
   try {
     return await autoAssignTicketForOrganization(ticket);
   } catch (error) {
-    if (error.statusCode === 409) {
+    if (error.code === "NO_AGENT_AVAILABLE") {
       return ticket;
     }
 
@@ -165,7 +167,7 @@ export const autoAssignTicketService = async (ticketId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -181,6 +183,7 @@ export const autoAssignTicketService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to auto-assign this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -198,7 +201,7 @@ export const createTagService = async (tagData, userId) => {
     !membership.id ||
     !canEditAllOrganizationTickets(membership.role)
   ) {
-    throw new ApiError(403, "You do not have permission to create tags");
+    throw new ApiError(403, "You do not have permission to create tags", "FORBIDDEN");
   }
 
   const normalizedName = normalizeTagName(tagData.name);
@@ -208,7 +211,7 @@ export const createTagService = async (tagData, userId) => {
   );
 
   if (existingTag && existingTag.id) {
-    throw new ApiError(409, "Tag already exists in this organization");
+    throw new ApiError(409, "Tag already exists in this organization", "TAG_EXISTS");
   }
 
   const tag = await createTag({
@@ -217,7 +220,7 @@ export const createTagService = async (tagData, userId) => {
   });
 
   if (!tag || !tag.id) {
-    throw new ApiError(500, "Failed to create tag");
+    throw new ApiError(500, "Failed to create tag", "TAG_CREATION_FAILED");
   }
 
   return tag;
@@ -225,7 +228,7 @@ export const createTagService = async (tagData, userId) => {
 
 export const getTagsService = async (organizationId, userId) => {
   if (!organizationId) {
-    throw new ApiError(400, "Organization ID is required");
+    throw new ApiError(400, "Organization ID is required", "ORG_ID_REQUIRED");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -234,7 +237,7 @@ export const getTagsService = async (organizationId, userId) => {
   );
 
   if (!membership || !membership.id) {
-    throw new ApiError(403, "You do not have permission to view tags");
+    throw new ApiError(403, "You do not have permission to view tags", "FORBIDDEN");
   }
 
   const tags = await getTags(organizationId);
@@ -255,6 +258,7 @@ export const getTicketsService = async (query, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view tickets for this organization",
+      "FORBIDDEN",
     );
   }
 
@@ -282,6 +286,7 @@ export const getMyAgentTicketsService = async (query, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view assigned agent tickets",
+      "FORBIDDEN",
     );
   }
 
@@ -296,6 +301,7 @@ export const getMyAgentTicketsService = async (query, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view assigned agent tickets",
+      "FORBIDDEN",
     );
   }
 
@@ -351,11 +357,12 @@ export const updateMyAgentAvailabilityService = async (
     throw new ApiError(
       403,
       "You do not have permission to update agent availability for this organization",
+      "FORBIDDEN",
     );
   }
 
   if (membership.role !== "AGENT") {
-    throw new ApiError(403, "Only agents can update their availability");
+    throw new ApiError(403, "Only agents can update their availability", "AGENT_ROLE_REQUIRED");
   }
 
   const updatedMembership = await updateAgentAvailability(
@@ -365,7 +372,7 @@ export const updateMyAgentAvailabilityService = async (
   );
 
   if (!updatedMembership || !updatedMembership.id) {
-    throw new ApiError(500, "Failed to update agent availability");
+    throw new ApiError(500, "Failed to update agent availability", "AGENT_AVAILABILITY_UPDATE_FAILED");
   }
 
   return updatedMembership;
@@ -375,7 +382,7 @@ export const getTicketByIdService = async (ticketId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -384,14 +391,14 @@ export const getTicketByIdService = async (ticketId, userId) => {
   );
 
   if (!membership || !membership.id) {
-    throw new ApiError(403, "You do not have permission to view this ticket");
+    throw new ApiError(403, "You do not have permission to view this ticket", "FORBIDDEN");
   }
 
   if (
     !canViewAllOrganizationTickets(membership.role) &&
     !canMemberViewTicket(ticket, userId)
   ) {
-    throw new ApiError(403, "You do not have permission to view this ticket");
+    throw new ApiError(403, "You do not have permission to view this ticket", "FORBIDDEN");
   }
 
   return filterInternalCommentsForRole(ticket, membership.role);
@@ -404,7 +411,7 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -413,7 +420,7 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
   );
 
   if (!membership || !membership.id) {
-    throw new ApiError(403, "You do not have permission to update this ticket");
+    throw new ApiError(403, "You do not have permission to update this ticket", "FORBIDDEN");
   }
 
   assertCanUpdateTicket(membership, ticket, userId, normalizedUpdateData);
@@ -430,7 +437,7 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
   );
 
   if (!updatedTicket || !updatedTicket.id) {
-    throw new ApiError(500, "Failed to update ticket");
+    throw new ApiError(500, "Failed to update ticket", "TICKET_UPDATE_FAILED");
   }
 
   return filterInternalCommentsForRole(updatedTicket, membership.role);
@@ -440,7 +447,7 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -453,7 +460,7 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
     !membership.id ||
     !canAssignOrganizationTickets(membership.role)
   ) {
-    throw new ApiError(403, "You do not have permission to assign this ticket");
+    throw new ApiError(403, "You do not have permission to assign this ticket", "FORBIDDEN");
   }
 
   await validateTicketAssignee(ticket.organizationId, assignedToId);
@@ -466,7 +473,7 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
   );
 
   if (!updatedTicket || !updatedTicket.id) {
-    throw new ApiError(500, "Failed to assign ticket");
+    throw new ApiError(500, "Failed to assign ticket", "TICKET_ASSIGNMENT_FAILED");
   }
 
   emitTicketEvent(TICKET_ASSIGNED_EVENT, {
@@ -487,7 +494,7 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -503,6 +510,7 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to update this ticket status",
+      "FORBIDDEN",
     );
   }
 
@@ -514,7 +522,7 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
   );
 
   if (!updatedTicket || !updatedTicket.id) {
-    throw new ApiError(500, "Failed to update ticket status");
+    throw new ApiError(500, "Failed to update ticket status", "TICKET_STATUS_UPDATE_FAILED");
   }
 
   emitTicketEvent(TICKET_STATUS_CHANGED_EVENT, {
@@ -538,7 +546,7 @@ export const createTicketCommentService = async (
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -550,6 +558,7 @@ export const createTicketCommentService = async (
     throw new ApiError(
       403,
       "You do not have permission to comment on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -560,6 +569,7 @@ export const createTicketCommentService = async (
     throw new ApiError(
       403,
       "You do not have permission to comment on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -569,6 +579,7 @@ export const createTicketCommentService = async (
     throw new ApiError(
       403,
       "You do not have permission to create internal comments",
+      "FORBIDDEN",
     );
   }
 
@@ -580,7 +591,7 @@ export const createTicketCommentService = async (
   });
 
   if (!comment || !comment.id) {
-    throw new ApiError(500, "Failed to create ticket comment");
+    throw new ApiError(500, "Failed to create ticket comment", "COMMENT_CREATION_FAILED");
   }
 
   emitTicketEvent(TICKET_COMMENT_ADDED_EVENT, {
@@ -606,7 +617,7 @@ export const getTicketCommentsService = async (ticketId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -618,6 +629,7 @@ export const getTicketCommentsService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view comments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -628,6 +640,7 @@ export const getTicketCommentsService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view comments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -640,7 +653,7 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -652,6 +665,7 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view activity on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -662,6 +676,7 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view activity on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -678,13 +693,13 @@ export const deleteTicketCommentService = async (
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const comment = await getTicketCommentById(commentId);
 
   if (!comment || !comment.id || comment.ticketId !== ticketId) {
-    throw new ApiError(404, "Comment not found");
+    throw new ApiError(404, "Comment not found", "COMMENT_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -696,6 +711,7 @@ export const deleteTicketCommentService = async (
     throw new ApiError(
       403,
       "You do not have permission to delete comments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -706,13 +722,14 @@ export const deleteTicketCommentService = async (
     throw new ApiError(
       403,
       "You do not have permission to delete this comment",
+      "FORBIDDEN",
     );
   }
 
   const deletedComment = await deleteTicketComment(commentId);
 
   if (!deletedComment || !deletedComment.id) {
-    throw new ApiError(500, "Failed to delete ticket comment");
+    throw new ApiError(500, "Failed to delete ticket comment", "COMMENT_DELETION_FAILED");
   }
 
   emitTicketEvent(TICKET_COMMENT_DELETED_EVENT, {
@@ -735,7 +752,7 @@ export const createTicketAttachmentService = async (
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -747,6 +764,7 @@ export const createTicketAttachmentService = async (
     throw new ApiError(
       403,
       "You do not have permission to add attachments to this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -757,6 +775,7 @@ export const createTicketAttachmentService = async (
     throw new ApiError(
       403,
       "You do not have permission to add attachments to this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -768,7 +787,7 @@ export const createTicketAttachmentService = async (
   });
 
   if (!attachment || !attachment.id) {
-    throw new ApiError(500, "Failed to create ticket attachment");
+    throw new ApiError(500, "Failed to create ticket attachment", "ATTACHMENT_CREATION_FAILED");
   }
 
   emitTicketEvent(TICKET_ATTACHMENT_ADDED_EVENT, {
@@ -787,7 +806,7 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -799,6 +818,7 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view attachments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -809,6 +829,7 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to view attachments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -825,13 +846,13 @@ export const deleteTicketAttachmentService = async (
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const attachment = await getTicketAttachmentById(attachmentId);
 
   if (!attachment || !attachment.id || attachment.ticketId !== ticketId) {
-    throw new ApiError(404, "Attachment not found");
+    throw new ApiError(404, "Attachment not found", "ATTACHMENT_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -843,6 +864,7 @@ export const deleteTicketAttachmentService = async (
     throw new ApiError(
       403,
       "You do not have permission to delete attachments on this ticket",
+      "FORBIDDEN",
     );
   }
 
@@ -853,13 +875,14 @@ export const deleteTicketAttachmentService = async (
     throw new ApiError(
       403,
       "You do not have permission to delete this attachment",
+      "FORBIDDEN",
     );
   }
 
   const deletedAttachment = await deleteTicketAttachment(attachmentId);
 
   if (!deletedAttachment || !deletedAttachment.id) {
-    throw new ApiError(500, "Failed to delete ticket attachment");
+    throw new ApiError(500, "Failed to delete ticket attachment", "ATTACHMENT_DELETION_FAILED");
   }
 
   emitTicketEvent(TICKET_ATTACHMENT_DELETED_EVENT, {
@@ -878,7 +901,7 @@ export const addTicketTagService = async (ticketId, tagId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -891,25 +914,25 @@ export const addTicketTagService = async (ticketId, tagId, userId) => {
     !membership.id ||
     !canEditAllOrganizationTickets(membership.role)
   ) {
-    throw new ApiError(403, "You do not have permission to tag this ticket");
+    throw new ApiError(403, "You do not have permission to tag this ticket", "FORBIDDEN");
   }
 
   const tag = await getTagById(tagId);
 
   if (!tag || !tag.id || tag.organizationId !== ticket.organizationId) {
-    throw new ApiError(404, "Tag not found");
+    throw new ApiError(404, "Tag not found", "TAG_NOT_FOUND");
   }
 
   const existingTicketTag = await getTicketTagById(ticketId, tagId);
 
   if (existingTicketTag && existingTicketTag.tagId) {
-    throw new ApiError(409, "Tag already added to this ticket");
+    throw new ApiError(409, "Tag already added to this ticket", "TICKET_TAG_EXISTS");
   }
 
   const ticketTag = await addTagToTicket(ticketId, tagId);
 
   if (!ticketTag || !ticketTag.tagId) {
-    throw new ApiError(500, "Failed to add tag to ticket");
+    throw new ApiError(500, "Failed to add tag to ticket", "TICKET_TAG_ADD_FAILED");
   }
 
   emitTicketEvent(TICKET_TAG_ADDED_EVENT, {
@@ -928,7 +951,7 @@ export const deleteTicketTagService = async (ticketId, tagId, userId) => {
   const ticket = await getTicketById(ticketId);
 
   if (!ticket || !ticket.id) {
-    throw new ApiError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found", "TICKET_NOT_FOUND");
   }
 
   const membership = await getTicketOrganizationMembership(
@@ -944,19 +967,20 @@ export const deleteTicketTagService = async (ticketId, tagId, userId) => {
     throw new ApiError(
       403,
       "You do not have permission to remove tags from this ticket",
+      "FORBIDDEN",
     );
   }
 
   const ticketTag = await getTicketTagById(ticketId, tagId);
 
   if (!ticketTag || !ticketTag.tagId) {
-    throw new ApiError(404, "Tag not found on this ticket");
+    throw new ApiError(404, "Tag not found on this ticket", "TICKET_TAG_NOT_FOUND");
   }
 
   const deletedTicketTag = await deleteTicketTag(ticketId, tagId);
 
   if (!deletedTicketTag || !deletedTicketTag.tagId) {
-    throw new ApiError(500, "Failed to remove tag from ticket");
+    throw new ApiError(500, "Failed to remove tag from ticket", "TICKET_TAG_REMOVE_FAILED");
   }
 
   emitTicketEvent(TICKET_TAG_REMOVED_EVENT, {

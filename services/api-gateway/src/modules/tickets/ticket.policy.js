@@ -36,7 +36,7 @@ export const assertCanUpdateTicket = (
   }
 
   if (membership.role !== "MEMBER" || ticket.createdById !== userId) {
-    throw new ApiError(403, "You do not have permission to update this ticket");
+    throw new ApiError(403, "You do not have permission to update this ticket", "TICKET_UPDATE_FORBIDDEN");
   }
 
   const allowedFields = ["title", "description", "priority"];
@@ -46,6 +46,7 @@ export const assertCanUpdateTicket = (
     throw new ApiError(
       403,
       "Members can only update title, description, and priority on their own tickets",
+      "TICKET_UPDATE_FORBIDDEN",
     );
   }
 };

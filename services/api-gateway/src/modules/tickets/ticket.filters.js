@@ -52,25 +52,25 @@ export const validateListFilters = (filters, options = {}) => {
   const { requireOrganizationId = true } = options;
 
   if (requireOrganizationId && !filters.organizationId) {
-    throw new ApiError(400, "Organization ID is required");
+    throw new ApiError(400, "Organization ID is required", "ORG_ID_REQUIRED");
   }
 
   if (filters.status && !TICKET_STATUSES.includes(filters.status)) {
-    throw new ApiError(400, "Invalid status");
+    throw new ApiError(400, "Invalid status", "INVALID_STATUS");
   }
 
   if (filters.priority && !TICKET_PRIORITIES.includes(filters.priority)) {
-    throw new ApiError(400, "Invalid priority");
+    throw new ApiError(400, "Invalid priority", "INVALID_PRIORITY");
   }
 
   if (filters.source && !TICKET_SOURCES.includes(filters.source)) {
-    throw new ApiError(400, "Invalid source");
+    throw new ApiError(400, "Invalid source", "INVALID_SOURCE");
   }
 
   const dateFrom = parseDateFilter(filters.dateFrom, "dateFrom");
   const dateTo = parseDateFilter(filters.dateTo, "dateTo");
 
   if (dateFrom && dateTo && dateFrom > dateTo) {
-    throw new ApiError(400, "dateFrom cannot be after dateTo");
+    throw new ApiError(400, "dateFrom cannot be after dateTo", "INVALID_DATE_RANGE");
   }
 };
