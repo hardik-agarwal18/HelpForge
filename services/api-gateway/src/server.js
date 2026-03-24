@@ -8,8 +8,14 @@ import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automa
 import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
 import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
-import { startScraperWorker, stopScraperWorker } from "./modules/ai/scraper/scraper.worker.js";
-import { scheduleScrapeCleanup, stopScrapeCleanup } from "./modules/ai/scraper/scraper.cleanup.cron.js";
+import {
+  startScraperWorker,
+  stopScraperWorker,
+} from "./modules/ai/scraper/scraper.worker.js";
+import {
+  scheduleScrapeCleanup,
+  stopScrapeCleanup,
+} from "./modules/ai/scraper/scraper.cleanup.cron.js";
 
 const PORT = config.port;
 
@@ -30,33 +36,66 @@ const startServer = async () => {
   });
 };
 
+const SHUTDOWN_TIMEOUT_MS =
+  parseInt(process.env.SHUTDOWN_TIMEOUT_MS, 10) || 15_000;
+
+let isShuttingDown = false;
+
 const gracefulShutdown = async (signal) => {
-  logger.info({ signal }, "Received shutdown signal");
+  if (isShuttingDown) return;
+  isShuttingDown = true;
 
-  server.close(async () => {
-    try {
-      await db.disconnect();
+  logger.info(
+    { signal },
+    "Received shutdown signal — starting graceful shutdown",
+  );
 
-      await disconnectRedis();
+  // Force exit if shutdown hangs
+  const forceTimer = setTimeout(() => {
+    logger.error("Graceful shutdown timed out — forcing exit");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceTimer.unref();
 
-      stopScrapeCleanup();
-      await stopScraperWorker();
-      logger.info("API Gateway shutdown complete");
-      process.exit(0);
-    } catch (error) {
-      logger.error({ error }, "Error during graceful shutdown");
-      process.exit(1);
-    }
-  });
+  try {
+    // 1. Stop accepting new connections + drain in-flight requests
+    await new Promise((resolve, reject) => {
+      // Destroy idle keep-alive sockets so they don't hold the server open
+      server.closeIdleConnections();
+
+      server.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+
+      // After a grace period, forcibly close remaining connections
+      setTimeout(
+        () => {
+          server.closeAllConnections();
+        },
+        Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6),
+      );
+    });
+
+    logger.info("HTTP server closed — all in-flight requests completed");
+
+    // 2. Stop workers + crons (stop consuming before disconnecting backends)
+    stopScrapeCleanup();
+    await stopScraperWorker();
+
+    // 3. Disconnect data stores
+    await Promise.allSettled([db.disconnect(), disconnectRedis()]);
+
+    logger.info("API Gateway shutdown complete");
+    process.exit(0);
+  } catch (error) {
+    logger.error({ error: error.message }, "Error during graceful shutdown");
+    process.exit(1);
+  }
 };
 
-process.on("SIGINT", () => {
-  gracefulShutdown("SIGINT");
-});
-
-process.on("SIGTERM", () => {
-  gracefulShutdown("SIGTERM");
-});
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 startServer().catch((error) => {
   logger.error({ error }, "Failed to start API Gateway");
