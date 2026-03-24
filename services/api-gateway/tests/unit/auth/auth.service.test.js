@@ -4,9 +4,10 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 const mockFindUserByEmail = jest.fn();
 const mockCreateUser = jest.fn();
 const mockFindUserById = jest.fn();
-const mockBcryptHash = jest.fn();
-const mockBcryptCompare = jest.fn();
-const mockJwtSign = jest.fn();
+const mockHashPassword = jest.fn();
+const mockComparePassword = jest.fn();
+const mockGenerateToken = jest.fn();
+const mockSanitizeUser = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserByEmail: mockFindUserByEmail,
@@ -14,17 +15,11 @@ jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserById: mockFindUserById,
 }));
 
-jest.unstable_mockModule("bcrypt", () => ({
-  default: {
-    hash: mockBcryptHash,
-    compare: mockBcryptCompare,
-  },
-}));
-
-jest.unstable_mockModule("jsonwebtoken", () => ({
-  default: {
-    sign: mockJwtSign,
-  },
+jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
+  hashPassword: mockHashPassword,
+  comparePassword: mockComparePassword,
+  generateToken: mockGenerateToken,
+  sanitizeUser: mockSanitizeUser,
 }));
 
 // Import after mocking
@@ -35,6 +30,7 @@ const { ApiError } = await import("../../../src/utils/errorHandler.js");
 describe("Auth Service Unit Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSanitizeUser.mockImplementation(({ password, ...rest }) => rest);
   });
 
   describe("registerUser", () => {
@@ -48,31 +44,35 @@ describe("Auth Service Unit Tests", () => {
       id: "user-123",
       email: "test@example.com",
       name: "Test User",
+      password: "hashedPassword123",
       createdAt: new Date(),
     };
 
     it("should register a new user successfully", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockJwtSign.mockReturnValue("mock-jwt-token");
+      mockGenerateToken.mockReturnValue({
+        token: "mock-jwt-token",
+        expiresIn: "7d",
+      });
 
       // Act
       const result = await registerUser(mockUserData);
 
       // Assert
       expect(mockFindUserByEmail).toHaveBeenCalledWith(mockUserData.email);
-      expect(mockBcryptHash).toHaveBeenCalledWith(mockUserData.password, 10);
+      expect(mockHashPassword).toHaveBeenCalledWith(mockUserData.password);
       expect(mockCreateUser).toHaveBeenCalledWith({
         ...mockUserData,
         password: "hashedPassword123",
       });
-      expect(result).toEqual({
-        user: mockCreatedUser,
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
+      expect(mockGenerateToken).toHaveBeenCalledWith(mockCreatedUser);
+      expect(mockSanitizeUser).toHaveBeenCalledWith(mockCreatedUser);
+      expect(result.token).toBe("mock-jwt-token");
+      expect(result.expiresIn).toBe("7d");
+      expect(result.user).not.toHaveProperty("password");
     });
 
     it("should throw error if user already exists", async () => {
@@ -84,22 +84,25 @@ describe("Auth Service Unit Tests", () => {
       await expect(registerUser(mockUserData)).rejects.toThrow(
         "User already exists",
       );
-      expect(mockBcryptHash).not.toHaveBeenCalled();
+      expect(mockHashPassword).not.toHaveBeenCalled();
       expect(mockCreateUser).not.toHaveBeenCalled();
     });
 
     it("should hash password before creating user", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockJwtSign.mockReturnValue("mock-jwt-token");
+      mockGenerateToken.mockReturnValue({
+        token: "mock-jwt-token",
+        expiresIn: "7d",
+      });
 
       // Act
       await registerUser(mockUserData);
 
       // Assert
-      expect(mockBcryptHash).toHaveBeenCalledWith(mockUserData.password, 10);
+      expect(mockHashPassword).toHaveBeenCalledWith(mockUserData.password);
       expect(mockCreateUser).toHaveBeenCalledWith(
         expect.objectContaining({
           password: "hashedPassword123",
@@ -107,22 +110,21 @@ describe("Auth Service Unit Tests", () => {
       );
     });
 
-    it("should generate JWT token with correct payload", async () => {
+    it("should generate token with the created user", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue(mockCreatedUser);
-      mockJwtSign.mockReturnValue("mock-jwt-token");
+      mockGenerateToken.mockReturnValue({
+        token: "mock-jwt-token",
+        expiresIn: "7d",
+      });
 
       // Act
       await registerUser(mockUserData);
 
       // Assert
-      expect(mockJwtSign).toHaveBeenCalledWith(
-        { userId: mockCreatedUser.id, email: mockCreatedUser.email },
-        expect.anything(),
-        { expiresIn: "7d" },
-      );
+      expect(mockGenerateToken).toHaveBeenCalledWith(mockCreatedUser);
     });
   });
 
@@ -140,23 +142,26 @@ describe("Auth Service Unit Tests", () => {
     it("should login user successfully with correct credentials", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(mockUser);
-      mockBcryptCompare.mockResolvedValue(true);
-      mockJwtSign.mockReturnValue("mock-jwt-token");
+      mockComparePassword.mockResolvedValue(true);
+      mockGenerateToken.mockReturnValue({
+        token: "mock-jwt-token",
+        expiresIn: "7d",
+      });
 
       // Act
       const result = await loginUser(mockEmail, mockPassword);
 
       // Assert
       expect(mockFindUserByEmail).toHaveBeenCalledWith(mockEmail);
-      expect(mockBcryptCompare).toHaveBeenCalledWith(
+      expect(mockComparePassword).toHaveBeenCalledWith(
         mockPassword,
         mockUser.password,
       );
-      expect(result).toEqual({
-        user: mockUser,
-        token: "mock-jwt-token",
-        expiresIn: "7d",
-      });
+      expect(mockGenerateToken).toHaveBeenCalledWith(mockUser);
+      expect(mockSanitizeUser).toHaveBeenCalledWith(mockUser);
+      expect(result.token).toBe("mock-jwt-token");
+      expect(result.expiresIn).toBe("7d");
+      expect(result.user).not.toHaveProperty("password");
     });
 
     it("should throw 401 error if user not found", async () => {
@@ -170,13 +175,13 @@ describe("Auth Service Unit Tests", () => {
       await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
         "Invalid credentials",
       );
-      expect(mockBcryptCompare).not.toHaveBeenCalled();
+      expect(mockComparePassword).not.toHaveBeenCalled();
     });
 
     it("should throw 401 error if password is incorrect", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(mockUser);
-      mockBcryptCompare.mockResolvedValue(false);
+      mockComparePassword.mockResolvedValue(false);
 
       // Act & Assert
       await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
@@ -185,24 +190,23 @@ describe("Auth Service Unit Tests", () => {
       await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
         "Invalid credentials",
       );
-      expect(mockJwtSign).not.toHaveBeenCalled();
+      expect(mockGenerateToken).not.toHaveBeenCalled();
     });
 
-    it("should generate JWT token on successful login", async () => {
+    it("should generate token on successful login", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(mockUser);
-      mockBcryptCompare.mockResolvedValue(true);
-      mockJwtSign.mockReturnValue("mock-jwt-token");
+      mockComparePassword.mockResolvedValue(true);
+      mockGenerateToken.mockReturnValue({
+        token: "mock-jwt-token",
+        expiresIn: "7d",
+      });
 
       // Act
       await loginUser(mockEmail, mockPassword);
 
       // Assert
-      expect(mockJwtSign).toHaveBeenCalledWith(
-        { userId: mockUser.id, email: mockUser.email },
-        expect.anything(),
-        { expiresIn: "7d" },
-      );
+      expect(mockGenerateToken).toHaveBeenCalledWith(mockUser);
     });
 
     it("should throw 401 error when user password is corrupted", async () => {
@@ -219,8 +223,8 @@ describe("Auth Service Unit Tests", () => {
       await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow(
         "Invalid credentials",
       );
-      expect(mockBcryptCompare).not.toHaveBeenCalled();
-      expect(mockJwtSign).not.toHaveBeenCalled();
+      expect(mockComparePassword).not.toHaveBeenCalled();
+      expect(mockGenerateToken).not.toHaveBeenCalled();
     });
   });
 
@@ -234,7 +238,7 @@ describe("Auth Service Unit Tests", () => {
     it("should throw 500 error when password hashing fails", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue(null); // Hash fails
+      mockHashPassword.mockResolvedValue(null); // Hash fails
 
       // Act & Assert
       await expect(registerUser(mockUserData)).rejects.toThrow(ApiError);
@@ -242,13 +246,13 @@ describe("Auth Service Unit Tests", () => {
         "Failed to hash password",
       );
       expect(mockCreateUser).not.toHaveBeenCalled();
-      expect(mockJwtSign).not.toHaveBeenCalled();
+      expect(mockGenerateToken).not.toHaveBeenCalled();
     });
 
     it("should throw 500 error when user creation fails - no id", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue(null); // Creation fails
 
       // Act & Assert
@@ -256,13 +260,13 @@ describe("Auth Service Unit Tests", () => {
       await expect(registerUser(mockUserData)).rejects.toThrow(
         "Failed to create user",
       );
-      expect(mockJwtSign).not.toHaveBeenCalled();
+      expect(mockGenerateToken).not.toHaveBeenCalled();
     });
 
     it("should throw 500 error when user creation returns no id", async () => {
       // Arrange
       mockFindUserByEmail.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue("hashedPassword123");
+      mockHashPassword.mockResolvedValue("hashedPassword123");
       mockCreateUser.mockResolvedValue({
         email: "test@example.com",
         name: "Test User",
@@ -274,7 +278,7 @@ describe("Auth Service Unit Tests", () => {
       await expect(registerUser(mockUserData)).rejects.toThrow(
         "Failed to create user",
       );
-      expect(mockJwtSign).not.toHaveBeenCalled();
+      expect(mockGenerateToken).not.toHaveBeenCalled();
     });
   });
 });

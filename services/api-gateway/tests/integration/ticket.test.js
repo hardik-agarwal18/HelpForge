@@ -45,8 +45,11 @@ describe("Ticket API Integration Tests", () => {
   let organization;
 
   const signToken = (user) =>
-    jwt.sign({ userId: user.id, email: user.email }, config.jwtSecret, {
+    jwt.sign({ sub: user.id }, config.jwtSecret, {
+      algorithm: "HS256",
       expiresIn: "7d",
+      issuer: "helpforge-api",
+      audience: "helpforge-users",
     });
 
   beforeEach(async () => {

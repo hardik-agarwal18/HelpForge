@@ -3,28 +3,14 @@ import { z } from "zod";
 
 // Mock dependencies before importing
 const mockFindUserById = jest.fn();
-const mockJwtVerify = jest.fn();
+const mockVerifyToken = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserById: mockFindUserById,
 }));
 
-jest.unstable_mockModule("jsonwebtoken", () => ({
-  default: {
-    verify: mockJwtVerify,
-    JsonWebTokenError: class JsonWebTokenError extends Error {
-      constructor(message) {
-        super(message);
-        this.name = "JsonWebTokenError";
-      }
-    },
-  },
-}));
-
-jest.unstable_mockModule("../../../src/config/index.js", () => ({
-  default: {
-    jwtSecret: "test-secret",
-  },
+jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
+  verifyToken: mockVerifyToken,
 }));
 
 // Import after mocking
@@ -60,20 +46,14 @@ describe("Middleware Unit Tests", () => {
         name: "Test User",
       };
       req.headers.authorization = "Bearer valid-token";
-      mockJwtVerify.mockReturnValue({
-        userId: "user-123",
-        email: "test@example.com",
-      });
+      mockVerifyToken.mockReturnValue({ sub: "user-123" });
       mockFindUserById.mockResolvedValue(mockUser);
 
       // Act
       await authenticate(req, res, next);
 
       // Assert
-      expect(mockJwtVerify).toHaveBeenCalledWith(
-        "valid-token",
-        expect.anything(),
-      );
+      expect(mockVerifyToken).toHaveBeenCalledWith("valid-token");
       expect(mockFindUserById).toHaveBeenCalledWith("user-123");
       expect(req.user).toEqual(mockUser);
       expect(next).toHaveBeenCalledWith();
@@ -91,11 +71,9 @@ describe("Middleware Unit Tests", () => {
     it("should return 401 if token is invalid", async () => {
       // Arrange
       req.headers.authorization = "Bearer invalid-token";
-      mockJwtVerify.mockImplementation(() => {
-        const error = new Error("invalid token");
-        error.name = "JsonWebTokenError";
-        // Adding instanceof check compatibility
-        error.constructor = { name: "JsonWebTokenError" };
+      mockVerifyToken.mockImplementation(() => {
+        const error = new Error("Invalid or expired token");
+        error.statusCode = 401;
         throw error;
       });
 
@@ -110,7 +88,7 @@ describe("Middleware Unit Tests", () => {
     it("should return 401 if user not found", async () => {
       // Arrange
       req.headers.authorization = "Bearer valid-token";
-      mockJwtVerify.mockReturnValue({ userId: "user-123" });
+      mockVerifyToken.mockReturnValue({ sub: "user-123" });
       mockFindUserById.mockResolvedValue(null);
 
       // Act
