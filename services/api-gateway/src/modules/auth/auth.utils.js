@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import config from "../../config/index.js";
 import { ApiError } from "../../utils/errorHandler.js";
 
@@ -13,26 +14,60 @@ export const hashPassword = (password) =>
 export const comparePassword = (plain, hashed) =>
   bcrypt.compare(plain, hashed);
 
-export const generateToken = (user) => {
-  const token = jwt.sign({ sub: user.id }, config.jwtSecret, {
-    algorithm: JWT_ALGORITHM,
-    expiresIn: config.jwtExpiresIn,
-    issuer: JWT_ISSUER,
-    audience: JWT_AUDIENCE,
-  });
-  return { token, expiresIn: config.jwtExpiresIn };
+export const generateAccessToken = (user) => {
+  const jti = crypto.randomUUID();
+  const iat = Math.floor(Date.now() / 1000);
+  const token = jwt.sign(
+    { sub: user.id, type: "access", jti, iat },
+    config.jwtSecret,
+    {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: config.accessTokenExpiresIn,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    },
+  );
+  return { accessToken: token, expiresIn: config.accessTokenExpiresIn };
 };
 
-export const verifyToken = (token) => {
+export const generateRefreshToken = () => crypto.randomBytes(48).toString("hex");
+
+export const verifyAccessToken = (token) => {
   try {
-    return jwt.verify(token, config.jwtSecret, {
+    const decoded = jwt.verify(token, config.jwtSecret, {
       algorithms: [JWT_ALGORITHM],
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
-  } catch {
-    throw new ApiError(401, "Invalid or expired token");
+    if (decoded.type !== "access") {
+      throw new ApiError(401, "Invalid token type", "TOKEN_TYPE_INVALID");
+    }
+    return decoded;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(401, "Invalid or expired token", "TOKEN_INVALID");
   }
 };
 
 export const sanitizeUser = ({ password, ...user }) => user;
+
+export const parseDuration = (duration) => {
+  const match = duration.match(/^(\d+)([smhd])$/);
+  if (!match) return 7 * 24 * 60 * 60 * 1000;
+  const [, value, unit] = match;
+  const multipliers = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return parseInt(value, 10) * multipliers[unit];
+};
+
+export const extractBearerToken = (authHeader) => {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7);
+  return token || null;
+};
+
+export const formatUserResponse = (user) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  createdAt: user.createdAt,
+});

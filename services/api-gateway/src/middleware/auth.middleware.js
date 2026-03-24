@@ -1,31 +1,29 @@
 import { ApiError } from "../utils/errorHandler.js";
-import { findUserById } from "../modules/auth/auth.repo.js";
-import { verifyToken } from "../modules/auth/auth.utils.js";
+import { findUserById, isTokenBlacklisted } from "../modules/auth/auth.repo.js";
+import { verifyAccessToken, extractBearerToken } from "../modules/auth/auth.utils.js";
 
 export const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-      throw new ApiError(401, "Authentication token is required");
-    }
-
-    // Check if it starts with "Bearer "
-    if (!authHeader.startsWith("Bearer ")) {
-      throw new ApiError(401, "Invalid authorization header format");
-    }
-
-    const token = authHeader.replace("Bearer ", "");
+    const token = extractBearerToken(req.headers.authorization);
 
     if (!token) {
-      throw new ApiError(401, "Authentication token is required");
+      throw new ApiError(401, "Authentication token is required", "TOKEN_MISSING");
     }
 
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
+
+    if (decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
+      throw new ApiError(401, "Token has been revoked", "TOKEN_REVOKED");
+    }
+
     const user = await findUserById(decoded.sub);
 
     if (!user) {
-      throw new ApiError(401, "Invalid authentication token");
+      throw new ApiError(401, "Invalid authentication token", "TOKEN_INVALID");
+    }
+
+    if (user.tokenIssuedAt && decoded.iat < Math.floor(user.tokenIssuedAt.getTime() / 1000)) {
+      throw new ApiError(401, "Token has been revoked", "TOKEN_REVOKED");
     }
 
     req.user = user;
