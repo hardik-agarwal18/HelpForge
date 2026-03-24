@@ -15,6 +15,10 @@ import aiInternalRoutes from "./modules/ai/internal/ai.internal.routes.js";
 import scraperRoutes from "./modules/ai/scraper/scraper.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
 import config from "./config/index.js";
+import {
+  metricsHandler,
+  metricsMiddleware,
+} from "./observability/prometheus.js";
 
 const app = express();
 
@@ -52,6 +56,8 @@ app.use((req, res, next) => {
   res.setHeader("x-request-id", req.id);
   requestContext.run({ requestId: req.id }, next);
 });
+
+app.use(metricsMiddleware);
 
 app.get("/", (_req, res) => {
   res.send("Hello from API Gateway!");
@@ -106,6 +112,8 @@ app.get("/metrics/db", (_req, res) => {
 app.get("/metrics/redis", (_req, res) => {
   res.json(getRedisMetrics());
 });
+
+app.get("/metrics", metricsHandler);
 
 // Routes
 app.use("/api/auth", authRoutes);

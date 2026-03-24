@@ -14,3 +14,4 @@ qdrant-client==1.12.1
 
 # Misc
 python-multipart==0.0.20
+prometheus-client==0.21.1

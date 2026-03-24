@@ -256,6 +256,49 @@ npm run perf:load
 - `checks > 99%`
 - `http_req_duration p(95) < 500ms` (load script)
 
+## 13) Observability (Prometheus)
+
+Prometheus metrics are now exposed by both backend services:
+
+- API Gateway: `GET /metrics` on the API Gateway host/port
+- Chatbot Service: `GET /metrics` on the chatbot host/port
+
+Additional JSON diagnostics remain available in API Gateway:
+
+- `GET /metrics/db`
+- `GET /metrics/redis`
+
+### Metric families added
+
+- API Gateway:
+  - `helpforge_api_gateway_http_requests_total`
+  - `helpforge_api_gateway_http_request_duration_seconds`
+  - `helpforge_api_gateway_http_requests_in_flight`
+  - default process/runtime metrics with prefix `helpforge_api_gateway_`
+- Chatbot Service:
+  - `helpforge_chatbot_http_requests_total`
+  - `helpforge_chatbot_http_request_duration_seconds`
+  - `helpforge_chatbot_http_requests_in_flight`
+  - default Python/runtime metrics from `prometheus_client`
+
+### Example `prometheus.yml`
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "helpforge-api-gateway"
+    static_configs:
+      - targets: ["localhost:3000"]
+    metrics_path: /metrics
+
+  - job_name: "helpforge-chatbot-service"
+    static_configs:
+      - targets: ["localhost:8000"]
+    metrics_path: /metrics
+```
+
 ## 10) Documentation Index
 
 - docs/PROJECT_ROADMAP.md

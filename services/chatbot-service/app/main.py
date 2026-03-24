@@ -6,10 +6,12 @@ Shutdown:  graceful close of all connections
 """
 
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 
 from app.api.chat import router as chat_router
 from app.api.feedback import router as feedback_router
@@ -33,6 +35,24 @@ logging.basicConfig(
 # Inject request_id into every log record across all loggers
 logging.getLogger().addFilter(RequestIDFilter())
 logger = logging.getLogger(__name__)
+
+HTTP_REQUESTS_TOTAL = Counter(
+    "helpforge_chatbot_http_requests_total",
+    "Total number of HTTP requests handled by the chatbot service",
+    ["method", "route", "status_code"],
+)
+
+HTTP_REQUEST_DURATION_SECONDS = Histogram(
+    "helpforge_chatbot_http_request_duration_seconds",
+    "HTTP request latency in seconds for the chatbot service",
+    ["method", "route", "status_code"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+)
+
+HTTP_REQUESTS_IN_FLIGHT = Gauge(
+    "helpforge_chatbot_http_requests_in_flight",
+    "Current in-flight HTTP requests in the chatbot service",
+)
 
 
 @asynccontextmanager
@@ -65,6 +85,45 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,   # hide Swagger in production
     redoc_url=None,
 )
+
+app.mount("/metrics", make_asgi_app())
+
+
+@app.middleware("http")
+async def prometheus_metrics_middleware(request, call_next):
+    if request.url.path.startswith("/metrics"):
+        return await call_next(request)
+
+    start = time.perf_counter()
+    HTTP_REQUESTS_IN_FLIGHT.inc()
+
+    status_code = 500
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception:
+        status_code = 500
+        raise
+    finally:
+        HTTP_REQUESTS_IN_FLIGHT.dec()
+
+        route = "unmatched"
+        route_obj = request.scope.get("route")
+        route_path = getattr(route_obj, "path", None)
+        if route_path:
+            route = route_path
+
+        labels = {
+            "method": request.method,
+            "route": route,
+            "status_code": str(status_code),
+        }
+        HTTP_REQUESTS_TOTAL.labels(**labels).inc()
+        HTTP_REQUEST_DURATION_SECONDS.labels(**labels).observe(
+            time.perf_counter() - start
+        )
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 
