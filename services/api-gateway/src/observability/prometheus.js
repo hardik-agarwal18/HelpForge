@@ -59,7 +59,7 @@ export const metricsMiddleware = (req, res, next) => {
 
     inFlightRequests.dec();
 
-    if (req.path === "/metrics") return;
+    if (req.path === "/metrics" || req.path === "/health/live") return;
 
     const duration = Number(process.hrtime.bigint() - start) / 1e9;
     const labels = {
