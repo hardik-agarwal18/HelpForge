@@ -2,10 +2,7 @@ import http from "http";
 import app from "./app.js";
 import config from "./config/index.js";
 import logger from "./config/logger.js";
-import {
-  connectDatabase,
-  disconnectDatabase,
-} from "./config/database.config.js";
+import db from "./config/database.config.js";
 import { getSharedBullmqConnection } from "./config/redis.config.js";
 import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automation.worker.js";
 import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
@@ -19,7 +16,7 @@ const PORT = config.port;
 const server = http.createServer(app);
 
 const startServer = async () => {
-  await connectDatabase();
+  await db.connect();
 
   initializeWebsocketGateway(server);
   startAIAutomationWorker();
@@ -38,7 +35,7 @@ const gracefulShutdown = async (signal) => {
 
   server.close(async () => {
     try {
-      await disconnectDatabase();
+      await db.disconnect();
 
       const redisConnection = getSharedBullmqConnection();
       if (redisConnection) {
