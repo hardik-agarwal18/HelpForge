@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { verifyToken } from "../../auth/auth.utils.js";
+import { verifyAccessToken } from "../../auth/auth.utils.js";
 import logger from "../../../config/logger.js";
 
 let ioInstance;
@@ -44,7 +44,7 @@ export const initializeWebsocketGateway = (httpServer) => {
         return next(new Error("Unauthorized"));
       }
 
-      const decoded = verifyToken(token);
+      const decoded = verifyAccessToken(token);
       socket.data.userId = decoded.sub;
       return next();
     } catch (_error) {

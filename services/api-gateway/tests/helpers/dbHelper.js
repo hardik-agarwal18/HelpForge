@@ -42,6 +42,8 @@ export const cleanDatabase = async () => {
       await prisma.agentWorkload.deleteMany({});
       await prisma.membership.deleteMany({});
       await prisma.organization.deleteMany({});
+      await prisma.refreshToken.deleteMany({});
+      await prisma.tokenBlacklist.deleteMany({});
       await prisma.user.deleteMany({});
       return;
     } catch (error) {
