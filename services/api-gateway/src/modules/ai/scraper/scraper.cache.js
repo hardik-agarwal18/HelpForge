@@ -22,10 +22,11 @@
 
 import { createHash } from "node:crypto";
 import { getCacheClient } from "../../../config/redis.config.js";
+import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 
 const CACHE_TTL_SECONDS =
-  parseInt(process.env.SCRAPER_CACHE_TTL_SECONDS, 10) || 86_400; // 24 h
+  config.scraper.cacheTtlSeconds;
 
 const KEY_PREFIX = "scraper:cache:";
 

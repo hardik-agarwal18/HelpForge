@@ -45,8 +45,7 @@ const startServer = async () => {
   });
 };
 
-const SHUTDOWN_TIMEOUT_MS =
-  parseInt(process.env.SHUTDOWN_TIMEOUT_MS, 10) || 15_000;
+const SHUTDOWN_TIMEOUT_MS = config.server.shutdownTimeoutMs;
 const WORKER_STOP_TIMEOUT_MS = 5_000;
 
 let isShuttingDown = false;

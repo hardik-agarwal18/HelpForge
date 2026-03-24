@@ -14,11 +14,11 @@ import aiConfigRoutes from "./modules/ai/config/ai.config.routes.js";
 import aiInternalRoutes from "./modules/ai/internal/ai.internal.routes.js";
 import scraperRoutes from "./modules/ai/scraper/scraper.routes.js";
 import { errorHandler } from "./utils/errorHandler.js";
+import config from "./config/index.js";
 
 const app = express();
 
-const REQUEST_TIMEOUT_MS =
-  parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 30_000;
+const REQUEST_TIMEOUT_MS = config.server.requestTimeoutMs;
 const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 
 app.use(express.json());

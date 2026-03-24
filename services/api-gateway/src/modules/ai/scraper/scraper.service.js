@@ -40,6 +40,7 @@
 
 import { createHash } from "node:crypto";
 import db from "../../../config/database.config.js";
+import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import {
   enqueueDeleteDocuments,
@@ -58,15 +59,15 @@ import { ScraperValidationError, validateUrl } from "./scraper.validator.js";
 
 /** Pages scraped within this window are considered fresh (no re-embed needed). */
 const FRESHNESS_TTL_MS =
-  parseInt(process.env.SCRAPER_FRESHNESS_TTL_MS, 10) || 24 * 60 * 60 * 1_000; // 24 h
+  config.scraper.freshnessTtlMs;
 
 /** Maximum response body size allowed (5 MB). */
 const MAX_PAGE_BYTES =
-  parseInt(process.env.SCRAPER_MAX_PAGE_BYTES, 10) || 5 * 1_024 * 1_024;
+  config.scraper.maxPageBytes;
 
 /** HTTP fetch timeout in milliseconds. */
 const FETCH_TIMEOUT_MS =
-  parseInt(process.env.SCRAPER_FETCH_TIMEOUT_MS, 10) || 15_000;
+  config.scraper.fetchTimeoutMs;
 
 const USER_AGENT =
   "HelpForge-Scraper/1.0 (+https://helpforge.io/bot)";

@@ -39,7 +39,7 @@ import {
   purgeStaleDbRows,
 } from "./scraper.service.js";
 
-const CONCURRENCY = parseInt(process.env.SCRAPER_WORKER_CONCURRENCY, 10) || 3;
+const CONCURRENCY = config.scraper.workerConcurrency;
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
 

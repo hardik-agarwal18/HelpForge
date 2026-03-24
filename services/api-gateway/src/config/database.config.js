@@ -12,13 +12,11 @@ const CONNECT_TIMEOUT_MS = 10_000;
 const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 const SLOW_QUERY_THRESHOLD_MS = 1_000;
 
-const CB_FAILURE_THRESHOLD =
-  parseInt(process.env.DB_CB_FAILURE_THRESHOLD, 10) || 5;
-const CB_RESET_TIMEOUT_MS =
-  parseInt(process.env.DB_CB_RESET_TIMEOUT_MS, 10) || 30_000;
+const CB_FAILURE_THRESHOLD = config.database.circuitBreaker.failureThreshold;
+const CB_RESET_TIMEOUT_MS = config.database.circuitBreaker.resetTimeoutMs;
 
-const POOL_SIZE = parseInt(process.env.DB_POOL_SIZE, 10) || 10;
-const POOL_TIMEOUT = parseInt(process.env.DB_POOL_TIMEOUT, 10) || 20;
+const POOL_SIZE = config.database.poolSize;
+const POOL_TIMEOUT = config.database.poolTimeout;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

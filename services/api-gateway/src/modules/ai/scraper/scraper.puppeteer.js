@@ -24,24 +24,21 @@
  */
 
 import puppeteer from "puppeteer";
+import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
-const PUPPETEER_ENABLED =
-  process.env.SCRAPER_PUPPETEER_ENABLED === "true";
+const PUPPETEER_ENABLED = config.scraper.puppeteer.enabled;
 
 /** Timeout for a full page navigation (ms). */
-const PUPPETEER_TIMEOUT_MS =
-  parseInt(process.env.SCRAPER_PUPPETEER_TIMEOUT_MS, 10) || 30_000;
+const PUPPETEER_TIMEOUT_MS = config.scraper.puppeteer.timeoutMs;
 
 /** Shared with the static fetcher — same cap applies. */
-const MAX_PAGE_BYTES =
-  parseInt(process.env.SCRAPER_MAX_PAGE_BYTES, 10) || 5 * 1_024 * 1_024;
+const MAX_PAGE_BYTES = config.scraper.maxPageBytes;
 
 /** Word-count below which static content is considered "thin". */
-const THIN_WORD_THRESHOLD =
-  parseInt(process.env.SCRAPER_THIN_WORD_THRESHOLD, 10) || 50;
+const THIN_WORD_THRESHOLD = config.scraper.puppeteer.thinWordThreshold;
 
 const USER_AGENT = "HelpForge-Scraper/1.0 (+https://helpforge.io/bot)";
 

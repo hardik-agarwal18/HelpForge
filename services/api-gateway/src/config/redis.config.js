@@ -8,16 +8,13 @@ const SERVICE_NAME = "api-gateway";
 const MAX_RETRIES = 10;
 const RETRY_BASE_MS = 500;
 const MAX_RETRY_DELAY_MS = 30_000;
-const CONNECT_TIMEOUT_MS =
-  parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS, 10) || 10_000;
+const CONNECT_TIMEOUT_MS = config.redis.connectTimeoutMs;
 const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 
-const CB_FAILURE_THRESHOLD =
-  parseInt(process.env.REDIS_CB_FAILURE_THRESHOLD, 10) || 5;
-const CB_RESET_TIMEOUT_MS =
-  parseInt(process.env.REDIS_CB_RESET_TIMEOUT_MS, 10) || 30_000;
+const CB_FAILURE_THRESHOLD = config.redis.circuitBreaker.failureThreshold;
+const CB_RESET_TIMEOUT_MS = config.redis.circuitBreaker.resetTimeoutMs;
 
-const MAX_CONNECTIONS = parseInt(process.env.REDIS_MAX_CONNECTIONS, 10) || 10;
+const MAX_CONNECTIONS = config.redis.maxConnections;
 
 // ── Circuit Breaker ──────────────────────────────────────────────────────────
 

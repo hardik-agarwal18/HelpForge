@@ -26,11 +26,12 @@
 
 import cron from "node-cron";
 import db from "../../../config/database.config.js";
+import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { deleteStalePages, purgeStaleDbRows } from "./scraper.service.js";
 
-const CLEANUP_CRON   = process.env.SCRAPER_CLEANUP_CRON   ?? "0 2 * * *";     // 02:00 UTC daily
-const RETENTION_DAYS = parseInt(process.env.SCRAPER_RETENTION_DAYS, 10) || 30;
+const CLEANUP_CRON = config.scraper.cleanupCron;
+const RETENTION_DAYS = config.scraper.retentionDays;
 
 // ── Core cleanup logic ────────────────────────────────────────────────────────
 

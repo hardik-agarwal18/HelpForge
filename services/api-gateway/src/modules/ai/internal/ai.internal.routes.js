@@ -8,6 +8,7 @@
  */
 
 import express from "express";
+import config from "../../../config/index.js";
 import {
   generateController,
   generateStreamController,
@@ -19,7 +20,7 @@ const router = express.Router();
 // ── Auth middleware ──────────────────────────────────────────────────────────
 const verifyInternalToken = (req, res, next) => {
   const token = req.headers["x-internal-token"];
-  if (!token || token !== process.env.INTERNAL_SERVICE_TOKEN) {
+  if (!token || token !== config.internal.serviceToken) {
     return res.status(403).json({ success: false, message: "Forbidden" });
   }
   next();
