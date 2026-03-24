@@ -1,6 +1,5 @@
 import { Server } from "socket.io";
-import jwt from "jsonwebtoken";
-import config from "../../../config/index.js";
+import { verifyToken } from "../../auth/auth.utils.js";
 import logger from "../../../config/logger.js";
 
 let ioInstance;
@@ -45,8 +44,8 @@ export const initializeWebsocketGateway = (httpServer) => {
         return next(new Error("Unauthorized"));
       }
 
-      const decoded = jwt.verify(token, config.jwtSecret);
-      socket.data.userId = decoded.userId;
+      const decoded = verifyToken(token);
+      socket.data.userId = decoded.sub;
       return next();
     } catch (_error) {
       return next(new Error("Unauthorized"));

@@ -1,7 +1,6 @@
-import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/errorHandler.js";
 import { findUserById } from "../modules/auth/auth.repo.js";
-import config from "../config/index.js";
+import { verifyToken } from "../modules/auth/auth.utils.js";
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -22,8 +21,8 @@ export const authenticate = async (req, res, next) => {
       throw new ApiError(401, "Authentication token is required");
     }
 
-    const decoded = jwt.verify(token, config.jwtSecret);
-    const user = await findUserById(decoded.userId);
+    const decoded = verifyToken(token);
+    const user = await findUserById(decoded.sub);
 
     if (!user) {
       throw new ApiError(401, "Invalid authentication token");
@@ -32,12 +31,6 @@ export const authenticate = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid or expired token",
-      });
-    }
     next(error);
   }
 };

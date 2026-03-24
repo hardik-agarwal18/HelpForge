@@ -45,6 +45,8 @@ const config = {
   },
 
   jwtSecret: process.env.JWT_SECRET,
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  bcryptSaltRounds: toInt(process.env.BCRYPT_SALT_ROUNDS, 12),
 
   services: {
     chatbot: process.env.CHATBOT_SERVICE_URL,

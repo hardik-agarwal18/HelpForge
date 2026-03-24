@@ -1,8 +1,11 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { createUser, findUserByEmail } from "./auth.repo.js";
 import { ApiError } from "../../utils/errorHandler.js";
-import config from "../../config/index.js";
+import {
+  hashPassword,
+  comparePassword,
+  generateToken,
+  sanitizeUser,
+} from "./auth.utils.js";
 
 export const registerUser = async (userData) => {
   //Check if user already exists
@@ -12,7 +15,7 @@ export const registerUser = async (userData) => {
   }
 
   //Hash password
-  const hashedPassword = await bcrypt.hash(userData.password, 10);
+  const hashedPassword = await hashPassword(userData.password);
   if (!hashedPassword) {
     throw new ApiError(500, "Failed to hash password");
   }
@@ -27,14 +30,9 @@ export const registerUser = async (userData) => {
     throw new ApiError(500, "Failed to create user");
   }
 
-  //Generate JWT token
-  const token = jwt.sign(
-    { userId: newUser.id, email: newUser.email },
-    config.jwtSecret,
-    { expiresIn: "7d" },
-  );
+  const { token, expiresIn } = generateToken(newUser);
 
-  return { user: newUser, token, expiresIn: "7d" };
+  return { user: sanitizeUser(newUser), token, expiresIn };
 };
 
 export const loginUser = async (email, password) => {
@@ -49,17 +47,12 @@ export const loginUser = async (email, password) => {
   }
 
   //Check if password is correct
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await comparePassword(password, user.password);
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid credentials");
   }
 
-  //Generate JWT token
-  const token = jwt.sign(
-    { userId: user.id, email: user.email },
-    config.jwtSecret,
-    { expiresIn: "7d" },
-  );
+  const { token, expiresIn } = generateToken(user);
 
-  return { user, token, expiresIn: "7d" };
+  return { user: sanitizeUser(user), token, expiresIn };
 };
