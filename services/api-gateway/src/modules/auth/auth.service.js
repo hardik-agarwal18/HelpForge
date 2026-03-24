@@ -34,28 +34,24 @@ export const registerUser = async (userData) => {
     { expiresIn: "7d" },
   );
 
-  if (!token) {
-    throw new ApiError(500, "Failed to generate authentication token");
-  }
-
-  return { user: newUser, token };
+  return { user: newUser, token, expiresIn: "7d" };
 };
 
 export const loginUser = async (email, password) => {
   //Check if user exists
   const user = await findUserByEmail(email);
   if (!user) {
-    throw new ApiError(404, "User not found");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   if (!user.password) {
-    throw new ApiError(500, "User password data is corrupted");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   //Check if password is correct
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
-    throw new ApiError(401, "Invalid password");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   //Generate JWT token
@@ -65,9 +61,5 @@ export const loginUser = async (email, password) => {
     { expiresIn: "7d" },
   );
 
-  if (!token) {
-    throw new ApiError(500, "Failed to generate authentication token");
-  }
-
-  return { user, token };
+  return { user, token, expiresIn: "7d" };
 };

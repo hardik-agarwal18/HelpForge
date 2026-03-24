@@ -42,7 +42,11 @@ describe("Auth Controller Unit Tests", () => {
       const mockToken = "mock-jwt-token";
 
       req.body = userData;
-      mockRegisterUser.mockResolvedValue({ user: mockUser, token: mockToken });
+      mockRegisterUser.mockResolvedValue({
+        user: mockUser,
+        token: mockToken,
+        expiresIn: "7d",
+      });
 
       await register(req, res, next);
 
@@ -59,6 +63,8 @@ describe("Auth Controller Unit Tests", () => {
             createdAt: mockUser.createdAt,
           },
           token: mockToken,
+          tokenType: "Bearer",
+          expiresIn: "7d",
         },
       });
     });
@@ -72,24 +78,6 @@ describe("Auth Controller Unit Tests", () => {
 
       expect(next).toHaveBeenCalledWith(error);
     });
-
-    it("should call next with the expected status code and message when register result is incomplete", async () => {
-      req.body = {
-        email: "test@example.com",
-        password: "password123",
-        name: "Test User",
-      };
-      mockRegisterUser.mockResolvedValue(null);
-
-      await register(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({
-          statusCode: 500,
-          message: "Failed to register user",
-        }),
-      );
-    });
   });
 
   describe("login", () => {
@@ -102,11 +90,16 @@ describe("Auth Controller Unit Tests", () => {
         id: "user-123",
         email: credentials.email,
         name: "Test User",
+        createdAt: new Date(),
       };
       const mockToken = "mock-jwt-token";
 
       req.body = credentials;
-      mockLoginUser.mockResolvedValue({ user: mockUser, token: mockToken });
+      mockLoginUser.mockResolvedValue({
+        user: mockUser,
+        token: mockToken,
+        expiresIn: "7d",
+      });
 
       await login(req, res, next);
 
@@ -123,8 +116,11 @@ describe("Auth Controller Unit Tests", () => {
             id: mockUser.id,
             email: mockUser.email,
             name: mockUser.name,
+            createdAt: mockUser.createdAt,
           },
           token: mockToken,
+          tokenType: "Bearer",
+          expiresIn: "7d",
         },
       });
     });
@@ -137,20 +133,6 @@ describe("Auth Controller Unit Tests", () => {
       await login(req, res, next);
 
       expect(next).toHaveBeenCalledWith(error);
-    });
-
-    it("should call next with the expected status code and message when login result is incomplete", async () => {
-      req.body = { email: "test@example.com", password: "password123" };
-      mockLoginUser.mockResolvedValue({ user: null, token: null });
-
-      await login(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({
-          statusCode: 500,
-          message: "Failed to login user",
-        }),
-      );
     });
   });
 
@@ -181,9 +163,21 @@ describe("Auth Controller Unit Tests", () => {
       });
     });
 
+    it("should return 401 when req.user is missing", async () => {
+      req.user = undefined;
+
+      await getProfile(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "Authentication required",
+        }),
+      );
+    });
+
     it("should handle errors in getProfile", async () => {
       const error = new Error("Profile retrieval failed");
-      // Simulate an error by making req.user a getter that throws
       Object.defineProperty(req, "user", {
         get: () => {
           throw error;

@@ -32,6 +32,8 @@ describe("Auth API Integration Tests", () => {
       expect(response.body.message).toBe("User registered successfully");
       expect(response.body.data).toHaveProperty("user");
       expect(response.body.data).toHaveProperty("token");
+      expect(response.body.data.tokenType).toBe("Bearer");
+      expect(response.body.data.expiresIn).toBe("7d");
       expect(response.body.data.user.email).toBe(userData.email);
       expect(response.body.data.user.name).toBe(userData.name);
       expect(response.body.data.user).not.toHaveProperty("password");
@@ -128,21 +130,23 @@ describe("Auth API Integration Tests", () => {
       expect(response.body.message).toBe("Login successful");
       expect(response.body.data).toHaveProperty("user");
       expect(response.body.data).toHaveProperty("token");
+      expect(response.body.data.tokenType).toBe("Bearer");
+      expect(response.body.data.expiresIn).toBe("7d");
       expect(response.body.data.user.email).toBe(testUser.email);
       expect(response.body.data.user).not.toHaveProperty("password");
     });
 
-    it("should return 404 for non-existent user", async () => {
+    it("should return 401 for non-existent user", async () => {
       const response = await request(app)
         .post("/api/auth/login")
         .send({
           email: "nonexistent@example.com",
           password: "Password123!",
         })
-        .expect(404);
+        .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe("User not found");
+      expect(response.body.message).toBe("Invalid credentials");
     });
 
     it("should return 401 for incorrect password", async () => {
@@ -155,7 +159,7 @@ describe("Auth API Integration Tests", () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBe("Invalid password");
+      expect(response.body.message).toBe("Invalid credentials");
     });
 
     it("should return 400 for invalid email format", async () => {
