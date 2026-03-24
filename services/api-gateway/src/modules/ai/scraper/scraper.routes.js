@@ -25,7 +25,7 @@
 import { Router } from "express";
 import db from "../../../config/database.config.js";
 import logger from "../../../config/logger.js";
-import { requireAuth } from "../../auth/auth.middleware.js";
+import { authenticate as requireAuth } from "../../../middleware/auth.middleware.js";
 import { scraperCache, hashUrl } from "./scraper.cache.js";
 import { checkAndEnqueue, deleteStalePages } from "./scraper.service.js";
 

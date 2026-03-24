@@ -7,10 +7,10 @@ export const validate = (schema) => {
         query: req.query,
       });
 
-      // Optional but powerful: overwrite req with validated data
+      // Overwrite req with validated data
       req.body = validatedData.body || {};
-      req.params = validatedData.params || {};
-      req.query = validatedData.query || {};
+      if (validatedData.params) req.params = validatedData.params;
+      // req.query is read-only in Express 5 — skip reassignment
 
       next();
     } catch (error) {

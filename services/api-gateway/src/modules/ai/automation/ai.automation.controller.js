@@ -4,7 +4,6 @@ import {
   getTicket,
   getTicketWithComments,
   updateTicket,
-  getOrganizationTickets,
 } from "./ai.automation.repo.js";
 import { ApiError } from "../../../utils/errorHandler.js";
 import aiConfig from "../core/config/ai.config.js";

@@ -1,4 +1,4 @@
-import { getOrganizationTicketsWithAIMetrics } from "../../tickets/ticket.repo";
+import { getOrganizationTicketsWithAIMetrics } from "../../tickets/ticket.repo.js";
 
 export const getAIStats = async (organizationId, since) => {
   const tickets = await getOrganizationTicketsWithAIMetrics(
