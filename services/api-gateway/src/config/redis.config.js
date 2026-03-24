@@ -380,7 +380,6 @@ const connectRedis = async () => {
         .then(() => logger.info({ service: SERVICE_NAME }, "Redis cache connected"))
         .catch((err) => {
           logger.error({ service: SERVICE_NAME, error: err.message }, "Redis cache connect failed");
-          throw err;
         }),
     );
   }
@@ -393,7 +392,6 @@ const connectRedis = async () => {
         .then(() => logger.info({ service: SERVICE_NAME }, "Redis queue connected"))
         .catch((err) => {
           logger.error({ service: SERVICE_NAME, error: err.message }, "Redis queue connect failed");
-          throw err;
         }),
     );
   }
