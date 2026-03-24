@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 import "./events/registerHandlers.js";
 import db, { requestContext } from "./config/database.config.js";
-import { redisHealthCheck } from "./config/redis.config.js";
+import { redisHealthCheck, getRedisMetrics } from "./config/redis.config.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
@@ -47,6 +47,10 @@ app.get("/health", async (_req, res) => {
 
 app.get("/metrics/db", (_req, res) => {
   res.json(db.getMetrics());
+});
+
+app.get("/metrics/redis", (_req, res) => {
+  res.json(getRedisMetrics());
 });
 
 // Routes

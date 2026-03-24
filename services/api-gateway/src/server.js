@@ -3,7 +3,7 @@ import app from "./app.js";
 import config from "./config/index.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
-import { getSharedBullmqConnection } from "./config/redis.config.js";
+import { disconnectRedis } from "./config/redis.config.js";
 import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automation.worker.js";
 import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
 import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
@@ -37,11 +37,7 @@ const gracefulShutdown = async (signal) => {
     try {
       await db.disconnect();
 
-      const redisConnection = getSharedBullmqConnection();
-      if (redisConnection) {
-        await redisConnection.quit();
-        logger.info("Redis connection closed gracefully");
-      }
+      await disconnectRedis();
 
       stopScrapeCleanup();
       await stopScraperWorker();
