@@ -13,20 +13,29 @@ const mockTransaction = jest.fn();
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
-    organization: {
-      create: mockOrganizationCreate,
-      findMany: mockOrganizationFindMany,
-      update: mockOrganizationUpdate,
-      delete: mockOrganizationDelete,
+    read: {
+      organization: {
+        findMany: mockOrganizationFindMany,
+        findFirst: jest.fn(),
+      },
+      membership: {
+        findMany: mockMembershipFindMany,
+        findUnique: mockMembershipFindUnique,
+      },
     },
-    membership: {
-      create: mockMembershipCreate,
-      findMany: mockMembershipFindMany,
-      findUnique: mockMembershipFindUnique,
-      update: mockMembershipUpdate,
-      deleteMany: mockMembershipDeleteMany,
+    write: {
+      organization: {
+        create: mockOrganizationCreate,
+        update: mockOrganizationUpdate,
+        delete: mockOrganizationDelete,
+      },
+      membership: {
+        create: mockMembershipCreate,
+        update: mockMembershipUpdate,
+        deleteMany: mockMembershipDeleteMany,
+      },
+      $transaction: mockTransaction,
     },
-    $transaction: mockTransaction,
   },
 }));
 
@@ -50,7 +59,7 @@ describe("Organization Repo", () => {
     const created = { id: "org-1" };
     mockOrganizationCreate.mockResolvedValue(created);
 
-    const result = await createOrganization("Test Org", "user-1");
+    const result = await createOrganization({ name: "Test Org", userId: "user-1" });
 
     expect(mockOrganizationCreate).toHaveBeenCalledWith({
       data: {
@@ -91,7 +100,7 @@ describe("Organization Repo", () => {
     const updated = { id: "org-1", name: "Updated Org" };
     mockOrganizationUpdate.mockResolvedValue(updated);
 
-    const result = await patchOrganization("org-1", "Updated Org");
+    const result = await patchOrganization({ orgId: "org-1", name: "Updated Org" });
 
     expect(mockOrganizationUpdate).toHaveBeenCalledWith({
       where: {
@@ -100,6 +109,7 @@ describe("Organization Repo", () => {
       data: {
         name: "Updated Org",
       },
+      include: { memberships: true },
     });
     expect(result).toBe(updated);
   });
@@ -119,7 +129,7 @@ describe("Organization Repo", () => {
       }),
     );
 
-    const result = await deleteOrganization("org-1");
+    const result = await deleteOrganization({ orgId: "org-1" });
 
     expect(mockTransaction).toHaveBeenCalled();
     expect(mockMembershipDeleteMany).toHaveBeenCalledWith({

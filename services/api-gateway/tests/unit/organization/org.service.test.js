@@ -9,6 +9,7 @@ const mockInviteMemberInOrganization = jest.fn();
 const mockGetOrganizationMembersById = jest.fn();
 const mockGetOrganizationMembershipByUserId = jest.fn();
 const mockUpdateMembershipRole = jest.fn();
+const mockFindOrganizationByOwner = jest.fn();
 
 // Mock the repository
 jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => ({
@@ -16,6 +17,7 @@ jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => 
   getOrganizationsByUserId: mockGetOrganizationsByUserId,
   patchOrganization: mockPatchOrganization,
   deleteOrganization: mockDeleteOrganization,
+  findOrganizationByOwner: mockFindOrganizationByOwner,
   inviteMemberInOrganization: mockInviteMemberInOrganization,
   getOrganizationMembersById: mockGetOrganizationMembersById,
   getOrganizationMembershipByUserId: mockGetOrganizationMembershipByUserId,
@@ -41,19 +43,29 @@ describe("Organization Service", () => {
   describe("createOrganizationService", () => {
     it("should successfully create an organization", async () => {
       const mockOrg = { id: "org-1", name: "Test Org" };
+      mockFindOrganizationByOwner.mockResolvedValue(null);
       mockCreateOrganization.mockResolvedValue(mockOrg);
 
-      const result = await createOrganizationService("Test Org", "user-1");
+      const result = await createOrganizationService({ name: "Test Org", userId: "user-1" });
 
-      expect(mockCreateOrganization).toHaveBeenCalledWith("Test Org", "user-1");
+      expect(mockCreateOrganization).toHaveBeenCalledWith({ name: "Test Org", userId: "user-1" });
       expect(result).toEqual(mockOrg);
     });
 
     it("should throw ApiError if organization creation fails", async () => {
+      mockFindOrganizationByOwner.mockResolvedValue(null);
       mockCreateOrganization.mockResolvedValue(null);
 
       await expect(
-        createOrganizationService("Test Org", "user-1"),
+        createOrganizationService({ name: "Test Org", userId: "user-1" }),
+      ).rejects.toThrow(ApiError);
+    });
+
+    it("should throw ApiError if user already owns an organization", async () => {
+      mockFindOrganizationByOwner.mockResolvedValue({ id: "existing-org" });
+
+      await expect(
+        createOrganizationService({ name: "Test Org", userId: "user-1" }),
       ).rejects.toThrow(ApiError);
     });
   });
@@ -87,12 +99,9 @@ describe("Organization Service", () => {
       const mockUpdatedOrg = { id: "org-1", name: "Updated Org" };
       mockPatchOrganization.mockResolvedValue(mockUpdatedOrg);
 
-      const result = await updateOrganizationService("org-1", "Updated Org");
+      const result = await updateOrganizationService({ orgId: "org-1", name: "Updated Org" });
 
-      expect(mockPatchOrganization).toHaveBeenCalledWith(
-        "org-1",
-        "Updated Org",
-      );
+      expect(mockPatchOrganization).toHaveBeenCalledWith({ orgId: "org-1", name: "Updated Org" });
       expect(result).toEqual(mockUpdatedOrg);
     });
 
@@ -100,7 +109,7 @@ describe("Organization Service", () => {
       mockPatchOrganization.mockResolvedValue(null);
 
       await expect(
-        updateOrganizationService("org-1", "Updated Org"),
+        updateOrganizationService({ orgId: "org-1", name: "Updated Org" }),
       ).rejects.toThrow(ApiError);
     });
   });
@@ -110,16 +119,16 @@ describe("Organization Service", () => {
       const mockDeletedOrg = { id: "org-1", name: "Deleted Org" };
       mockDeleteOrganization.mockResolvedValue(mockDeletedOrg);
 
-      const result = await deleteOrganizationService("org-1");
+      const result = await deleteOrganizationService({ orgId: "org-1" });
 
-      expect(mockDeleteOrganization).toHaveBeenCalledWith("org-1");
+      expect(mockDeleteOrganization).toHaveBeenCalledWith({ orgId: "org-1" });
       expect(result).toEqual(mockDeletedOrg);
     });
 
     it("should throw ApiError if organization deletion fails", async () => {
       mockDeleteOrganization.mockResolvedValue(null);
 
-      await expect(deleteOrganizationService("org-1")).rejects.toThrow(
+      await expect(deleteOrganizationService({ orgId: "org-1" })).rejects.toThrow(
         ApiError,
       );
     });

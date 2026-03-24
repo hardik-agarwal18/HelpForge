@@ -6,9 +6,12 @@ const mockFindUnique = jest.fn();
 // Mock prisma properly for ES modules
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
-    membership: {
-      findUnique: mockFindUnique,
+    read: {
+      membership: {
+        findUnique: mockFindUnique,
+      },
     },
+    write: {},
   },
 }));
 

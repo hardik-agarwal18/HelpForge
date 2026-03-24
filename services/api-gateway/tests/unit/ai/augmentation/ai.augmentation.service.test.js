@@ -36,6 +36,13 @@ jest.unstable_mockModule(
   }),
 );
 
+jest.unstable_mockModule(
+  "../../../../src/modules/ai/config/ai.config.repo.js",
+  () => ({
+    getAIConfigByOrg: jest.fn().mockResolvedValue(null),
+  }),
+);
+
 const {
   generateAgentSuggestion,
   generateTicketSummary,

@@ -30,21 +30,29 @@ const expectNotificationFindManyCalledWith = ({
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
-    notification: {
-      createMany: mockNotificationCreateMany,
-      findMany: mockNotificationFindMany,
-      updateMany: mockNotificationUpdateMany,
+    read: {
+      notification: {
+        findMany: mockNotificationFindMany,
+      },
+      notificationPreference: {
+        findMany: mockNotificationPreferenceFindMany,
+        findUnique: mockNotificationPreferenceFindUnique,
+      },
+      ticket: {
+        findUnique: mockTicketFindUnique,
+      },
+      membership: {
+        findMany: mockMembershipFindMany,
+      },
     },
-    notificationPreference: {
-      findMany: mockNotificationPreferenceFindMany,
-      findUnique: mockNotificationPreferenceFindUnique,
-      upsert: mockNotificationPreferenceUpsert,
-    },
-    ticket: {
-      findUnique: mockTicketFindUnique,
-    },
-    membership: {
-      findMany: mockMembershipFindMany,
+    write: {
+      notification: {
+        createMany: mockNotificationCreateMany,
+        updateMany: mockNotificationUpdateMany,
+      },
+      notificationPreference: {
+        upsert: mockNotificationPreferenceUpsert,
+      },
     },
   },
 }));

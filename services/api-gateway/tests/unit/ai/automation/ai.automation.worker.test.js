@@ -25,7 +25,9 @@ jest.unstable_mockModule("../../../../src/config/index.js", () => ({
 jest.unstable_mockModule(
   "../../../../src/config/redis.config.js",
   () => ({
+    createWorkerConnection: mockCreateRedisClient,
     createRedisClient: mockCreateRedisClient,
+    getQueueConnection: mockGetSharedBullmqConnection,
     getSharedBullmqConnection: mockGetSharedBullmqConnection,
   }),
 );
@@ -45,6 +47,18 @@ jest.unstable_mockModule("../../../../src/config/logger.js", () => ({
   },
 }));
 
+const mockGetAIAutomationQueueName = jest.fn(() => "ai-automation");
+const mockStoreFailedAIJob = jest.fn();
+
+jest.unstable_mockModule(
+  "../../../../src/modules/ai/automation/queue/ai.automation.queue.js",
+  () => ({
+    getAIAutomationQueueName: mockGetAIAutomationQueueName,
+    storeFailedAIJob: mockStoreFailedAIJob,
+    enqueueAICommentProcessing: jest.fn(),
+  }),
+);
+
 const workerModule = await import(
   "../../../../src/modules/ai/automation/queue/ai.automation.worker.js"
 );
@@ -56,6 +70,7 @@ describe("ai.automation.worker", () => {
       on: mockWorkerOn,
     }));
     mockQueueConstructor.mockImplementation(() => ({}));
+    mockGetAIAutomationQueueName.mockReturnValue("ai-automation");
   });
 
   it("processes AI comment jobs via the automation service", async () => {
@@ -86,6 +101,7 @@ describe("ai.automation.worker", () => {
       workerModule.processAICommentJob,
       {
         connection: { redis: true },
+        concurrency: 5,
       },
     );
     expect(mockWorkerOn).toHaveBeenCalledTimes(2);

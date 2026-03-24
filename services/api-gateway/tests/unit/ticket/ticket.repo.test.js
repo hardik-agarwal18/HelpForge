@@ -11,49 +11,69 @@ const mockTransaction = jest.fn();
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
-    membership: {
-      findMany: mockMembershipFindMany,
-      findUnique: mockMembershipFindUnique,
-      update: mockMembershipUpdate,
+    read: {
+      membership: {
+        findMany: mockMembershipFindMany,
+        findUnique: mockMembershipFindUnique,
+      },
+      tag: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      ticket: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      agentWorkload: {
+        findMany: mockAgentWorkloadFindMany,
+      },
+      ticketComment: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      ticketAttachment: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      ticketActivityLog: {
+        findMany: jest.fn(),
+      },
+      ticketTag: {
+        findUnique: jest.fn(),
+      },
     },
-    tag: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
+    write: {
+      membership: {
+        update: mockMembershipUpdate,
+      },
+      tag: {
+        create: jest.fn(),
+      },
+      ticket: {
+        create: jest.fn(),
+        update: mockTicketUpdate,
+      },
+      agentWorkload: {
+        upsert: mockAgentWorkloadUpsert,
+      },
+      ticketComment: {
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
+      ticketAttachment: {
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
+      ticketActivityLog: {
+        create: mockTicketActivityLogCreate,
+      },
+      ticketTag: {
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
+      $transaction: mockTransaction,
     },
-    ticket: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: mockTicketUpdate,
-    },
-    agentWorkload: {
-      findMany: mockAgentWorkloadFindMany,
-      upsert: mockAgentWorkloadUpsert,
-    },
-    ticketComment: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-    },
-    ticketAttachment: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-    },
-    ticketActivityLog: {
-      create: mockTicketActivityLogCreate,
-      findMany: jest.fn(),
-    },
-    ticketTag: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-    },
-    $transaction: mockTransaction,
   },
 }));
 

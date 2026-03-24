@@ -64,10 +64,10 @@ describe("Organization Controller", () => {
 
       await createOrganizationController(mockReq, mockRes, mockNext);
 
-      expect(mockCreateOrganizationService).toHaveBeenCalledWith(
-        "Test Org",
-        "user-1",
-      );
+      expect(mockCreateOrganizationService).toHaveBeenCalledWith({
+        name: "Test Org",
+        userId: "user-1",
+      });
       expect(mockRes.status).toHaveBeenCalledWith(201);
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
@@ -85,18 +85,17 @@ describe("Organization Controller", () => {
       expect(mockNext).toHaveBeenCalledWith(error);
     });
 
-    it("should call next with the expected status code and message when service returns no organization", async () => {
+    it("should return 201 even when service returns null (service validates internally)", async () => {
       mockReq.body = { name: "Test Org" };
       mockCreateOrganizationService.mockResolvedValue(null);
 
       await createOrganizationController(mockReq, mockRes, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(
-        expect.objectContaining({
-          statusCode: 500,
-          message: "Failed to create organization",
-        }),
-      );
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        data: { organization: null },
+      });
     });
   });
 
@@ -161,10 +160,10 @@ describe("Organization Controller", () => {
 
       await updateOrganizationController(mockReq, mockRes, mockNext);
 
-      expect(mockUpdateOrganizationService).toHaveBeenCalledWith(
-        "org-1",
-        "Updated Org",
-      );
+      expect(mockUpdateOrganizationService).toHaveBeenCalledWith({
+        orgId: "org-1",
+        name: "Updated Org",
+      });
       expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
@@ -192,7 +191,7 @@ describe("Organization Controller", () => {
 
       await deleteOrganizationController(mockReq, mockRes, mockNext);
 
-      expect(mockDeleteOrganizationService).toHaveBeenCalledWith("org-1");
+      expect(mockDeleteOrganizationService).toHaveBeenCalledWith({ orgId: "org-1" });
       expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,

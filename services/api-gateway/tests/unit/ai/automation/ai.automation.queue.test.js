@@ -12,6 +12,7 @@ jest.unstable_mockModule("bullmq", () => ({
 jest.unstable_mockModule(
   "../../../../src/config/redis.config.js",
   () => ({
+    getQueueConnection: mockGetSharedBullmqConnection,
     getSharedBullmqConnection: mockGetSharedBullmqConnection,
   }),
 );
@@ -19,8 +20,43 @@ jest.unstable_mockModule(
 jest.unstable_mockModule("../../../../src/config/logger.js", () => ({
   default: {
     warn: mockLoggerWarn,
+    error: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
   },
 }));
+
+jest.unstable_mockModule(
+  "../../../../src/modules/ai/core/config/ai.config.js",
+  () => ({
+    default: {
+      automation: {
+        queueName: "ai-automation",
+        processCommentJobName: "process-ticket-comment",
+        retryLimit: 3,
+        retryBackoffMs: 2000,
+        dlqMaxEntries: 100,
+      },
+    },
+    aiConfig: {
+      automation: {
+        queueName: "ai-automation",
+        processCommentJobName: "process-ticket-comment",
+        retryLimit: 3,
+        retryBackoffMs: 2000,
+        dlqMaxEntries: 100,
+      },
+    },
+  }),
+);
+
+jest.unstable_mockModule(
+  "../../../../src/modules/ai/automation/ai.automation.repo.js",
+  () => ({
+    createAIProcessingFailure: jest.fn(),
+    getAIProcessingFailures: jest.fn().mockResolvedValue([]),
+  }),
+);
 
 const queueModule = await import(
   "../../../../src/modules/ai/automation/queue/ai.automation.queue.js"

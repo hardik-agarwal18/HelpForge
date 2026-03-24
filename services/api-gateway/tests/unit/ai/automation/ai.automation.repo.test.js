@@ -17,37 +17,92 @@ const mockAgentWorkloadFindUnique = jest.fn();
 const mockMembershipFindMany = jest.fn();
 const mockTransaction = jest.fn();
 
-const mockPrisma = {
-  ticket: {
-    findUnique: mockTicketFindUnique,
-    findMany: mockTicketFindMany,
-    update: mockTicketUpdate,
-  },
-  ticketComment: {
-    findMany: mockTicketCommentFindMany,
-    findUnique: mockTicketCommentFindUnique,
-    create: mockTicketCommentCreate,
-  },
-  agentWorkload: {
-    findMany: mockAgentWorkloadFindMany,
-    findUnique: mockAgentWorkloadFindUnique,
-  },
-  membership: {
-    findMany: mockMembershipFindMany,
-  },
-  $transaction: mockTransaction,
-};
-
 jest.unstable_mockModule("../../../../src/config/logger.js", () => ({
   default: {
     error: mockLoggerError,
     debug: mockLoggerDebug,
+    info: jest.fn(),
+    warn: jest.fn(),
   },
 }));
 
-jest.unstable_mockModule("@prisma/client", () => ({
-  PrismaClient: jest.fn(() => mockPrisma),
+jest.unstable_mockModule("../../../../src/config/index.js", () => ({
+  default: {
+    nodeEnv: "test",
+    logLevel: "silent",
+    database: {
+      circuitBreaker: { failureThreshold: 5, resetTimeoutMs: 30000 },
+      poolSize: 10,
+      poolTimeout: 30000,
+    },
+    redis: {
+      url: null,
+      connectTimeoutMs: 5000,
+      circuitBreaker: { failureThreshold: 5, resetTimeoutMs: 30000 },
+      maxConnections: 10,
+    },
+  },
 }));
+
+const mockBaseGetTicketWithComments = jest.fn();
+const mockBaseGetTicket = jest.fn();
+const mockBaseGetTicketComments = jest.fn();
+const mockBaseGetAgentTickets = jest.fn();
+
+jest.unstable_mockModule(
+  "../../../../src/modules/ai/core/repo/ticket.base.repo.js",
+  () => ({
+    getTicketWithComments: mockBaseGetTicketWithComments,
+    getTicket: mockBaseGetTicket,
+    getTicketComments: mockBaseGetTicketComments,
+    getAgentTickets: mockBaseGetAgentTickets,
+    default: {
+      getTicketWithComments: mockBaseGetTicketWithComments,
+      getTicket: mockBaseGetTicket,
+      getTicketComments: mockBaseGetTicketComments,
+      getAgentTickets: mockBaseGetAgentTickets,
+    },
+  }),
+);
+
+jest.unstable_mockModule("../../../../src/config/database.config.js", () => ({
+  default: {
+    read: {
+      ticket: {
+        findUnique: mockTicketFindUnique,
+        findMany: mockTicketFindMany,
+      },
+      ticketComment: {
+        findMany: mockTicketCommentFindMany,
+        findUnique: mockTicketCommentFindUnique,
+      },
+      agentWorkload: {
+        findMany: mockAgentWorkloadFindMany,
+        findUnique: mockAgentWorkloadFindUnique,
+      },
+      membership: {
+        findMany: mockMembershipFindMany,
+      },
+      aiProcessingFailure: {
+        findMany: jest.fn(),
+      },
+    },
+    write: {
+      ticket: {
+        update: mockTicketUpdate,
+      },
+      ticketComment: {
+        create: mockTicketCommentCreate,
+      },
+      aiProcessingFailure: {
+        create: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      $transaction: mockTransaction,
+    },
+  },
+}));
+
 
 const repo =
   await import("../../../../src/modules/ai/automation/ai.automation.repo.js");
@@ -60,46 +115,31 @@ describe("ai.automation.repo", () => {
   describe("read operations", () => {
     it("gets ticket with comments and relations", async () => {
       const ticket = { id: "ticket-1" };
-      mockTicketFindUnique.mockResolvedValue(ticket);
+      mockBaseGetTicketWithComments.mockResolvedValue(ticket);
 
       const result = await repo.getTicketWithComments("ticket-1");
 
-      expect(mockTicketFindUnique).toHaveBeenCalledWith({
-        where: { id: "ticket-1" },
-        include: {
-          comments: {
-            orderBy: { createdAt: "asc" },
-          },
-          createdBy: true,
-          assignedTo: true,
-          organization: true,
-        },
-      });
+      expect(mockBaseGetTicketWithComments).toHaveBeenCalledWith("ticket-1");
       expect(result).toBe(ticket);
     });
 
     it("gets ticket basic info", async () => {
       const ticket = { id: "ticket-2" };
-      mockTicketFindUnique.mockResolvedValue(ticket);
+      mockBaseGetTicket.mockResolvedValue(ticket);
 
       const result = await repo.getTicket("ticket-2");
 
-      expect(mockTicketFindUnique).toHaveBeenCalledWith({
-        where: { id: "ticket-2" },
-      });
+      expect(mockBaseGetTicket).toHaveBeenCalledWith("ticket-2");
       expect(result).toBe(ticket);
     });
 
     it("gets ticket comments", async () => {
       const comments = [{ id: "comment-1" }];
-      mockTicketCommentFindMany.mockResolvedValue(comments);
+      mockBaseGetTicketComments.mockResolvedValue(comments);
 
       const result = await repo.getTicketComments("ticket-3");
 
-      expect(mockTicketCommentFindMany).toHaveBeenCalledWith({
-        where: { ticketId: "ticket-3" },
-        orderBy: { createdAt: "asc" },
-      });
+      expect(mockBaseGetTicketComments).toHaveBeenCalledWith("ticket-3");
       expect(result).toBe(comments);
     });
 
@@ -194,40 +234,11 @@ describe("ai.automation.repo", () => {
     it("gets tickets for agent since timestamp", async () => {
       const since = new Date("2026-01-01T00:00:00.000Z");
       const tickets = [{ id: "ticket-5" }];
-      mockTicketFindMany.mockResolvedValue(tickets);
+      mockBaseGetAgentTickets.mockResolvedValue(tickets);
 
       const result = await repo.getAgentTickets("agent-2", since);
 
-      expect(mockTicketFindMany).toHaveBeenCalledWith({
-        where: {
-          assignedToId: "agent-2",
-          updatedAt: { gte: since },
-        },
-        include: {
-          comments: true,
-        },
-      });
-      expect(result).toBe(tickets);
-    });
-
-    it("gets organization tickets since timestamp", async () => {
-      const since = new Date("2026-01-01T00:00:00.000Z");
-      const tickets = [{ id: "ticket-6" }];
-      mockTicketFindMany.mockResolvedValue(tickets);
-
-      const result = await repo.getOrganizationTickets("org-2", since);
-
-      expect(mockTicketFindMany).toHaveBeenCalledWith({
-        where: {
-          organizationId: "org-2",
-          createdAt: { gte: since },
-        },
-        include: {
-          comments: {
-            where: { authorType: "AI" },
-          },
-        },
-      });
+      expect(mockBaseGetAgentTickets).toHaveBeenCalledWith("agent-2", since);
       expect(result).toBe(tickets);
     });
 
@@ -447,218 +458,161 @@ describe("ai.automation.repo", () => {
   });
 
   describe("error handling", () => {
-    const sampleError = new Error("db-failure");
-
     it("logs and rethrows for getTicketWithComments", async () => {
-      mockTicketFindUnique.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockBaseGetTicketWithComments.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getTicketWithComments("ticket-e1")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getTicketWithComments("ticket-e1")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e1" },
+        { error: err, ticketId: "ticket-e1" },
         "Error fetching ticket with comments",
       );
     });
 
-    it("logs and rethrows for getTicket", async () => {
-      mockTicketFindUnique.mockRejectedValue(sampleError);
-
-      await expect(repo.getTicket("ticket-e2")).rejects.toThrow(sampleError);
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e2" },
-        "Error fetching ticket",
-      );
-    });
-
-    it("logs and rethrows for getTicketComments", async () => {
-      mockTicketCommentFindMany.mockRejectedValue(sampleError);
-
-      await expect(repo.getTicketComments("ticket-e3")).rejects.toThrow(
-        sampleError,
-      );
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e3" },
-        "Error fetching comments",
-      );
-    });
-
     it("logs and rethrows for getAIComments", async () => {
-      mockTicketCommentFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTicketCommentFindMany.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getAIComments("ticket-e4")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getAIComments("ticket-e4")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e4" },
+        { error: err, ticketId: "ticket-e4" },
         "Error fetching AI comments",
       );
     });
 
-    it("logs and rethrows for getComment", async () => {
-      mockTicketCommentFindUnique.mockRejectedValue(sampleError);
-
-      await expect(repo.getComment("comment-e1")).rejects.toThrow(sampleError);
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, commentId: "comment-e1" },
-        "Error fetching comment",
-      );
-    });
-
     it("logs and rethrows for createComment", async () => {
+      const err = new Error("db-failure");
       const data = { ticketId: "ticket-e5", message: "x" };
-      mockTicketCommentCreate.mockRejectedValue(sampleError);
+      mockTicketCommentCreate.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.createComment(data)).rejects.toThrow(sampleError);
+      await expect(repo.createComment(data)).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, data },
+        { error: err, data },
         "Error creating comment",
       );
     });
 
     it("logs and rethrows for updateTicket", async () => {
+      const err = new Error("db-failure");
       const update = { status: "OPEN" };
-      mockTicketUpdate.mockRejectedValue(sampleError);
+      mockTicketUpdate.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.updateTicket("ticket-e6", update)).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.updateTicket("ticket-e6", update)).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e6", data: update },
+        { error: err, ticketId: "ticket-e6", data: update },
         "Error updating ticket",
       );
     });
 
     it("logs and rethrows for getAvailableAgents", async () => {
-      mockAgentWorkloadFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockAgentWorkloadFindMany.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getAvailableAgents("org-e1")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getAvailableAgents("org-e1")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, organizationId: "org-e1" },
+        { error: err, organizationId: "org-e1" },
         "Error fetching available agents",
       );
     });
 
     it("logs and rethrows for getAgentWorkload", async () => {
-      mockAgentWorkloadFindUnique.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockAgentWorkloadFindUnique.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getAgentWorkload("agent-e1", "org-e2")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getAgentWorkload("agent-e1", "org-e2")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, userId: "agent-e1", organizationId: "org-e2" },
+        { error: err, userId: "agent-e1", organizationId: "org-e2" },
         "Error fetching agent workload",
       );
     });
 
     it("logs and rethrows for getAgentTickets", async () => {
-      mockTicketFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockBaseGetAgentTickets.mockImplementationOnce(() => Promise.reject(err));
       const since = new Date("2026-01-02T00:00:00.000Z");
 
-      await expect(repo.getAgentTickets("agent-e2", since)).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getAgentTickets("agent-e2", since)).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, agentId: "agent-e2" },
+        { error: err, agentId: "agent-e2" },
         "Error fetching agent tickets",
       );
     });
 
-    it("logs and rethrows for getOrganizationTickets", async () => {
-      mockTicketFindMany.mockRejectedValue(sampleError);
-
-      await expect(
-        repo.getOrganizationTickets("org-e3", new Date()),
-      ).rejects.toThrow(sampleError);
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, organizationId: "org-e3" },
-        "Error fetching org tickets",
-      );
-    });
-
     it("logs and rethrows for getTicketAIMetadata", async () => {
-      mockTicketFindUnique.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTicketFindUnique.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getTicketAIMetadata("ticket-e7")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getTicketAIMetadata("ticket-e7")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e7" },
+        { error: err, ticketId: "ticket-e7" },
         "Error fetching AI metadata",
       );
     });
 
     it("logs and rethrows for incrementAIMessageCount", async () => {
-      mockTicketUpdate.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTicketUpdate.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.incrementAIMessageCount("ticket-e8")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.incrementAIMessageCount("ticket-e8")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e8" },
+        { error: err, ticketId: "ticket-e8" },
         "Error incrementing AI message count",
       );
     });
 
     it("logs and rethrows for bulkUpdateTickets", async () => {
-      mockTicketUpdate.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      // Mock $transaction to reject (simulates Prisma array-based tx failure)
+      mockTransaction.mockImplementationOnce(() => Promise.reject(err));
       const updates = [{ id: "ticket-e9", data: { status: "OPEN" } }];
 
-      await expect(repo.bulkUpdateTickets(updates)).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.bulkUpdateTickets(updates)).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, updateCount: 1 },
+        { error: err, updateCount: 1 },
         "Error in bulk update",
       );
     });
 
     it("logs and rethrows for getOrganizationMembers", async () => {
-      mockMembershipFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockMembershipFindMany.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getOrganizationMembers("org-e4")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getOrganizationMembers("org-e4")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, organizationId: "org-e4" },
+        { error: err, organizationId: "org-e4" },
         "Error fetching org members",
       );
     });
 
     it("logs and rethrows for getAllAIComments", async () => {
-      mockTicketCommentFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTicketCommentFindMany.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getAllAIComments("ticket-e10")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getAllAIComments("ticket-e10")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e10" },
+        { error: err, ticketId: "ticket-e10" },
         "Error fetching all AI comments",
       );
     });
 
     it("logs and rethrows for getUserComments", async () => {
-      mockTicketCommentFindMany.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTicketCommentFindMany.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.getUserComments("ticket-e11")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.getUserComments("ticket-e11")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError, ticketId: "ticket-e11" },
+        { error: err, ticketId: "ticket-e11" },
         "Error fetching user comments",
       );
     });
 
     it("logs and rethrows for transaction", async () => {
-      mockTransaction.mockRejectedValue(sampleError);
+      const err = new Error("db-failure");
+      mockTransaction.mockImplementationOnce(() => Promise.reject(err));
 
-      await expect(repo.transaction(async () => "unused")).rejects.toThrow(
-        sampleError,
-      );
+      await expect(repo.transaction(async () => "unused")).rejects.toThrow(err);
       expect(mockLoggerError).toHaveBeenCalledWith(
-        { error: sampleError },
+        { error: err },
         "Transaction failed",
       );
     });

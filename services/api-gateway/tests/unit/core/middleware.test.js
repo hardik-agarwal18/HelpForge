@@ -21,6 +21,12 @@ jest.unstable_mockModule("jsonwebtoken", () => ({
   },
 }));
 
+jest.unstable_mockModule("../../../src/config/index.js", () => ({
+  default: {
+    jwtSecret: "test-secret",
+  },
+}));
+
 // Import after mocking
 const { authenticate } =
   await import("../../../src/middleware/auth.middleware.js");
@@ -152,15 +158,19 @@ describe("Middleware Unit Tests", () => {
     });
 
     it("should pass validation with valid data", () => {
-      // Arrange
+      // Arrange - validate() now wraps input in { body, params, query }
       const schema = z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
+        body: z.object({
+          email: z.string().email(),
+          password: z.string().min(6),
+        }),
       });
       req.body = {
         email: "test@example.com",
         password: "password123",
       };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(schema);
@@ -174,13 +184,17 @@ describe("Middleware Unit Tests", () => {
     it("should return 400 with invalid data", () => {
       // Arrange
       const schema = z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
+        body: z.object({
+          email: z.string().email(),
+          password: z.string().min(6),
+        }),
       });
       req.body = {
         email: "invalid-email",
         password: "123", // Too short
       };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(schema);
@@ -199,13 +213,17 @@ describe("Middleware Unit Tests", () => {
     it("should return 400 with missing required fields", () => {
       // Arrange
       const schema = z.object({
-        email: z.string().email(),
-        password: z.string(),
+        body: z.object({
+          email: z.string().email(),
+          password: z.string(),
+        }),
       });
       req.body = {
         email: "test@example.com",
         // missing password
       };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(schema);
@@ -223,15 +241,19 @@ describe("Middleware Unit Tests", () => {
     it("should format validation errors correctly", () => {
       // Arrange
       const schema = z.object({
-        email: z.string().email(),
-        nested: z.object({
-          field: z.string(),
+        body: z.object({
+          email: z.string().email(),
+          nested: z.object({
+            field: z.string(),
+          }),
         }),
       });
       req.body = {
         email: "invalid",
         nested: {}, // missing field
       };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(schema);
@@ -260,6 +282,8 @@ describe("Middleware Unit Tests", () => {
         },
       };
       req.body = { test: "data" };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(malformedSchema);
@@ -290,6 +314,8 @@ describe("Middleware Unit Tests", () => {
         },
       };
       req.body = { test: "data" };
+      req.params = {};
+      req.query = {};
 
       // Act
       const middleware = validate(malformedSchema);
