@@ -35,7 +35,7 @@ router.patch(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
-  requireOwner,
+  requireOwnerOrAdmin,
   validate(updateOrganizationSchema),
   updateOrganizationController,
 );
