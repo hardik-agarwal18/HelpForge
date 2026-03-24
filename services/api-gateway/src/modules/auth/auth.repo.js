@@ -6,6 +6,15 @@ import { getCacheClient } from "../../config/redis.config.js";
 
 const CACHE_TTL = 300; // 5 minutes
 
+let redis;
+
+const cache = () => {
+  if (redis) return redis;
+  const client = getCacheClient();
+  if (client) redis = client;
+  return client;
+};
+
 const cacheKey = {
   userById: (id) => `auth:user:id:${id}`,
   emailToId: (email) => `auth:user:email-to-id:${email}`,
@@ -13,8 +22,10 @@ const cacheKey = {
 };
 
 const getCache = async (key) => {
+  const client = cache();
+  if (!client) return null;
+
   try {
-    const client = getCacheClient();
     const raw = await client.get(key);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
@@ -24,8 +35,10 @@ const getCache = async (key) => {
 };
 
 const setCache = async (key, value, ttl = CACHE_TTL) => {
+  const client = cache();
+  if (!client) return;
+
   try {
-    const client = getCacheClient();
     await client.set(key, JSON.stringify(value), "EX", ttl);
   } catch (err) {
     logger.error({ err, key }, "Auth cache write failed");
@@ -33,8 +46,10 @@ const setCache = async (key, value, ttl = CACHE_TTL) => {
 };
 
 const delCache = async (...keys) => {
+  const client = cache();
+  if (!client) return;
+
   try {
-    const client = getCacheClient();
     await client.del(...keys);
   } catch (err) {
     logger.error({ err, keys }, "Auth cache delete failed");

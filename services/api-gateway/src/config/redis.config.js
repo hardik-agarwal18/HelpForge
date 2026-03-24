@@ -365,6 +365,42 @@ const createWorkerConnection = (workerName = "worker") => {
   return buildClient(`worker:${workerName}`);
 };
 
+/**
+ * Eagerly connect cache + queue clients. Call before starting workers.
+ * Resolves once both are ready (or logs warnings if REDIS_URL is unset).
+ */
+const connectRedis = async () => {
+  const results = [];
+
+  const cache = getCacheClient();
+  if (cache && cacheClientRaw?.status !== "ready") {
+    results.push(
+      cacheClientRaw
+        .connect()
+        .then(() => logger.info({ service: SERVICE_NAME }, "Redis cache connected"))
+        .catch((err) => {
+          logger.error({ service: SERVICE_NAME, error: err.message }, "Redis cache connect failed");
+          throw err;
+        }),
+    );
+  }
+
+  const queue = getQueueConnection();
+  if (queue && queue.status !== "ready") {
+    results.push(
+      queue
+        .connect()
+        .then(() => logger.info({ service: SERVICE_NAME }, "Redis queue connected"))
+        .catch((err) => {
+          logger.error({ service: SERVICE_NAME, error: err.message }, "Redis queue connect failed");
+          throw err;
+        }),
+    );
+  }
+
+  await Promise.all(results);
+};
+
 // ── Backward Compatibility ───────────────────────────────────────────────────
 
 const getSharedBullmqConnection = getQueueConnection;
@@ -448,6 +484,7 @@ const disconnectRedis = async () => {
 };
 
 export {
+  connectRedis,
   getCacheClient,
   getQueueConnection,
   createWorkerConnection,
@@ -460,6 +497,7 @@ export {
 };
 
 export default {
+  connectRedis,
   getCacheClient,
   getQueueConnection,
   createWorkerConnection,

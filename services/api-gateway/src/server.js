@@ -3,7 +3,7 @@ import app from "./app.js";
 import config from "./config/index.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
-import { disconnectRedis } from "./config/redis.config.js";
+import { connectRedis, disconnectRedis } from "./config/redis.config.js";
 import {
   startAIAutomationWorker,
   stopAIAutomationWorker,
@@ -32,6 +32,7 @@ const server = http.createServer(app);
 
 const startServer = async () => {
   await db.connect();
+  await connectRedis();
 
   initializeWebsocketGateway(server);
   startAIAutomationWorker();
