@@ -1,4 +1,4 @@
-import prisma from "../../config/database.config.js";
+import db from "../../config/database.config.js";
 
 const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
 
@@ -7,7 +7,7 @@ export const createNotifications = async (notifications) => {
     return { count: 0 };
   }
 
-  return await prisma.notification.createMany({
+  return await db.write.notification.createMany({
     data: notifications,
   });
 };
@@ -20,7 +20,7 @@ export const getNotificationsByRecipient = async (
   const normalizedPageSize = Number(pageSize) > 0 ? Number(pageSize) : 20;
   const skip = (normalizedPage - 1) * normalizedPageSize;
 
-  return await prisma.notification.findMany({
+  return await db.read.notification.findMany({
     where: {
       recipientId,
       ...(typeof isRead === "boolean" ? { isRead } : {}),
@@ -34,7 +34,7 @@ export const getNotificationsByRecipient = async (
 };
 
 export const markNotificationAsRead = async (notificationId, recipientId) => {
-  return await prisma.notification.updateMany({
+  return await db.write.notification.updateMany({
     where: {
       id: notificationId,
       recipientId,
@@ -48,7 +48,7 @@ export const markNotificationAsRead = async (notificationId, recipientId) => {
 };
 
 export const markAllNotificationsAsRead = async (recipientId) => {
-  return await prisma.notification.updateMany({
+  return await db.write.notification.updateMany({
     where: {
       recipientId,
       isRead: false,
@@ -65,7 +65,7 @@ export const getTicketNotificationContext = async (ticketId) => {
     return null;
   }
 
-  return await prisma.ticket.findUnique({
+  return await db.read.ticket.findUnique({
     where: {
       id: ticketId,
     },
@@ -83,7 +83,7 @@ export const getOrganizationStaffRecipientIds = async (organizationId) => {
     return [];
   }
 
-  const memberships = await prisma.membership.findMany({
+  const memberships = await db.read.membership.findMany({
     where: {
       organizationId,
       role: {
@@ -103,7 +103,7 @@ export const getNotificationPreferencesForUsers = async (userIds = []) => {
     return [];
   }
 
-  return await prisma.notificationPreference.findMany({
+  return await db.read.notificationPreference.findMany({
     where: {
       userId: {
         in: userIds,
@@ -126,7 +126,7 @@ export const getNotificationPreferenceByUserId = async (userId) => {
     return null;
   }
 
-  return await prisma.notificationPreference.findUnique({
+  return await db.read.notificationPreference.findUnique({
     where: {
       userId,
     },
@@ -134,7 +134,7 @@ export const getNotificationPreferenceByUserId = async (userId) => {
 };
 
 export const upsertNotificationPreferenceByUserId = async (userId, data) => {
-  return await prisma.notificationPreference.upsert({
+  return await db.write.notificationPreference.upsert({
     where: {
       userId,
     },

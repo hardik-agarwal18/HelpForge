@@ -1,9 +1,9 @@
 import logger from "../../../../config/logger.js";
-import prisma from "../../../../config/database.config.js";
+import db from "../../../../config/database.config.js";
 
 export const getTicketWithComments = async (ticketId) => {
   try {
-    return await prisma.ticket.findUnique({
+    return await db.read.ticket.findUnique({
       where: { id: ticketId },
       include: {
         comments: {
@@ -22,7 +22,7 @@ export const getTicketWithComments = async (ticketId) => {
 
 export const getTicket = async (ticketId) => {
   try {
-    return await prisma.ticket.findUnique({
+    return await db.read.ticket.findUnique({
       where: { id: ticketId },
     });
   } catch (error) {
@@ -33,7 +33,7 @@ export const getTicket = async (ticketId) => {
 
 export const getTicketComments = async (ticketId) => {
   try {
-    return await prisma.ticketComment.findMany({
+    return await db.read.ticketComment.findMany({
       where: { ticketId },
       orderBy: { createdAt: "asc" },
     });
@@ -45,7 +45,7 @@ export const getTicketComments = async (ticketId) => {
 
 export const getAgentTickets = async (agentId, since) => {
   try {
-    return await prisma.ticket.findMany({
+    return await db.read.ticket.findMany({
       where: {
         assignedToId: agentId,
         updatedAt: { gte: since },

@@ -1,7 +1,7 @@
-import prisma from "../../config/database.config.js";
+import db from "../../config/database.config.js";
 
 export const getOrganizationsByUserId = async (userId) => {
-  return await prisma.organization.findMany({
+  return await db.read.organization.findMany({
     where: {
       memberships: {
         some: { userId },
@@ -11,7 +11,7 @@ export const getOrganizationsByUserId = async (userId) => {
 };
 
 export const createOrganization = async ({ name, userId }) => {
-  return await prisma.organization.create({
+  return await db.write.organization.create({
     data: {
       name,
       memberships: {
@@ -28,7 +28,7 @@ export const createOrganization = async ({ name, userId }) => {
 };
 
 export const patchOrganization = async ({ orgId, name }) => {
-  return await prisma.organization.update({
+  return await db.write.organization.update({
     where: { id: orgId },
     data: { name },
     include: { memberships: true },
@@ -36,7 +36,7 @@ export const patchOrganization = async ({ orgId, name }) => {
 };
 
 export const findOrganizationByOwner = async ({ userId }) => {
-  return await prisma.organization.findFirst({
+  return await db.read.organization.findFirst({
     where: {
       memberships: {
         some: { userId, role: "OWNER" },
@@ -46,7 +46,7 @@ export const findOrganizationByOwner = async ({ userId }) => {
 };
 
 export const deleteOrganization = async ({ orgId }) => {
-  return await prisma.$transaction(async (tx) => {
+  return await db.write.$transaction(async (tx) => {
     await tx.membership.deleteMany({
       where: { organizationId: orgId },
     });
@@ -57,14 +57,14 @@ export const deleteOrganization = async ({ orgId }) => {
 };
 
 export const getOrganizationMembersById = async (orgId) => {
-  return await prisma.membership.findMany({
+  return await db.read.membership.findMany({
     where: { organizationId: orgId },
     include: { user: true },
   });
 };
 
 export const getOrganizationMembershipByUserId = async (orgId, userId) => {
-  return await prisma.membership.findUnique({
+  return await db.read.membership.findUnique({
     where: {
       userId_organizationId: { userId, organizationId: orgId },
     },
@@ -72,7 +72,7 @@ export const getOrganizationMembershipByUserId = async (orgId, userId) => {
 };
 
 export const getUserMembershipInOrganization = async ({ userId, orgId }) => {
-  return await prisma.membership.findUnique({
+  return await db.read.membership.findUnique({
     where: {
       userId_organizationId: { userId, organizationId: orgId },
     },
@@ -81,7 +81,7 @@ export const getUserMembershipInOrganization = async ({ userId, orgId }) => {
 };
 
 export const inviteMemberInOrganization = async (orgId, userId, role) => {
-  return await prisma.membership.create({
+  return await db.write.membership.create({
     data: {
       organizationId: orgId,
       userId,
@@ -91,7 +91,7 @@ export const inviteMemberInOrganization = async (orgId, userId, role) => {
 };
 
 export const updateMembershipRole = (orgId, userId, role) => {
-  return prisma.membership.update({
+  return db.write.membership.update({
     where: {
       userId_organizationId: { userId, organizationId: orgId },
     },

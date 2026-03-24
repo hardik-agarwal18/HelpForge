@@ -25,7 +25,7 @@
  */
 
 import cron from "node-cron";
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 import logger from "../../../config/logger.js";
 import { deleteStalePages, purgeStaleDbRows } from "./scraper.service.js";
 
@@ -41,7 +41,7 @@ export const runScrapeCleanup = async () => {
   const purgeAt = new Date(Date.now() - 25 * 60 * 60 * 1_000); // 25 h ago
 
   // Get all orgs that have scraped pages
-  const orgs = await prisma.scrapedPage
+  const orgs = await db.read.scrapedPage
     .findMany({
       distinct: ["orgId"],
       select:   { orgId: true },

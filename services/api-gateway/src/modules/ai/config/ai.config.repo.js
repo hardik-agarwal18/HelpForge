@@ -1,4 +1,4 @@
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 
 /**
  * Get AIConfig for an organization
@@ -6,7 +6,7 @@ import prisma from "../../../config/database.config.js";
  * @returns {Promise<Object|null>}
  */
 export const getAIConfigByOrg = async (organizationId) => {
-  return await prisma.aIConfig.findUnique({
+  return await db.read.aIConfig.findUnique({
     where: { organizationId },
   });
 };
@@ -18,7 +18,7 @@ export const getAIConfigByOrg = async (organizationId) => {
  * @returns {Promise<Object>}
  */
 export const createAIConfig = async (organizationId, data) => {
-  return await prisma.aIConfig.create({
+  return await db.write.aIConfig.create({
     data: { organizationId, ...data },
   });
 };
@@ -30,7 +30,7 @@ export const createAIConfig = async (organizationId, data) => {
  * @returns {Promise<Object>}
  */
 export const updateAIConfig = async (organizationId, data) => {
-  return await prisma.aIConfig.update({
+  return await db.write.aIConfig.update({
     where: { organizationId },
     data,
   });
@@ -43,7 +43,7 @@ export const updateAIConfig = async (organizationId, data) => {
  * @returns {Promise<Object>}
  */
 export const upsertAIConfig = async (organizationId, data) => {
-  return await prisma.aIConfig.upsert({
+  return await db.write.aIConfig.upsert({
     where: { organizationId },
     create: { organizationId, ...data },
     update: data,

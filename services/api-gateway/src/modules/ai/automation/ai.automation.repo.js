@@ -1,5 +1,5 @@
 import logger from "../../../config/logger.js";
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 import {
   getAgentTickets as getBaseAgentTickets,
   getTicket as getBaseTicket,
@@ -62,7 +62,7 @@ export const getTicketComments = async (ticketId) => {
  */
 export const getAIComments = async (ticketId, limit = 1) => {
   try {
-    return await prisma.ticketComment.findMany({
+    return await db.read.ticketComment.findMany({
       where: { ticketId, authorType: "AI" },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -80,7 +80,7 @@ export const getAIComments = async (ticketId, limit = 1) => {
  */
 export const getComment = async (commentId) => {
   try {
-    return await prisma.ticketComment.findUnique({
+    return await db.read.ticketComment.findUnique({
       where: { id: commentId },
     });
   } catch (error) {
@@ -96,7 +96,7 @@ export const getComment = async (commentId) => {
  */
 export const createComment = async (data) => {
   try {
-    const comment = await prisma.ticketComment.create({
+    const comment = await db.write.ticketComment.create({
       data: {
         ticketId: data.ticketId,
         message: data.message,
@@ -126,7 +126,7 @@ export const createComment = async (data) => {
  */
 export const updateTicket = async (ticketId, data) => {
   try {
-    const ticket = await prisma.ticket.update({
+    const ticket = await db.write.ticket.update({
       where: { id: ticketId },
       data,
     });
@@ -147,7 +147,7 @@ export const updateTicket = async (ticketId, data) => {
  */
 export const getAvailableAgents = async (organizationId) => {
   try {
-    return await prisma.agentWorkload.findMany({
+    return await db.read.agentWorkload.findMany({
       where: {
         organizationId,
         user: {
@@ -183,7 +183,7 @@ export const getAvailableAgents = async (organizationId) => {
  */
 export const getAgentWorkload = async (userId, organizationId) => {
   try {
-    return await prisma.agentWorkload.findUnique({
+    return await db.read.agentWorkload.findUnique({
       where: {
         userId_organizationId: { userId, organizationId },
       },
@@ -219,7 +219,7 @@ export const getAgentTickets = async (agentId, since) => {
  */
 export const getTicketAIMetadata = async (ticketId) => {
   try {
-    const ticket = await prisma.ticket.findUnique({
+    const ticket = await db.read.ticket.findUnique({
       where: { id: ticketId },
       select: {
         id: true,
@@ -244,7 +244,7 @@ export const getTicketAIMetadata = async (ticketId) => {
  */
 export const incrementAIMessageCount = async (ticketId) => {
   try {
-    return await prisma.ticket.update({
+    return await db.write.ticket.update({
       where: { id: ticketId },
       data: {
         aiMessageCount: {
@@ -265,8 +265,8 @@ export const incrementAIMessageCount = async (ticketId) => {
  */
 export const bulkUpdateTickets = async (updates) => {
   try {
-    await prisma.$transaction(
-      updates.map(({ id, data }) => prisma.ticket.update({ where: { id }, data })),
+    await db.write.$transaction(
+      updates.map(({ id, data }) => db.write.ticket.update({ where: { id }, data })),
     );
 
     logger.debug({ updateCount: updates.length }, "Bulk updated tickets");
@@ -288,7 +288,7 @@ export const bulkUpdateTickets = async (updates) => {
  */
 export const getOrganizationMembers = async (organizationId) => {
   try {
-    return await prisma.membership.findMany({
+    return await db.read.membership.findMany({
       where: {
         organizationId,
         role: { in: ["AGENT", "ADMIN"] },
@@ -316,7 +316,7 @@ export const getOrganizationMembers = async (organizationId) => {
  */
 export const getAllAIComments = async (ticketId) => {
   try {
-    return await prisma.ticketComment.findMany({
+    return await db.read.ticketComment.findMany({
       where: { ticketId, authorType: "AI" },
       orderBy: { createdAt: "asc" },
     });
@@ -333,7 +333,7 @@ export const getAllAIComments = async (ticketId) => {
  */
 export const getUserComments = async (ticketId) => {
   try {
-    return await prisma.ticketComment.findMany({
+    return await db.read.ticketComment.findMany({
       where: { ticketId, authorType: "USER" },
       orderBy: { createdAt: "asc" },
     });
@@ -350,7 +350,7 @@ export const getUserComments = async (ticketId) => {
  */
 export const transaction = async (callback) => {
   try {
-    return await prisma.$transaction(callback);
+    return await db.write.$transaction(callback);
   } catch (error) {
     logger.error({ error }, "Transaction failed");
     throw error;
@@ -365,7 +365,7 @@ export const transaction = async (callback) => {
  */
 export const createAIProcessingFailure = async (data, maxEntries) => {
   try {
-    const failure = await prisma.aiProcessingFailure.create({
+    const failure = await db.write.aiProcessingFailure.create({
       data: {
         queueName: data.queueName,
         jobName: data.jobName,
@@ -383,14 +383,14 @@ export const createAIProcessingFailure = async (data, maxEntries) => {
     });
 
     if (Number.isFinite(maxEntries) && maxEntries > 0) {
-      const staleFailures = await prisma.aiProcessingFailure.findMany({
+      const staleFailures = await db.read.aiProcessingFailure.findMany({
         orderBy: [{ failedAt: "desc" }, { createdAt: "desc" }],
         skip: maxEntries,
         select: { id: true },
       });
 
       if (staleFailures.length > 0) {
-        await prisma.aiProcessingFailure.deleteMany({
+        await db.write.aiProcessingFailure.deleteMany({
           where: {
             id: {
               in: staleFailures.map((entry) => entry.id),
@@ -414,7 +414,7 @@ export const createAIProcessingFailure = async (data, maxEntries) => {
  */
 export const getAIProcessingFailures = async (limit = 50) => {
   try {
-    return await prisma.aiProcessingFailure.findMany({
+    return await db.read.aiProcessingFailure.findMany({
       orderBy: [{ failedAt: "desc" }, { createdAt: "desc" }],
       take: limit,
     });

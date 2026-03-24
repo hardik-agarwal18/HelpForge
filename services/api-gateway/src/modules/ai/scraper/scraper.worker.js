@@ -23,7 +23,7 @@
  */
 
 import { Worker } from "bullmq";
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { createRedisClient } from "../../../config/redis.config.js";
@@ -69,7 +69,7 @@ const handlers = {
 
 const persistFailure = async (job, error) => {
   try {
-    await prisma.aIProcessingFailure.create({
+    await db.write.aIProcessingFailure.create({
       data: {
         queueName:     SCRAPER_QUEUE,
         jobName:       job?.name ?? "unknown",

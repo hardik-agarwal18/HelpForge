@@ -1,10 +1,10 @@
-import prisma from "../../config/database.config.js";
+import db from "../../config/database.config.js";
 
 export const getTicketOrganizationMembership = async (
   organizationId,
   userId,
 ) => {
-  return await prisma.membership.findUnique({
+  return await db.read.membership.findUnique({
     where: {
       userId_organizationId: {
         userId,
@@ -15,7 +15,7 @@ export const getTicketOrganizationMembership = async (
 };
 
 export const getTicketMembershipsByUserId = async (userId) => {
-  return await prisma.membership.findMany({
+  return await db.read.membership.findMany({
     where: {
       userId,
     },
@@ -27,7 +27,7 @@ export const updateAgentAvailability = async (
   userId,
   isAvailable,
 ) => {
-  return await prisma.membership.update({
+  return await db.write.membership.update({
     where: {
       userId_organizationId: {
         userId,
@@ -41,7 +41,7 @@ export const updateAgentAvailability = async (
 };
 
 export const getOrganizationAvailableAgents = async (organizationId) => {
-  return await prisma.membership.findMany({
+  return await db.read.membership.findMany({
     where: {
       organizationId,
       role: "AGENT",
@@ -57,7 +57,7 @@ export const getOrganizationAvailableAgents = async (organizationId) => {
 };
 
 export const getOrganizationAgentWorkloads = async (organizationId) => {
-  return await prisma.agentWorkload.findMany({
+  return await db.read.agentWorkload.findMany({
     where: {
       organizationId,
     },
@@ -65,13 +65,13 @@ export const getOrganizationAgentWorkloads = async (organizationId) => {
 };
 
 export const createTag = async (tagData) => {
-  return await prisma.tag.create({
+  return await db.write.tag.create({
     data: tagData,
   });
 };
 
 export const getTags = async (organizationId) => {
-  return await prisma.tag.findMany({
+  return await db.read.tag.findMany({
     where: {
       organizationId,
     },
@@ -82,7 +82,7 @@ export const getTags = async (organizationId) => {
 };
 
 export const getTagById = async (tagId) => {
-  return await prisma.tag.findUnique({
+  return await db.read.tag.findUnique({
     where: {
       id: tagId,
     },
@@ -90,7 +90,7 @@ export const getTagById = async (tagId) => {
 };
 
 export const getTagByName = async (organizationId, name) => {
-  return await prisma.tag.findFirst({
+  return await db.read.tag.findFirst({
     where: {
       organizationId,
       name,
@@ -99,7 +99,7 @@ export const getTagByName = async (organizationId, name) => {
 };
 
 export const createTicket = async (ticketData) => {
-  return await prisma.ticket.create({
+  return await db.write.ticket.create({
     data: ticketData,
     include: {
       organization: true,
@@ -111,7 +111,7 @@ export const createTicket = async (ticketData) => {
 };
 
 export const getTickets = async (filters) => {
-  return await prisma.ticket.findMany({
+  return await db.read.ticket.findMany({
     where: filters,
     include: {
       organization: true,
@@ -126,7 +126,7 @@ export const getTickets = async (filters) => {
 };
 
 export const getAgentTickets = async (filters) => {
-  return await prisma.ticket.findMany({
+  return await db.read.ticket.findMany({
     where: filters,
     include: {
       organization: true,
@@ -146,7 +146,7 @@ export const getAgentTickets = async (filters) => {
 };
 
 export const getTicketById = async (ticketId) => {
-  return await prisma.ticket.findUnique({
+  return await db.read.ticket.findUnique({
     where: { id: ticketId },
     include: {
       organization: true,
@@ -173,7 +173,7 @@ export const getTicketById = async (ticketId) => {
 };
 
 export const updateTicket = async (ticketId, ticketData, actorId) => {
-  return await prisma.ticket.update({
+  return await db.write.ticket.update({
     where: { id: ticketId },
     data: {
       ...ticketData,
@@ -214,7 +214,7 @@ export const assignTicket = async (
   actorId,
   previousAssignedToId,
 ) => {
-  return await prisma.ticket.update({
+  return await db.write.ticket.update({
     where: { id: ticketId },
     data: {
       assignedToId,
@@ -248,7 +248,7 @@ export const autoAssignTicket = async (
   organizationId,
   agentUserId,
 ) => {
-  return await prisma.$transaction(async (tx) => {
+  return await db.write.$transaction(async (tx) => {
     const now = new Date();
 
     await tx.agentWorkload.upsert({
@@ -322,7 +322,7 @@ export const updateTicketStatus = async (
   actorId,
   previousStatus,
 ) => {
-  return await prisma.ticket.update({
+  return await db.write.ticket.update({
     where: { id: ticketId },
     data: {
       status,
@@ -352,7 +352,7 @@ export const updateTicketStatus = async (
 };
 
 export const createTicketComment = async (ticketId, commentData) => {
-  return await prisma.ticketComment.create({
+  return await db.write.ticketComment.create({
     data: {
       ticketId,
       authorType: "USER",
@@ -366,7 +366,7 @@ export const createTicketComment = async (ticketId, commentData) => {
 };
 
 export const createTicketActivityLog = async (ticketId, activityData) => {
-  return await prisma.ticketActivityLog.create({
+  return await db.write.ticketActivityLog.create({
     data: {
       ticketId,
       ...activityData,
@@ -375,7 +375,7 @@ export const createTicketActivityLog = async (ticketId, activityData) => {
 };
 
 export const addTagToTicket = async (ticketId, tagId) => {
-  return await prisma.ticketTag.create({
+  return await db.write.ticketTag.create({
     data: {
       ticketId,
       tagId,
@@ -388,7 +388,7 @@ export const addTagToTicket = async (ticketId, tagId) => {
 };
 
 export const getTicketTagById = async (ticketId, tagId) => {
-  return await prisma.ticketTag.findUnique({
+  return await db.read.ticketTag.findUnique({
     where: {
       ticketId_tagId: {
         ticketId,
@@ -403,7 +403,7 @@ export const getTicketTagById = async (ticketId, tagId) => {
 };
 
 export const deleteTicketTag = async (ticketId, tagId) => {
-  return await prisma.ticketTag.delete({
+  return await db.write.ticketTag.delete({
     where: {
       ticketId_tagId: {
         ticketId,
@@ -418,7 +418,7 @@ export const deleteTicketTag = async (ticketId, tagId) => {
 };
 
 export const getTicketComments = async (ticketId) => {
-  return await prisma.ticketComment.findMany({
+  return await db.read.ticketComment.findMany({
     where: {
       ticketId,
     },
@@ -432,7 +432,7 @@ export const getTicketComments = async (ticketId) => {
 };
 
 export const getTicketActivities = async (ticketId) => {
-  return await prisma.ticketActivityLog.findMany({
+  return await db.read.ticketActivityLog.findMany({
     where: {
       ticketId,
     },
@@ -446,7 +446,7 @@ export const getTicketActivities = async (ticketId) => {
 };
 
 export const getTicketCommentById = async (commentId) => {
-  return await prisma.ticketComment.findUnique({
+  return await db.read.ticketComment.findUnique({
     where: {
       id: commentId,
     },
@@ -458,7 +458,7 @@ export const getTicketCommentById = async (commentId) => {
 };
 
 export const deleteTicketComment = async (commentId) => {
-  return await prisma.ticketComment.delete({
+  return await db.write.ticketComment.delete({
     where: {
       id: commentId,
     },
@@ -470,7 +470,7 @@ export const deleteTicketComment = async (commentId) => {
 };
 
 export const createTicketAttachment = async (ticketId, attachmentData) => {
-  return await prisma.ticketAttachment.create({
+  return await db.write.ticketAttachment.create({
     data: {
       ticketId,
       ...attachmentData,
@@ -483,7 +483,7 @@ export const createTicketAttachment = async (ticketId, attachmentData) => {
 };
 
 export const getTicketAttachments = async (ticketId) => {
-  return await prisma.ticketAttachment.findMany({
+  return await db.read.ticketAttachment.findMany({
     where: {
       ticketId,
     },
@@ -497,7 +497,7 @@ export const getTicketAttachments = async (ticketId) => {
 };
 
 export const getTicketAttachmentById = async (attachmentId) => {
-  return await prisma.ticketAttachment.findUnique({
+  return await db.read.ticketAttachment.findUnique({
     where: {
       id: attachmentId,
     },
@@ -509,7 +509,7 @@ export const getTicketAttachmentById = async (attachmentId) => {
 };
 
 export const deleteTicketAttachment = async (attachmentId) => {
-  return await prisma.ticketAttachment.delete({
+  return await db.write.ticketAttachment.delete({
     where: {
       id: attachmentId,
     },
@@ -524,7 +524,7 @@ export const getOrganizationTicketsWithAIMetrics = async (
   organizationId,
   since,
 ) => {
-  return prisma.ticket.findMany({
+  return db.read.ticket.findMany({
     where: {
       organizationId,
       createdAt: { gte: since },

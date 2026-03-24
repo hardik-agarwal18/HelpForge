@@ -39,7 +39,7 @@
  */
 
 import { createHash } from "node:crypto";
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 import logger from "../../../config/logger.js";
 import {
   enqueueDeleteDocuments,
@@ -133,7 +133,7 @@ const fetchPage = async (url) => {
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
 const upsertScrapedPage = (orgId, url, urlHash, data) =>
-  prisma.scrapedPage.upsert({
+  db.write.scrapedPage.upsert({
     where:  { orgId_urlHash: { orgId, urlHash } },
     create: { orgId, url, urlHash, ...data },
     update: data,
@@ -164,7 +164,7 @@ export const checkAndEnqueue = async (orgId, url, priority = "normal") => {
   }
 
   // 3. DB check
-  const existing = await prisma.scrapedPage.findUnique({
+  const existing = await db.read.scrapedPage.findUnique({
     where: { orgId_urlHash: { orgId, urlHash } },
     select: { status: true, lastScrapedAt: true },
   });
@@ -275,7 +275,7 @@ export const processScrapeJob = async (job) => {
   const contentHash = hashContent(embeddingText);
 
   // ── 6. Deduplication — skip embedding if content unchanged ────────────────
-  const dbRecord = await prisma.scrapedPage.findUnique({
+  const dbRecord = await db.read.scrapedPage.findUnique({
     where:  { orgId_urlHash: { orgId, urlHash } },
     select: { contentHash: true, chunkCount: true },
   });
@@ -345,7 +345,7 @@ export const processScrapeJob = async (job) => {
  * @returns {{ deleted: number, embeddingJobId: string|null }}
  */
 export const deleteStalePages = async (orgId, cutoff) => {
-  const staleRows = await prisma.scrapedPage.findMany({
+  const staleRows = await db.read.scrapedPage.findMany({
     where: {
       orgId,
       createdAt: { lt: cutoff },
@@ -364,7 +364,7 @@ export const deleteStalePages = async (orgId, cutoff) => {
   const { jobId: embeddingJobId } = await enqueueDeleteDocuments(orgId, documentIds);
 
   // 2. Mark rows as STALE in DB (don't hard-delete until vectors are gone)
-  await prisma.scrapedPage.updateMany({
+  await db.write.scrapedPage.updateMany({
     where: { id: { in: staleRows.map((r) => r.id) } },
     data:  { status: "STALE" },
   });
@@ -387,7 +387,7 @@ export const deleteStalePages = async (orgId, cutoff) => {
  * deletion job to have completed (called a day after marking STALE).
  */
 export const purgeStaleDbRows = async (orgId, olderThan) => {
-  const { count } = await prisma.scrapedPage.deleteMany({
+  const { count } = await db.write.scrapedPage.deleteMany({
     where: {
       orgId,
       status:    "STALE",

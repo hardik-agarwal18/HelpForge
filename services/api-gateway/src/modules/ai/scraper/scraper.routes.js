@@ -23,7 +23,7 @@
  */
 
 import { Router } from "express";
-import prisma from "../../../config/database.config.js";
+import db from "../../../config/database.config.js";
 import logger from "../../../config/logger.js";
 import { requireAuth } from "../../auth/auth.middleware.js";
 import { scraperCache, hashUrl } from "./scraper.cache.js";
@@ -75,7 +75,7 @@ router.get("/status/:orgId/:urlHash", requireAuth, async (req, res, next) => {
   try {
     const { orgId, urlHash } = req.params;
 
-    const page = await prisma.scrapedPage.findUnique({
+    const page = await db.read.scrapedPage.findUnique({
       where:  { orgId_urlHash: { orgId, urlHash } },
       select: {
         status:         true,
@@ -112,13 +112,13 @@ router.get("/stats/:orgId", requireAuth, async (req, res, next) => {
 
     const [statusCounts, totals] = await Promise.all([
       // Status breakdown
-      prisma.scrapedPage.groupBy({
+      db.read.scrapedPage.groupBy({
         by:     ["status"],
         where:  { orgId },
         _count: { _all: true },
       }),
       // Aggregate metrics
-      prisma.scrapedPage.aggregate({
+      db.read.scrapedPage.aggregate({
         where:  { orgId },
         _count: { _all: true },
         _sum:   { chunkCount: true },
@@ -154,7 +154,7 @@ router.delete("/pages/:orgId/:urlHash", requireAuth, async (req, res, next) => {
   try {
     const { orgId, urlHash } = req.params;
 
-    const page = await prisma.scrapedPage.findUnique({
+    const page = await db.read.scrapedPage.findUnique({
       where:  { orgId_urlHash: { orgId, urlHash } },
       select: { url: true, status: true },
     });
@@ -167,7 +167,7 @@ router.delete("/pages/:orgId/:urlHash", requireAuth, async (req, res, next) => {
     await scraperCache.invalidate(orgId, page.url);
 
     // Delete DB row so checkAndEnqueue sees it as fresh
-    await prisma.scrapedPage.delete({
+    await db.write.scrapedPage.delete({
       where: { orgId_urlHash: { orgId, urlHash } },
     });
 
