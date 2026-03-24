@@ -15,3 +15,5 @@ perf
 
 docs/dev
 _pycache__/
+
+logs/
