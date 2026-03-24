@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 import express from "express";
 import "./events/registerHandlers.js";
+import db, { requestContext } from "./config/database.config.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
 import organizationRoutes from "./modules/organization/org.routes.js";
@@ -16,8 +18,26 @@ const app = express();
 
 app.use(express.json());
 
+// Attach requestId + propagate through AsyncLocalStorage for DB tracing
+app.use((req, res, next) => {
+  req.id = req.headers["x-request-id"] || crypto.randomUUID();
+  res.setHeader("x-request-id", req.id);
+  requestContext.run({ requestId: req.id }, next);
+});
+
 app.get("/", (_req, res) => {
   res.send("Hello from API Gateway!");
+});
+
+// Health & metrics
+app.get("/health/db", async (_req, res) => {
+  const status = await db.healthCheck();
+  const ok = status.write && status.read;
+  res.status(ok ? 200 : 503).json(status);
+});
+
+app.get("/metrics/db", (_req, res) => {
+  res.json(db.getMetrics());
 });
 
 // Routes
