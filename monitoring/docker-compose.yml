@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  # ── Application Services ──────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: helpforge-api-gateway
+    ports:
+      - "5000:5000"
+    env_file:
+      - ../services/api-gateway/.env
+    environment:
+      - PORT=5000
+    restart: unless-stopped
+
+  chatbot-service:
+    build:
+      context: ../services/chatbot-service
+      dockerfile: Dockerfile
+    container_name: helpforge-chatbot
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../services/chatbot-service/.env
+    restart: unless-stopped
+
+  # ── Monitoring Stack ──────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: helpforge-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    depends_on:
+      - api-gateway
+      - chatbot-service
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: helpforge-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

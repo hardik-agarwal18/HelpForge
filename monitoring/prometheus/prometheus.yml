@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # API Gateway (Node.js)
+  - job_name: "api-gateway"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api-gateway:5000"]
+        labels:
+          service: api-gateway
+
+  # Chatbot Service (FastAPI)
+  - job_name: "chatbot-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["chatbot-service:8000"]
+        labels:
+          service: chatbot-service
