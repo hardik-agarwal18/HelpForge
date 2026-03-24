@@ -21,7 +21,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { createRedisClient } from "../../../config/redis.config.js";
+import { getCacheClient } from "../../../config/redis.config.js";
 import logger from "../../../config/logger.js";
 
 const CACHE_TTL_SECONDS =
@@ -45,7 +45,7 @@ class ScraperCache {
   /** Lazy initialisation — called on first use. */
   _redis() {
     if (!this._client) {
-      this._client = createRedisClient();
+      this._client = getCacheClient();
     }
     return this._client;
   }
@@ -119,10 +119,7 @@ class ScraperCache {
   }
 
   async close() {
-    if (this._client) {
-      await this._client.quit().catch(() => {});
-      this._client = null;
-    }
+    this._client = null;
   }
 }
 

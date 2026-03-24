@@ -26,7 +26,7 @@
 
 import { Queue } from "bullmq";
 import { createHash } from "node:crypto";
-import { getSharedBullmqConnection } from "../../../config/redis.config.js";
+import { getQueueConnection } from "../../../config/redis.config.js";
 import logger from "../../../config/logger.js";
 
 export const SCRAPER_QUEUE    = "scraper-jobs";
@@ -48,7 +48,7 @@ let _queue = null;
 
 const getQueue = () => {
   if (_queue) return _queue;
-  const connection = getSharedBullmqConnection();
+  const connection = getQueueConnection();
   if (!connection) {
     logger.warn("Scraper queue unavailable (Redis connection missing)");
     return null;

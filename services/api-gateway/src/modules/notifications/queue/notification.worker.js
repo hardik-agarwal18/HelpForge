@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-import { createRedisClient } from "../../../config/redis.config.js";
+import { createWorkerConnection } from "../../../config/redis.config.js";
 import { sendNotification } from "../notification.provider.js";
 import { getNotificationQueueName } from "./notification.queue.js";
 
@@ -26,7 +26,7 @@ export const startNotificationWorker = () => {
     return worker;
   }
 
-  const connection = createRedisClient();
+  const connection = createWorkerConnection("notification");
 
   if (!connection) {
     logger.info("Notification worker skipped (Redis client unavailable)");

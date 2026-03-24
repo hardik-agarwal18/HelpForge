@@ -1,5 +1,5 @@
 import logger from "../../../../config/logger.js";
-import { createRedisClient } from "../../../../config/redis.config.js";
+import { getCacheClient as getRedisCache } from "../../../../config/redis.config.js";
 import aiConfig from "../config/ai.config.js";
 
 let cacheClient;
@@ -10,7 +10,7 @@ const getCacheClient = () => {
   }
 
   if (!cacheClient) {
-    cacheClient = createRedisClient();
+    cacheClient = getRedisCache();
   }
 
   return cacheClient;

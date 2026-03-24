@@ -16,7 +16,7 @@ import { createHash, createHmac } from "node:crypto";
 import { Worker } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-import { createRedisClient } from "../../../config/redis.config.js";
+import { createWorkerConnection } from "../../../config/redis.config.js";
 import {
   CHATBOT_BRIDGE_QUEUE,
   JOB_ANALYZE_FEEDBACK,
@@ -142,7 +142,7 @@ export const startChatbotBridgeWorker = () => {
 
   if (worker) return worker;
 
-  const connection = createRedisClient();
+  const connection = createWorkerConnection("chatbot-bridge");
   if (!connection) {
     logger.info("Chatbot bridge worker skipped (Redis unavailable)");
     return null;

@@ -26,7 +26,7 @@ import { Worker } from "bullmq";
 import db from "../../../config/database.config.js";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-import { createRedisClient } from "../../../config/redis.config.js";
+import { createWorkerConnection } from "../../../config/redis.config.js";
 import {
   JOB_CLEANUP_STALE,
   JOB_SCRAPE_PAGE,
@@ -99,7 +99,7 @@ export const startScraperWorker = () => {
 
   if (worker) return worker;
 
-  const connection = createRedisClient();
+  const connection = createWorkerConnection("scraper");
   if (!connection) {
     logger.info("Scraper worker skipped (Redis unavailable)");
     return null;

@@ -12,7 +12,7 @@
 
 import { Queue } from "bullmq";
 import logger from "../../../config/logger.js";
-import { getSharedBullmqConnection } from "../../../config/redis.config.js";
+import { getQueueConnection } from "../../../config/redis.config.js";
 
 // ── Job name constants ────────────────────────────────────────────────────────
 export const CHATBOT_BRIDGE_QUEUE    = "chatbot-bridge";
@@ -27,7 +27,7 @@ export const JOB_DELETE_DOCUMENTS    = "delete-documents";
 let queue;
 
 const getQueue = () => {
-  const connection = getSharedBullmqConnection();
+  const connection = getQueueConnection();
   if (!connection) return null;
 
   if (!queue) {

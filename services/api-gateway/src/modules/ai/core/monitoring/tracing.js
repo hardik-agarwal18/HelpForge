@@ -32,7 +32,7 @@
 import { randomUUID } from "crypto";
 import logger from "../../../../config/logger.js";
 import aiConfig from "../config/ai.config.js";
-import { getSharedBullmqConnection } from "../../../../config/redis.config.js";
+import { getCacheClient } from "../../../../config/redis.config.js";
 
 // ── Cost table (matches chatbot-service/_COST_TABLE) ──────────────────────────
 const COST_TABLE = {
@@ -67,7 +67,7 @@ const computeCost = (promptTokens = 0, completionTokens = 0, model) => {
 // ── Redis helpers ─────────────────────────────────────────────────────────────
 
 const persistUsage = async ({ ticketId, organizationId, tokensUsed, cost }) => {
-  const redis = getSharedBullmqConnection();
+  const redis = getCacheClient();
   if (!redis || !tokensUsed) return;
 
   const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
@@ -92,7 +92,7 @@ const persistUsage = async ({ ticketId, organizationId, tokensUsed, cost }) => {
 };
 
 const persistTraceBlob = async (trace) => {
-  const redis = getSharedBullmqConnection();
+  const redis = getCacheClient();
   if (!redis) return;
 
   const key = `trace:${trace.orgId}:${trace.ticketId}:${trace.traceId}`;

@@ -28,7 +28,7 @@ import {
   buildAITicketUsageCacheKey,
 } from "../cache/cache.keys.js";
 import { incrementHashValues } from "../cache/cache.service.js";
-import { getSharedBullmqConnection } from "../../../../config/redis.config.js";
+import { getCacheClient } from "../../../../config/redis.config.js";
 
 const TRACE_TTL_SECONDS = 7 * 24 * 3600;
 
@@ -147,7 +147,7 @@ export const logAITrace = async (trace) => {
   }
 
   // ── 2. Persist full trace blob to Redis (TTL 7 days) ──────────────────────
-  const redis = getSharedBullmqConnection();
+  const redis = getCacheClient();
   if (redis && trace.traceId && trace.orgId && trace.ticketId) {
     const traceKey = `trace:${trace.orgId}:${trace.ticketId}:${trace.traceId}`;
     redis

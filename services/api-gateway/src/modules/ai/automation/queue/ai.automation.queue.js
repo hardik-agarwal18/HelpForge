@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import logger from "../../../../config/logger.js";
-import { getSharedBullmqConnection } from "../../../../config/redis.config.js";
+import { getQueueConnection } from "../../../../config/redis.config.js";
 import aiConfig from "../../core/config/ai.config.js";
 import {
   createAIProcessingFailure,
@@ -18,7 +18,7 @@ const {
 let queue;
 
 const getQueue = () => {
-  const redisConnection = getSharedBullmqConnection();
+  const redisConnection = getQueueConnection();
 
   if (!redisConnection) {
     return null;

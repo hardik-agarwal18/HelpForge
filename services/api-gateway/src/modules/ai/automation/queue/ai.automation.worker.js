@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import config from "../../../../config/index.js";
 import logger from "../../../../config/logger.js";
-import { createRedisClient } from "../../../../config/redis.config.js";
+import { createWorkerConnection } from "../../../../config/redis.config.js";
 import { handleCommentAdded } from "../ai.automation.service.js";
 import {
   getAIAutomationQueueName,
@@ -31,7 +31,7 @@ export const startAIAutomationWorker = () => {
     return worker;
   }
 
-  const connection = createRedisClient();
+  const connection = createWorkerConnection("ai-automation");
 
   if (!connection) {
     logger.info("AI automation worker skipped (Redis client unavailable)");

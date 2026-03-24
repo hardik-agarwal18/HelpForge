@@ -1,14 +1,14 @@
 import { Queue } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
-import { getSharedBullmqConnection } from "../../../config/redis.config.js";
+import { getQueueConnection } from "../../../config/redis.config.js";
 
 const NOTIFICATION_QUEUE_NAME = "notification-delivery";
 
 let queue;
 
 const getQueue = () => {
-  const redisConnection = getSharedBullmqConnection();
+  const redisConnection = getQueueConnection();
 
   if (!redisConnection) {
     return null;
