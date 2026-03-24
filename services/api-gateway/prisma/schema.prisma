@@ -55,6 +55,10 @@ model User {
 
   tokenIssuedAt DateTime?
 
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  updatedAt DateTime  @updatedAt
+
   notificationPreference NotificationPreference?
   refreshTokens          RefreshToken[]
 }
