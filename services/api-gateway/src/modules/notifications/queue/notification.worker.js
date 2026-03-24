@@ -54,7 +54,15 @@ export const startNotificationWorker = () => {
   return worker;
 };
 
+export const stopNotificationWorker = async () => {
+  if (worker) {
+    await worker.close();
+    worker = null;
+  }
+};
+
 export default {
   processNotificationJob,
   startNotificationWorker,
+  stopNotificationWorker,
 };

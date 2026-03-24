@@ -17,11 +17,38 @@ import { errorHandler } from "./utils/errorHandler.js";
 
 const app = express();
 
+const REQUEST_TIMEOUT_MS =
+  parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 30_000;
+const HEALTH_CHECK_TIMEOUT_MS = 5_000;
+
 app.use(express.json());
+
+// Reject new requests during shutdown
+app.use((_req, res, next) => {
+  if (app.locals.isShuttingDown) {
+    res.set("Connection", "close");
+    return res.status(503).json({ error: "Server is shutting down" });
+  }
+  next();
+});
+
+// Request timeout — abort if handler doesn't respond within the limit
+app.use((_req, res, next) => {
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ error: "Request timed out" });
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  res.on("close", () => clearTimeout(timer));
+  next();
+});
 
 // Attach requestId + propagate through AsyncLocalStorage for DB tracing
 app.use((req, res, next) => {
-  req.id = req.headers["x-request-id"] || crypto.randomUUID();
+  const incoming =
+    req.headers["x-request-id"] || req.headers["X-Request-ID"] || "";
+  req.id = incoming || crypto.randomUUID();
   res.setHeader("x-request-id", req.id);
   requestContext.run({ requestId: req.id }, next);
 });
@@ -30,19 +57,46 @@ app.get("/", (_req, res) => {
   res.send("Hello from API Gateway!");
 });
 
-// Health & metrics
-app.get("/health", async (_req, res) => {
-  const [dbStatus, redisStatus] = await Promise.all([
-    db.healthCheck(),
-    redisHealthCheck(),
-  ]);
+// K8s liveness — process alive, no dependency checks
+app.get("/health/live", (_req, res) => {
+  if (app.locals.isShuttingDown) {
+    return res.status(503).json({ status: "shutting_down" });
+  }
+  res.json({ status: "alive" });
+});
 
-  const ok = dbStatus.write && dbStatus.read && redisStatus.connected;
-  res.status(ok ? 200 : 503).json({
-    status: ok ? "healthy" : "degraded",
-    db: dbStatus,
-    redis: redisStatus,
-  });
+// K8s readiness — DB + Redis must be reachable, with timeout protection
+app.get("/health/ready", async (_req, res) => {
+  if (app.locals.isShuttingDown) {
+    return res.status(503).json({ status: "shutting_down" });
+  }
+
+  try {
+    const [dbStatus, redisStatus] = await Promise.race([
+      Promise.all([db.healthCheck(), redisHealthCheck()]),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Health check timed out")),
+          HEALTH_CHECK_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+
+    const ok = dbStatus.write && dbStatus.read && redisStatus.connected;
+    res.status(ok ? 200 : 503).json({
+      status: ok ? "healthy" : "degraded",
+      db: dbStatus,
+      redis: redisStatus,
+    });
+  } catch {
+    res.status(503).json({ status: "timeout" });
+  }
+});
+
+// Backward compat — alias to readiness
+app.get("/health", (req, res, next) => {
+  req.url = "/health/ready";
+  app.handle(req, res, next);
 });
 
 app.get("/metrics/db", (_req, res) => {

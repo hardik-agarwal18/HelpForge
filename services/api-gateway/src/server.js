@@ -4,9 +4,18 @@ import config from "./config/index.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
 import { disconnectRedis } from "./config/redis.config.js";
-import { startAIAutomationWorker } from "./modules/ai/automation/queue/ai.automation.worker.js";
-import { startChatbotBridgeWorker } from "./modules/ai/bridge/chatbot.bridge.worker.js";
-import { startNotificationWorker } from "./modules/notifications/queue/notification.worker.js";
+import {
+  startAIAutomationWorker,
+  stopAIAutomationWorker,
+} from "./modules/ai/automation/queue/ai.automation.worker.js";
+import {
+  startChatbotBridgeWorker,
+  stopChatbotBridgeWorker,
+} from "./modules/ai/bridge/chatbot.bridge.worker.js";
+import {
+  startNotificationWorker,
+  stopNotificationWorker,
+} from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
 import {
   startScraperWorker,
@@ -38,29 +47,42 @@ const startServer = async () => {
 
 const SHUTDOWN_TIMEOUT_MS =
   parseInt(process.env.SHUTDOWN_TIMEOUT_MS, 10) || 15_000;
+const WORKER_STOP_TIMEOUT_MS = 5_000;
 
 let isShuttingDown = false;
+
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${ms}ms`)),
+        ms,
+      ),
+    ),
+  ]);
 
 const gracefulShutdown = async (signal) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  app.locals.isShuttingDown = true;
 
-  logger.info(
-    { signal },
-    "Received shutdown signal — starting graceful shutdown",
-  );
+  const shutdownStart = Date.now();
+  logger.info({ phase: "shutdown_started", signal }, "Graceful shutdown initiated");
 
   // Force exit if shutdown hangs
   const forceTimer = setTimeout(() => {
-    logger.error("Graceful shutdown timed out — forcing exit");
+    logger.error(
+      { phase: "shutdown_forced", elapsedMs: Date.now() - shutdownStart },
+      "Graceful shutdown timed out — forcing exit",
+    );
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
   forceTimer.unref();
 
   try {
-    // 1. Stop accepting new connections + drain in-flight requests
+    // Phase 1: Stop accepting new connections + drain in-flight requests
     await new Promise((resolve, reject) => {
-      // Destroy idle keep-alive sockets so they don't hold the server open
       server.closeIdleConnections();
 
       server.close((err) => {
@@ -68,34 +90,107 @@ const gracefulShutdown = async (signal) => {
         else resolve();
       });
 
-      // After a grace period, forcibly close remaining connections
-      setTimeout(
-        () => {
-          server.closeAllConnections();
-        },
-        Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6),
-      );
+      setTimeout(() => {
+        server.closeAllConnections();
+      }, Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6));
     });
 
-    logger.info("HTTP server closed — all in-flight requests completed");
+    logger.info(
+      { phase: "http_drained", elapsedMs: Date.now() - shutdownStart },
+      "HTTP server closed — in-flight requests drained",
+    );
 
-    // 2. Stop workers + crons (stop consuming before disconnecting backends)
+    // Phase 2: Stop crons
     stopScrapeCleanup();
-    await stopScraperWorker();
 
-    // 3. Disconnect data stores
-    await Promise.allSettled([db.disconnect(), disconnectRedis()]);
+    logger.info(
+      { phase: "crons_stopped", elapsedMs: Date.now() - shutdownStart },
+      "Cron jobs stopped",
+    );
 
-    logger.info("API Gateway shutdown complete");
+    // Phase 3: Stop workers that depend on queues (consume jobs)
+    const workerStops = [
+      ["scraper", () => withTimeout(stopScraperWorker(), WORKER_STOP_TIMEOUT_MS, "scraper-worker")],
+      ["chatbot-bridge", () => withTimeout(stopChatbotBridgeWorker(), WORKER_STOP_TIMEOUT_MS, "chatbot-bridge-worker")],
+      ["ai-automation", () => withTimeout(stopAIAutomationWorker(), WORKER_STOP_TIMEOUT_MS, "ai-automation-worker")],
+      ["notification", () => withTimeout(stopNotificationWorker(), WORKER_STOP_TIMEOUT_MS, "notification-worker")],
+    ];
+
+    const workerResults = await Promise.allSettled(
+      workerStops.map(([, stop]) => stop()),
+    );
+
+    workerStops.forEach(([name], i) => {
+      const result = workerResults[i];
+      if (result.status === "rejected") {
+        logger.warn(
+          { phase: "workers_stopped", worker: name, error: result.reason?.message, stack: result.reason?.stack },
+          `Worker stop failed: ${name}`,
+        );
+      }
+    });
+
+    logger.info(
+      { phase: "workers_stopped", elapsedMs: Date.now() - shutdownStart },
+      "All workers stopped",
+    );
+
+    // Phase 4: Disconnect data stores (after workers are done using them)
+    const storeStops = [
+      ["database", () => db.disconnect()],
+      ["redis", () => disconnectRedis()],
+    ];
+
+    const storeResults = await Promise.allSettled(
+      storeStops.map(([, stop]) => stop()),
+    );
+
+    storeStops.forEach(([name], i) => {
+      const result = storeResults[i];
+      if (result.status === "rejected") {
+        logger.warn(
+          { phase: "stores_disconnected", store: name, error: result.reason?.message, stack: result.reason?.stack },
+          `Data store disconnect failed: ${name}`,
+        );
+      }
+    });
+
+    logger.info(
+      { phase: "stores_disconnected", elapsedMs: Date.now() - shutdownStart },
+      "Data stores disconnected",
+    );
+
+    logger.info(
+      { phase: "shutdown_complete", elapsedMs: Date.now() - shutdownStart },
+      "API Gateway shutdown complete",
+    );
     process.exit(0);
   } catch (error) {
-    logger.error({ error: error.message }, "Error during graceful shutdown");
+    logger.error(
+      { phase: "shutdown_error", error: error.message, elapsedMs: Date.now() - shutdownStart },
+      "Error during graceful shutdown",
+    );
     process.exit(1);
   }
 };
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+process.on("unhandledRejection", (reason) => {
+  logger.error(
+    { error: reason instanceof Error ? reason.message : reason, stack: reason?.stack },
+    "Unhandled promise rejection",
+  );
+});
+
+process.on("uncaughtException", (error) => {
+  logger.fatal(
+    { error: error.message, stack: error.stack },
+    "Uncaught exception — shutting down",
+  );
+  gracefulShutdown("uncaughtException");
+});
 
 startServer().catch((error) => {
   logger.error({ error }, "Failed to start API Gateway");

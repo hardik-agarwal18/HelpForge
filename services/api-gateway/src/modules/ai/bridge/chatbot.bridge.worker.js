@@ -198,4 +198,11 @@ export const startChatbotBridgeWorker = () => {
   return worker;
 };
 
-export default { startChatbotBridgeWorker };
+export const stopChatbotBridgeWorker = async () => {
+  if (worker) {
+    await worker.close();
+    worker = null;
+  }
+};
+
+export default { startChatbotBridgeWorker, stopChatbotBridgeWorker };

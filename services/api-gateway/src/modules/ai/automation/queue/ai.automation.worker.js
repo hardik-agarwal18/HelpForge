@@ -88,6 +88,13 @@ export const startAIAutomationWorker = () => {
   return worker;
 };
 
+export const stopAIAutomationWorker = async () => {
+  if (worker) {
+    await worker.close();
+    worker = null;
+  }
+};
+
 export default {
   processAICommentJob,
   startAIAutomationWorker,
