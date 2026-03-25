@@ -1,0 +1,8 @@
+node_modules
+coverage
+logs
+.env
+.env.*
+*.log
+tests
+perf
