@@ -1,10 +1,14 @@
 import {
   createOrganizationService,
+  createRoleService,
   deleteOrganizationService,
+  deleteRoleService,
   getOrganizationByUserIdService,
+  getRolesService,
   inviteMemberInOrganizationService,
   updateMemberFromOrganizationService,
   updateOrganizationService,
+  updateRoleService,
   viewAllMembersInOrganizationService,
 } from "./org.service.js";
 
@@ -96,12 +100,12 @@ export const viewAllMembersInOrganizationController = async (req, res, next) => 
 
 export const inviteMemberInOrganizationController = async (req, res, next) => {
   try {
-    const { userId, role } = req.body;
+    const { userId, roleId } = req.body;
 
     const membership = await inviteMemberInOrganizationService(
       req.params.orgId,
       userId,
-      role,
+      roleId,
       req.membership,
     );
 
@@ -119,13 +123,81 @@ export const updateMemberFromOrganizationController = async (req, res, next) => 
     const updatedMembership = await updateMemberFromOrganizationService(
       req.params.orgId,
       req.params.userId,
-      req.body.role,
+      req.body.roleId,
       req.membership,
     );
 
     return res.status(200).json({
       success: true,
       data: { membership: updatedMembership },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── Role CRUD ────────────────────────────────────────────────────────
+
+export const getRolesController = async (req, res, next) => {
+  try {
+    const roles = await getRolesService(req.params.orgId);
+
+    return res.status(200).json({
+      success: true,
+      data: { roles },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createRoleController = async (req, res, next) => {
+  try {
+    const role = await createRoleService(
+      req.params.orgId,
+      req.body,
+      req.membership,
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: { role },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateRoleController = async (req, res, next) => {
+  try {
+    const role = await updateRoleService(
+      req.params.orgId,
+      req.params.roleId,
+      req.body,
+      req.membership,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { role },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteRoleController = async (req, res, next) => {
+  try {
+    const role = await deleteRoleService(
+      req.params.orgId,
+      req.params.roleId,
+      req.membership,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Role deleted successfully",
+      data: { role },
     });
   } catch (error) {
     next(error);

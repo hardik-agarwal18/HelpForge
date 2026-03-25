@@ -1,8 +1,9 @@
 import { getUserMembershipInOrganization } from "./org.repo.js";
+import { PERMISSIONS } from "./org.constants.js";
 
 /**
  * Middleware to verify user membership in an organization
- * Attaches organization and membership to req.organization and req.membership
+ * Attaches organization and membership (with role + permissions) to req
  */
 export const verifyOrganizationMembership = async (req, res, next) => {
   try {
@@ -34,19 +35,22 @@ export const verifyOrganizationMembership = async (req, res, next) => {
 };
 
 /**
- * Middleware to verify user has specific role(s) in the organization
+ * Middleware to verify user has specific permission(s) in the organization
  * Must be used after verifyOrganizationMembership
  */
-export const requireRole = (...allowedRoles) => {
+export const requirePermission = (...requiredPermissions) => {
   return (req, res, next) => {
-    if (!req.membership) {
+    if (!req.membership?.role) {
       return res.status(500).json({
         success: false,
         message: "Organization membership not verified",
       });
     }
 
-    if (!allowedRoles.includes(req.membership.role)) {
+    const memberPermissions = req.membership.role.permissions || [];
+    const hasAll = requiredPermissions.every((p) => memberPermissions.includes(p));
+
+    if (!hasAll) {
       return res.status(403).json({
         success: false,
         message: "You do not have permission to perform this action",
@@ -57,14 +61,6 @@ export const requireRole = (...allowedRoles) => {
   };
 };
 
-/**
- * Middleware to verify user is owner or admin
- * Must be used after verifyOrganizationMembership
- */
-export const requireOwnerOrAdmin = requireRole("OWNER", "ADMIN");
-
-/**
- * Middleware to verify user is owner
- * Must be used after verifyOrganizationMembership
- */
-export const requireOwner = requireRole("OWNER");
+// Convenience aliases matching common route guards
+export const requireOwnerOrAdmin = requirePermission(PERMISSIONS.ORG_UPDATE);
+export const requireOwner = requirePermission(PERMISSIONS.ORG_DELETE);
