@@ -1,29 +1,29 @@
 import { ApiError } from "../../utils/errorHandler.js";
-import { TICKET_ROLE_POLICIES } from "./ticket.constants.js";
+import { PERMISSIONS } from "../organization/org.constants.js";
 
-export const getTicketRolePolicy = (role) =>
-  TICKET_ROLE_POLICIES[role] ?? TICKET_ROLE_POLICIES.MEMBER;
+const has = (permissions, permission) =>
+  Array.isArray(permissions) && permissions.includes(permission);
 
-export const canViewAllOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canViewAll;
+export const canViewAllOrganizationTickets = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_VIEW_ALL);
 
-export const canEditAllOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canEditAll;
+export const canEditAllOrganizationTickets = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_EDIT_ALL);
 
-export const canAssignOrganizationTickets = (role) =>
-  getTicketRolePolicy(role).canAssign;
+export const canAssignOrganizationTickets = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_ASSIGN);
 
 export const canMemberViewTicket = (ticket, userId) =>
   ticket.createdById === userId || ticket.assignedToId === userId;
 
-export const canCreateInternalComment = (role) =>
-  getTicketRolePolicy(role).canCreateInternalComment;
+export const canCreateInternalComment = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT);
 
-export const canDeleteAnyTicketComment = (role) =>
-  getTicketRolePolicy(role).canDeleteAnyComment;
+export const canDeleteAnyTicketComment = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_DELETE_ANY_COMMENT);
 
-export const canDeleteAnyTicketAttachment = (role) =>
-  getTicketRolePolicy(role).canDeleteAnyComment;
+export const canDeleteAnyTicketAttachment = (permissions) =>
+  has(permissions, PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT);
 
 export const assertCanUpdateTicket = (
   membership,
@@ -31,11 +31,13 @@ export const assertCanUpdateTicket = (
   userId,
   updateData,
 ) => {
-  if (canEditAllOrganizationTickets(membership.role)) {
+  const permissions = membership.role?.permissions || [];
+
+  if (canEditAllOrganizationTickets(permissions)) {
     return;
   }
 
-  if (membership.role !== "MEMBER" || ticket.createdById !== userId) {
+  if (!canMemberViewTicket(ticket, userId)) {
     throw new ApiError(403, "You do not have permission to update this ticket", "TICKET_UPDATE_FORBIDDEN");
   }
 
@@ -45,7 +47,7 @@ export const assertCanUpdateTicket = (
   if (!attemptedFields.every((field) => allowedFields.includes(field))) {
     throw new ApiError(
       403,
-      "Members can only update title, description, and priority on their own tickets",
+      "You can only update title, description, and priority on your own tickets",
       "TICKET_UPDATE_FORBIDDEN",
     );
   }

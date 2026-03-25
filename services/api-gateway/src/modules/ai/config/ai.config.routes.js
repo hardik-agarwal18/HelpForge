@@ -3,8 +3,9 @@ import { authenticate } from "../../../middleware/auth.middleware.js";
 import { validate } from "../../../middleware/validation.middleware.js";
 import {
   verifyOrganizationMembership,
-  requireOwnerOrAdmin,
+  requirePermission,
 } from "../../organization/org.middleware.js";
+import { PERMISSIONS } from "../../organization/org.constants.js";
 import {
   getAIConfigController,
   createAIConfigController,
@@ -23,7 +24,7 @@ router.get(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
-  requireOwnerOrAdmin,
+  requirePermission(PERMISSIONS.AI_MANAGE_CONFIG),
   validate(getAIConfigSchema),
   getAIConfigController,
 );
@@ -33,7 +34,7 @@ router.post(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
-  requireOwnerOrAdmin,
+  requirePermission(PERMISSIONS.AI_MANAGE_CONFIG),
   validate(createAIConfigSchema),
   createAIConfigController,
 );
@@ -43,7 +44,7 @@ router.patch(
   "/:orgId",
   authenticate,
   verifyOrganizationMembership,
-  requireOwnerOrAdmin,
+  requirePermission(PERMISSIONS.AI_MANAGE_CONFIG),
   validate(updateAIConfigSchema),
   updateAIConfigController,
 );

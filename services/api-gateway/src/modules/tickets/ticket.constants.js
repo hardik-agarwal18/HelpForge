@@ -4,33 +4,3 @@ export const TICKET_SOURCES = ["WEB", "EMAIL", "CHAT", "API"];
 
 export const TICKET_STATUSES = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 
-export const TICKET_ROLE_POLICIES = {
-  OWNER: {
-    canViewAll: true,
-    canEditAll: true,
-    canAssign: true,
-    canCreateInternalComment: true,
-    canDeleteAnyComment: true,
-  },
-  ADMIN: {
-    canViewAll: true,
-    canEditAll: true,
-    canAssign: true,
-    canCreateInternalComment: true,
-    canDeleteAnyComment: true,
-  },
-  AGENT: {
-    canViewAll: true,
-    canEditAll: true,
-    canAssign: true,
-    canCreateInternalComment: true,
-    canDeleteAnyComment: true,
-  },
-  MEMBER: {
-    canViewAll: false,
-    canEditAll: false,
-    canAssign: false,
-    canCreateInternalComment: false,
-    canDeleteAnyComment: false,
-  },
-};

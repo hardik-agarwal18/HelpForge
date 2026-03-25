@@ -63,10 +63,10 @@ import {
 } from "./ticket.filters.js";
 import { autoAssignTicketForOrganization } from "./ticket.autoAssign.js";
 
-const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
+import { PERMISSIONS } from "../organization/org.constants.js";
 
-const filterInternalCommentsForRole = (ticket, role) => {
-  if (canViewAllOrganizationTickets(role) || !ticket.comments) {
+const filterInternalCommentsForRole = (ticket, permissions) => {
+  if (canViewAllOrganizationTickets(permissions) || !ticket.comments) {
     return ticket;
   }
 
@@ -76,8 +76,8 @@ const filterInternalCommentsForRole = (ticket, role) => {
   };
 };
 
-const filterCommentsForRole = (comments, role) => {
-  if (canViewAllOrganizationTickets(role)) {
+const filterCommentsForRole = (comments, permissions) => {
+  if (canViewAllOrganizationTickets(permissions)) {
     return comments;
   }
 
@@ -87,7 +87,7 @@ const filterCommentsForRole = (comments, role) => {
 const getStaffMemberships = async (userId) => {
   const memberships = await getTicketMembershipsByUserId(userId);
   return memberships.filter((membership) =>
-    STAFF_ROLES.includes(membership.role),
+    membership.role?.permissions?.includes(PERMISSIONS.TICKET_VIEW_ALL),
   );
 };
 
@@ -178,7 +178,7 @@ export const autoAssignTicketService = async (ticketId, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canAssignOrganizationTickets(membership.role)
+    !canAssignOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(
       403,
@@ -199,7 +199,7 @@ export const createTagService = async (tagData, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canEditAllOrganizationTickets(membership.role)
+    !canEditAllOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(403, "You do not have permission to create tags", "FORBIDDEN");
   }
@@ -266,7 +266,7 @@ export const getTicketsService = async (query, userId) => {
 
   const tickets = await getTickets({
     ...baseFilters,
-    ...(!canViewAllOrganizationTickets(membership.role)
+    ...(!canViewAllOrganizationTickets(membership.role?.permissions)
       ? {
           OR: [{ createdById: userId }, { assignedToId: userId }],
         }
@@ -361,8 +361,8 @@ export const updateMyAgentAvailabilityService = async (
     );
   }
 
-  if (membership.role !== "AGENT") {
-    throw new ApiError(403, "Only agents can update their availability", "AGENT_ROLE_REQUIRED");
+  if (!membership.role?.permissions?.includes(PERMISSIONS.AGENT_UPDATE_AVAILABILITY)) {
+    throw new ApiError(403, "You do not have permission to update availability", "AGENT_ROLE_REQUIRED");
   }
 
   const updatedMembership = await updateAgentAvailability(
@@ -395,13 +395,13 @@ export const getTicketByIdService = async (ticketId, userId) => {
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(403, "You do not have permission to view this ticket", "FORBIDDEN");
   }
 
-  return filterInternalCommentsForRole(ticket, membership.role);
+  return filterInternalCommentsForRole(ticket, membership.role?.permissions);
 };
 
 export const updateTicketService = async (ticketId, ticketData, userId) => {
@@ -440,7 +440,7 @@ export const updateTicketService = async (ticketId, ticketData, userId) => {
     throw new ApiError(500, "Failed to update ticket", "TICKET_UPDATE_FAILED");
   }
 
-  return filterInternalCommentsForRole(updatedTicket, membership.role);
+  return filterInternalCommentsForRole(updatedTicket, membership.role?.permissions);
 };
 
 export const assignTicketService = async (ticketId, assignedToId, userId) => {
@@ -458,7 +458,7 @@ export const assignTicketService = async (ticketId, assignedToId, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canAssignOrganizationTickets(membership.role)
+    !canAssignOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(403, "You do not have permission to assign this ticket", "FORBIDDEN");
   }
@@ -505,7 +505,7 @@ export const updateTicketStatusService = async (ticketId, status, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canEditAllOrganizationTickets(membership.role)
+    !canEditAllOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(
       403,
@@ -563,7 +563,7 @@ export const createTicketCommentService = async (
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(
@@ -575,7 +575,7 @@ export const createTicketCommentService = async (
 
   const isInternal = commentData.isInternal === true;
 
-  if (isInternal && !canCreateInternalComment(membership.role)) {
+  if (isInternal && !canCreateInternalComment(membership.role?.permissions)) {
     throw new ApiError(
       403,
       "You do not have permission to create internal comments",
@@ -603,7 +603,7 @@ export const createTicketCommentService = async (
     },
   });
 
-  if (!canViewAllOrganizationTickets(membership.role) && comment.isInternal) {
+  if (!canViewAllOrganizationTickets(membership.role?.permissions) && comment.isInternal) {
     return {
       ...comment,
       isInternal: false,
@@ -634,7 +634,7 @@ export const getTicketCommentsService = async (ticketId, userId) => {
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(
@@ -646,7 +646,7 @@ export const getTicketCommentsService = async (ticketId, userId) => {
 
   const comments = await getTicketComments(ticketId);
 
-  return filterCommentsForRole(comments || [], membership.role);
+  return filterCommentsForRole(comments || [], membership.role?.permissions);
 };
 
 export const getTicketActivitiesService = async (ticketId, userId) => {
@@ -670,7 +670,7 @@ export const getTicketActivitiesService = async (ticketId, userId) => {
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(
@@ -716,7 +716,7 @@ export const deleteTicketCommentService = async (
   }
 
   if (
-    !canDeleteAnyTicketComment(membership.role) &&
+    !canDeleteAnyTicketComment(membership.role?.permissions) &&
     (!canMemberViewTicket(ticket, userId) || comment.authorId !== userId)
   ) {
     throw new ApiError(
@@ -769,7 +769,7 @@ export const createTicketAttachmentService = async (
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(
@@ -823,7 +823,7 @@ export const getTicketAttachmentsService = async (ticketId, userId) => {
   }
 
   if (
-    !canViewAllOrganizationTickets(membership.role) &&
+    !canViewAllOrganizationTickets(membership.role?.permissions) &&
     !canMemberViewTicket(ticket, userId)
   ) {
     throw new ApiError(
@@ -869,7 +869,7 @@ export const deleteTicketAttachmentService = async (
   }
 
   if (
-    !canDeleteAnyTicketAttachment(membership.role) &&
+    !canDeleteAnyTicketAttachment(membership.role?.permissions) &&
     (!canMemberViewTicket(ticket, userId) || attachment.uploadedBy !== userId)
   ) {
     throw new ApiError(
@@ -912,7 +912,7 @@ export const addTicketTagService = async (ticketId, tagId, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canEditAllOrganizationTickets(membership.role)
+    !canEditAllOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(403, "You do not have permission to tag this ticket", "FORBIDDEN");
   }
@@ -962,7 +962,7 @@ export const deleteTicketTagService = async (ticketId, tagId, userId) => {
   if (
     !membership ||
     !membership.id ||
-    !canEditAllOrganizationTickets(membership.role)
+    !canEditAllOrganizationTickets(membership.role?.permissions)
   ) {
     throw new ApiError(
       403,
