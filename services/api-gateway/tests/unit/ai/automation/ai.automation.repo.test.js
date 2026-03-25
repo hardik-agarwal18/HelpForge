@@ -196,7 +196,7 @@ describe("ai.automation.repo", () => {
             memberships: {
               some: {
                 isAvailable: true,
-                role: { in: ["AGENT", "ADMIN"] },
+                role: { permissions: { has: "agent:update_availability" } },
               },
             },
           },
@@ -276,7 +276,6 @@ describe("ai.automation.repo", () => {
       expect(mockMembershipFindMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-3",
-          role: { in: ["AGENT", "ADMIN"] },
         },
         include: {
           user: {

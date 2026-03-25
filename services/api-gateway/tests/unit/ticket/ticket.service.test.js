@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
+const ALL_PERMISSIONS = ["org:update", "org:delete", "org:invite_member", "org:manage_member", "org:view_members", "role:create", "role:update", "role:delete", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability", "ai:manage_config"];
+const ADMIN_PERMISSIONS = ["org:update", "org:invite_member", "org:manage_member", "org:view_members", "role:create", "role:update", "role:delete", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "ai:manage_config"];
+const AGENT_PERMISSIONS = ["org:view_members", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability"];
+const MEMBER_PERMISSIONS = ["org:view_members"];
+const OWNER_ROLE = { id: "role-owner", name: "OWNER", permissions: ALL_PERMISSIONS, level: 100, isSystem: true };
+const ADMIN_ROLE = { id: "role-admin", name: "ADMIN", permissions: ADMIN_PERMISSIONS, level: 75, isSystem: true };
+const AGENT_ROLE = { id: "role-agent", name: "AGENT", permissions: AGENT_PERMISSIONS, level: 50, isSystem: true };
+const MEMBER_ROLE = { id: "role-member", name: "MEMBER", permissions: MEMBER_PERMISSIONS, level: 10, isSystem: true };
+
 const mockCreateTicket = jest.fn();
 const mockCreateTicketAttachment = jest.fn();
 const mockCreateTicketActivityLog = jest.fn();
@@ -102,8 +111,8 @@ describe("Ticket Service", () => {
 
   it("should create a ticket when the user belongs to the organization", async () => {
     mockGetTicketOrganizationMembership
-      .mockResolvedValueOnce({ id: "membership-1", role: "MEMBER" })
-      .mockResolvedValueOnce({ id: "membership-2", role: "AGENT" });
+      .mockResolvedValueOnce({ id: "membership-1", role: MEMBER_ROLE })
+      .mockResolvedValueOnce({ id: "membership-2", role: AGENT_ROLE });
     mockCreateTicket.mockResolvedValue({
       id: "ticket-1",
       title: "Login issue",
@@ -143,7 +152,7 @@ describe("Ticket Service", () => {
   it("should auto-assign a newly created ticket to the least-loaded agent", async () => {
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
-      role: "MEMBER",
+      role: MEMBER_ROLE,
     });
     mockCreateTicket.mockResolvedValue({
       id: "ticket-1",
@@ -206,7 +215,7 @@ describe("Ticket Service", () => {
   it("should respect per-agent workload limits during auto-assignment", async () => {
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
-      role: "MEMBER",
+      role: MEMBER_ROLE,
     });
     mockCreateTicket.mockResolvedValue({
       id: "ticket-1",
@@ -264,7 +273,7 @@ describe("Ticket Service", () => {
   it("should leave the ticket unassigned when no agent has capacity", async () => {
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
-      role: "MEMBER",
+      role: MEMBER_ROLE,
     });
     mockCreateTicket.mockResolvedValue({
       id: "ticket-1",
@@ -309,7 +318,7 @@ describe("Ticket Service", () => {
 
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
-      role: "MEMBER",
+      role: MEMBER_ROLE,
     });
     mockCreateTicket.mockResolvedValue({
       id: "ticket-1",
@@ -375,7 +384,7 @@ describe("Ticket Service", () => {
 
   it("should reject assignees outside the organization", async () => {
     mockGetTicketOrganizationMembership
-      .mockResolvedValueOnce({ id: "membership-1", role: "OWNER" })
+      .mockResolvedValueOnce({ id: "membership-1", role: OWNER_ROLE })
       .mockResolvedValueOnce(null);
 
     await expect(
@@ -396,7 +405,7 @@ describe("Ticket Service", () => {
   it("should throw when the ticket is not created", async () => {
     mockGetTicketOrganizationMembership.mockResolvedValue({
       id: "membership-1",
-      role: "MEMBER",
+      role: MEMBER_ROLE,
     });
     mockCreateTicket.mockResolvedValue(null);
 
@@ -419,7 +428,7 @@ describe("Ticket Service", () => {
       const tickets = [{ id: "ticket-1" }, { id: "ticket-2" }];
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetTickets.mockResolvedValue(tickets);
 
@@ -443,7 +452,7 @@ describe("Ticket Service", () => {
     it("should restrict members to their created or assigned tickets", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
 
@@ -463,7 +472,7 @@ describe("Ticket Service", () => {
     it("should support assignedTo=me filter", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
 
@@ -484,7 +493,7 @@ describe("Ticket Service", () => {
     it("should support tag and date range filters", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockGetTickets.mockResolvedValue([{ id: "ticket-1" }]);
 
@@ -556,7 +565,7 @@ describe("Ticket Service", () => {
     it("should return an empty array when no tickets are found", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTickets.mockResolvedValue(null);
 
@@ -590,7 +599,7 @@ describe("Ticket Service", () => {
   describe("getMyAgentTicketsService", () => {
     it("should return assigned tickets for staff memberships", async () => {
       mockGetTicketMembershipsByUserId.mockResolvedValue([
-        { organizationId: "org-1", role: "AGENT" },
+        { organizationId: "org-1", role: AGENT_ROLE },
       ]);
       mockGetAgentTickets.mockResolvedValue([{ id: "ticket-1" }]);
 
@@ -609,7 +618,7 @@ describe("Ticket Service", () => {
 
     it("should reject users without staff memberships", async () => {
       mockGetTicketMembershipsByUserId.mockResolvedValue([
-        { organizationId: "org-1", role: "MEMBER" },
+        { organizationId: "org-1", role: MEMBER_ROLE },
       ]);
 
       await expect(
@@ -624,7 +633,7 @@ describe("Ticket Service", () => {
   describe("getMyAgentStatsService", () => {
     it("should return assigned ticket stats", async () => {
       mockGetTicketMembershipsByUserId.mockResolvedValue([
-        { organizationId: "org-1", role: "AGENT" },
+        { organizationId: "org-1", role: AGENT_ROLE },
       ]);
       mockGetAgentTickets.mockResolvedValue([
         { id: "ticket-1", status: "OPEN", priority: "HIGH" },
@@ -655,13 +664,13 @@ describe("Ticket Service", () => {
     it("should update availability for an agent membership", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockUpdateAgentAvailability.mockResolvedValue({
         id: "membership-1",
         organizationId: "org-1",
         userId: "user-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
         isAvailable: false,
       });
 
@@ -694,21 +703,21 @@ describe("Ticket Service", () => {
     it("should reject non-agents from updating availability", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
         updateMyAgentAvailabilityService("org-1", false, "user-1"),
       ).rejects.toMatchObject({
         statusCode: 403,
-        message: "Only agents can update their availability",
+        message: "You do not have permission to update availability",
       });
     });
 
     it("should throw when availability update fails", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockUpdateAgentAvailability.mockResolvedValue(null);
 
@@ -725,7 +734,7 @@ describe("Ticket Service", () => {
     it("should allow elevated roles to create tags", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTagByName.mockResolvedValue(null);
       mockCreateTag.mockResolvedValue({
@@ -749,7 +758,7 @@ describe("Ticket Service", () => {
     it("should reject non-staff from creating tags", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -763,7 +772,7 @@ describe("Ticket Service", () => {
     it("should reject duplicate tags in the same organization", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockGetTagByName.mockResolvedValue({
         id: "tag-1",
@@ -782,7 +791,7 @@ describe("Ticket Service", () => {
     it("should return tags for organization members", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTags.mockResolvedValue([{ id: "tag-1", name: "Bug" }]);
 
@@ -813,7 +822,7 @@ describe("Ticket Service", () => {
       mockGetTicketById.mockResolvedValue(ticket);
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
 
       const result = await getTicketByIdService("ticket-1", "user-1");
@@ -857,7 +866,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -881,7 +890,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       const result = await getTicketByIdService("ticket-1", "user-1");
@@ -899,7 +908,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockUpdateTicket.mockResolvedValue({
         id: "ticket-1",
@@ -928,7 +937,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockUpdateTicket.mockResolvedValue({
         id: "ticket-1",
@@ -952,7 +961,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -971,7 +980,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -979,7 +988,7 @@ describe("Ticket Service", () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message:
-          "Members can only update title, description, and priority on their own tickets",
+          "You can only update title, description, and priority on your own tickets",
       });
     });
 
@@ -1003,8 +1012,8 @@ describe("Ticket Service", () => {
         assignedToId: "user-2",
       });
       mockGetTicketOrganizationMembership
-        .mockResolvedValueOnce({ id: "membership-1", role: "AGENT" })
-        .mockResolvedValueOnce({ id: "membership-2", role: "MEMBER" });
+        .mockResolvedValueOnce({ id: "membership-1", role: AGENT_ROLE })
+        .mockResolvedValueOnce({ id: "membership-2", role: MEMBER_ROLE });
       mockAssignTicket.mockResolvedValue({
         id: "ticket-1",
         assignedToId: "user-3",
@@ -1051,7 +1060,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1068,7 +1077,7 @@ describe("Ticket Service", () => {
         organizationId: "org-1",
       });
       mockGetTicketOrganizationMembership
-        .mockResolvedValueOnce({ id: "membership-1", role: "ADMIN" })
+        .mockResolvedValueOnce({ id: "membership-1", role: ADMIN_ROLE })
         .mockResolvedValueOnce(null);
 
       await expect(
@@ -1086,8 +1095,8 @@ describe("Ticket Service", () => {
         assignedToId: null,
       });
       mockGetTicketOrganizationMembership
-        .mockResolvedValueOnce({ id: "membership-1", role: "OWNER" })
-        .mockResolvedValueOnce({ id: "membership-2", role: "AGENT" });
+        .mockResolvedValueOnce({ id: "membership-1", role: OWNER_ROLE })
+        .mockResolvedValueOnce({ id: "membership-2", role: AGENT_ROLE });
       mockAssignTicket.mockResolvedValue(null);
 
       await expect(
@@ -1108,7 +1117,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetOrganizationAvailableAgents.mockResolvedValue([
         {
@@ -1172,7 +1181,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1190,7 +1199,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetOrganizationAvailableAgents.mockResolvedValue([]);
       mockGetOrganizationAgentWorkloads.mockResolvedValue([]);
@@ -1211,7 +1220,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockGetOrganizationAvailableAgents.mockResolvedValue([
         {
@@ -1241,7 +1250,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockUpdateTicketStatus.mockResolvedValue({
         id: "ticket-1",
@@ -1294,7 +1303,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1313,7 +1322,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockUpdateTicketStatus.mockResolvedValue(null);
 
@@ -1334,7 +1343,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockCreateTicketComment.mockResolvedValue({
         id: "comment-1",
@@ -1371,7 +1380,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicketComment.mockResolvedValue({
         id: "comment-1",
@@ -1398,7 +1407,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1422,7 +1431,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1457,7 +1466,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicketComment.mockResolvedValue({
         id: "comment-1",
@@ -1487,7 +1496,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetTicketComments.mockResolvedValue([
         { id: "comment-1", isInternal: false },
@@ -1508,7 +1517,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTicketComments.mockResolvedValue([
         { id: "comment-1", isInternal: false },
@@ -1529,7 +1538,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1560,7 +1569,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetTicketActivities.mockResolvedValue([{ id: "activity-1" }]);
 
@@ -1579,7 +1588,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTicketActivities.mockResolvedValue([{ id: "activity-1" }]);
 
@@ -1597,7 +1606,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1628,7 +1637,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockCreateTicketAttachment.mockResolvedValue({
         id: "attachment-1",
@@ -1667,7 +1676,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicketAttachment.mockResolvedValue({
         id: "attachment-1",
@@ -1696,7 +1705,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1751,7 +1760,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockDeleteTicketComment.mockResolvedValue({
         id: "comment-1",
@@ -1794,7 +1803,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockDeleteTicketComment.mockResolvedValue({
         id: "comment-1",
@@ -1879,7 +1888,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1905,7 +1914,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -1925,7 +1934,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTicketAttachments.mockResolvedValue([{ id: "attachment-1" }]);
 
@@ -1943,7 +1952,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockGetTicketAttachments.mockResolvedValue([{ id: "attachment-1" }]);
 
@@ -1961,7 +1970,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -2001,7 +2010,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockDeleteTicketAttachment.mockResolvedValue({
         id: "attachment-1",
@@ -2047,7 +2056,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockDeleteTicketAttachment.mockResolvedValue({
         id: "attachment-1",
@@ -2133,7 +2142,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -2153,7 +2162,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "AGENT",
+        role: AGENT_ROLE,
       });
       mockGetTagById.mockResolvedValue({
         id: "tag-1",
@@ -2180,7 +2189,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -2198,7 +2207,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockGetTagById.mockResolvedValue({
         id: "tag-1",
@@ -2222,7 +2231,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTicketTagById.mockResolvedValue({
         ticketId: "ticket-1",
@@ -2253,7 +2262,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "OWNER",
+        role: OWNER_ROLE,
       });
       mockGetTicketTagById.mockResolvedValue(null);
 
@@ -2270,7 +2279,7 @@ describe("Ticket Service", () => {
     it("rethrows non-409 auto-assign errors during ticket creation", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicket.mockResolvedValue({
         id: "ticket-1",
@@ -2298,7 +2307,7 @@ describe("Ticket Service", () => {
     it("throws when createTag repository call fails", async () => {
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTagByName.mockResolvedValue(null);
       mockCreateTag.mockResolvedValue(null);
@@ -2320,7 +2329,7 @@ describe("Ticket Service", () => {
 
     it("rejects agent ticket lookup for unauthorized organization scope", async () => {
       mockGetTicketMembershipsByUserId.mockResolvedValue([
-        { organizationId: "org-1", role: "AGENT" },
+        { organizationId: "org-1", role: AGENT_ROLE },
       ]);
 
       await expect(
@@ -2355,7 +2364,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockUpdateTicket.mockResolvedValue(null);
 
@@ -2390,7 +2399,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicketComment.mockResolvedValue(null);
 
@@ -2445,7 +2454,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockDeleteTicketComment.mockResolvedValue(null);
 
@@ -2488,7 +2497,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockCreateTicketAttachment.mockResolvedValue(null);
 
@@ -2537,7 +2546,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
       mockDeleteTicketAttachment.mockResolvedValue(null);
 
@@ -2567,7 +2576,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTagById.mockResolvedValue({
         id: "tag-1",
@@ -2593,7 +2602,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTagById.mockResolvedValue({
         id: "tag-1",
@@ -2628,7 +2637,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
       });
 
       await expect(
@@ -2646,7 +2655,7 @@ describe("Ticket Service", () => {
       });
       mockGetTicketOrganizationMembership.mockResolvedValue({
         id: "membership-1",
-        role: "ADMIN",
+        role: ADMIN_ROLE,
       });
       mockGetTicketTagById.mockResolvedValue({
         ticketId: "ticket-1",

@@ -1,6 +1,48 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { ApiError } from "../../../src/utils/errorHandler.js";
+import {
+  PERMISSIONS,
+  ALL_PERMISSIONS,
+} from "../../../src/modules/organization/org.constants.js";
 
+// ── Test role fixtures ──────────────────────────────────────────────
+const OWNER_ROLE = {
+  id: "role-owner",
+  name: "OWNER",
+  permissions: ALL_PERMISSIONS,
+  level: 100,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const AGENT_ROLE = {
+  id: "role-agent",
+  name: "AGENT",
+  permissions: [
+    PERMISSIONS.ORG_VIEW_MEMBERS,
+    PERMISSIONS.TICKET_VIEW_ALL,
+    PERMISSIONS.TICKET_EDIT_ALL,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    PERMISSIONS.AGENT_UPDATE_AVAILABILITY,
+  ],
+  level: 50,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const MEMBER_ROLE = {
+  id: "role-member",
+  name: "MEMBER",
+  permissions: [PERMISSIONS.ORG_VIEW_MEMBERS],
+  level: 10,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+// ── Mocks ───────────────────────────────────────────────────────────
 const mockCreateOrganizationService = jest.fn();
 const mockGetOrganizationByUserIdService = jest.fn();
 const mockUpdateOrganizationService = jest.fn();
@@ -8,6 +50,10 @@ const mockDeleteOrganizationService = jest.fn();
 const mockInviteMemberInOrganizationService = jest.fn();
 const mockUpdateMemberFromOrganizationService = jest.fn();
 const mockViewAllMembersInOrganizationService = jest.fn();
+const mockGetRolesService = jest.fn();
+const mockCreateRoleService = jest.fn();
+const mockUpdateRoleService = jest.fn();
+const mockDeleteRoleService = jest.fn();
 
 // Mock the service
 jest.unstable_mockModule(
@@ -20,6 +66,10 @@ jest.unstable_mockModule(
     inviteMemberInOrganizationService: mockInviteMemberInOrganizationService,
     updateMemberFromOrganizationService: mockUpdateMemberFromOrganizationService,
     viewAllMembersInOrganizationService: mockViewAllMembersInOrganizationService,
+    getRolesService: mockGetRolesService,
+    createRoleService: mockCreateRoleService,
+    updateRoleService: mockUpdateRoleService,
+    deleteRoleService: mockDeleteRoleService,
   }),
 );
 
@@ -47,7 +97,7 @@ describe("Organization Controller", () => {
       user: { id: "user-1" },
       params: {},
       organization: undefined,
-      membership: { userId: "user-1", role: "OWNER" },
+      membership: { userId: "user-1", role: OWNER_ROLE },
     };
     mockRes = {
       status: jest.fn().mockReturnThis(),
@@ -212,10 +262,10 @@ describe("Organization Controller", () => {
   });
 
   describe("inviteMemberInOrganizationController", () => {
-    it("should pass actor membership to the invite service", async () => {
+    it("should pass actor membership and roleId to the invite service", async () => {
       mockReq.params = { orgId: "org-1" };
-      mockReq.body = { userId: "user-2", role: "agent" };
-      const membership = { id: "membership-1", role: "AGENT" };
+      mockReq.body = { userId: "user-2", roleId: AGENT_ROLE.id };
+      const membership = { id: "membership-1", role: AGENT_ROLE };
       mockInviteMemberInOrganizationService.mockResolvedValue(membership);
 
       await inviteMemberInOrganizationController(mockReq, mockRes, mockNext);
@@ -223,7 +273,7 @@ describe("Organization Controller", () => {
       expect(mockInviteMemberInOrganizationService).toHaveBeenCalledWith(
         "org-1",
         "user-2",
-        "agent",
+        AGENT_ROLE.id,
         mockReq.membership,
       );
       expect(mockRes.status).toHaveBeenCalledWith(201);
@@ -231,7 +281,7 @@ describe("Organization Controller", () => {
 
     it("should call next if invite service throws", async () => {
       mockReq.params = { orgId: "org-1" };
-      mockReq.body = { userId: "user-2", role: "agent" };
+      mockReq.body = { userId: "user-2", roleId: AGENT_ROLE.id };
       const error = new Error("Invite failed");
       mockInviteMemberInOrganizationService.mockRejectedValue(error);
 
@@ -271,10 +321,10 @@ describe("Organization Controller", () => {
   });
 
   describe("updateMemberFromOrganizationController", () => {
-    it("should pass actor membership to the update service", async () => {
+    it("should pass actor membership and roleId to the update service", async () => {
       mockReq.params = { orgId: "org-1", userId: "user-2" };
-      mockReq.body = { role: "member" };
-      const membership = { id: "membership-2", role: "MEMBER" };
+      mockReq.body = { roleId: MEMBER_ROLE.id };
+      const membership = { id: "membership-2", role: MEMBER_ROLE };
       mockUpdateMemberFromOrganizationService.mockResolvedValue(membership);
 
       await updateMemberFromOrganizationController(mockReq, mockRes, mockNext);
@@ -282,7 +332,7 @@ describe("Organization Controller", () => {
       expect(mockUpdateMemberFromOrganizationService).toHaveBeenCalledWith(
         "org-1",
         "user-2",
-        "member",
+        MEMBER_ROLE.id,
         mockReq.membership,
       );
       expect(mockRes.status).toHaveBeenCalledWith(200);
@@ -290,7 +340,7 @@ describe("Organization Controller", () => {
 
     it("should call next if update member service throws", async () => {
       mockReq.params = { orgId: "org-1", userId: "user-2" };
-      mockReq.body = { role: "member" };
+      mockReq.body = { roleId: MEMBER_ROLE.id };
       const error = new Error("Update member failed");
       mockUpdateMemberFromOrganizationService.mockRejectedValue(error);
 

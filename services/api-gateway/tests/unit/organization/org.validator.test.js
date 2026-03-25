@@ -60,52 +60,75 @@ describe("Organization Validator", () => {
   });
 
   describe("inviteMemberSchema", () => {
-    it("should validate a valid invite payload", () => {
-      const validPayload = { body: { userId: "user-1", role: "agent" } };
+    it("should validate a valid invite payload with userId and roleId", () => {
+      const validPayload = {
+        body: {
+          userId: "user-1",
+          roleId: "550e8400-e29b-41d4-a716-446655440000",
+        },
+      };
       const result = inviteMemberSchema.safeParse(validPayload);
 
       expect(result.success).toBe(true);
-      expect(result.data.body).toEqual({ userId: "user-1", role: "AGENT" });
+      expect(result.data.body).toEqual({
+        userId: "user-1",
+        roleId: "550e8400-e29b-41d4-a716-446655440000",
+      });
     });
 
     it("should invalidate when userId is missing", () => {
-      const invalidPayload = { body: { role: "MEMBER" } };
+      const invalidPayload = {
+        body: { roleId: "550e8400-e29b-41d4-a716-446655440000" },
+      };
       const result = inviteMemberSchema.safeParse(invalidPayload);
 
       expect(result.success).toBe(false);
     });
 
-    it("should invalidate when role is invalid", () => {
-      const invalidPayload = { body: { userId: "user-1", role: "viewer" } };
+    it("should invalidate when roleId is missing", () => {
+      const invalidPayload = { body: { userId: "user-1" } };
       const result = inviteMemberSchema.safeParse(invalidPayload);
 
       expect(result.success).toBe(false);
-      expect(result.error.issues.some((i) => i.message === "Invalid role")).toBe(true);
+    });
+
+    it("should invalidate when roleId is not a valid UUID", () => {
+      const invalidPayload = {
+        body: { userId: "user-1", roleId: "not-a-uuid" },
+      };
+      const result = inviteMemberSchema.safeParse(invalidPayload);
+
+      expect(result.success).toBe(false);
+      expect(result.error.issues.some((i) => i.message === "Invalid role ID")).toBe(true);
     });
   });
 
   describe("updateMemberRoleSchema", () => {
-    it("should validate a valid role update payload", () => {
-      const validPayload = { body: { role: "member" } };
+    it("should validate a valid role update payload with roleId", () => {
+      const validPayload = {
+        body: { roleId: "550e8400-e29b-41d4-a716-446655440000" },
+      };
       const result = updateMemberRoleSchema.safeParse(validPayload);
 
       expect(result.success).toBe(true);
-      expect(result.data.body).toEqual({ role: "MEMBER" });
+      expect(result.data.body).toEqual({
+        roleId: "550e8400-e29b-41d4-a716-446655440000",
+      });
     });
 
-    it("should invalidate when role is missing", () => {
+    it("should invalidate when roleId is missing", () => {
       const invalidPayload = { body: {} };
       const result = updateMemberRoleSchema.safeParse(invalidPayload);
 
       expect(result.success).toBe(false);
     });
 
-    it("should invalidate when role is empty", () => {
-      const invalidPayload = { body: { role: "" } };
+    it("should invalidate when roleId is not a valid UUID", () => {
+      const invalidPayload = { body: { roleId: "not-a-uuid" } };
       const result = updateMemberRoleSchema.safeParse(invalidPayload);
 
       expect(result.success).toBe(false);
-      expect(result.error.issues.some((i) => i.message === "Role is required")).toBe(true);
+      expect(result.error.issues.some((i) => i.message === "Invalid role ID")).toBe(true);
     });
   });
 });

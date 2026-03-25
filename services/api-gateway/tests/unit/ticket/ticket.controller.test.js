@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
+const ALL_PERMISSIONS = ["org:update", "org:delete", "org:invite_member", "org:manage_member", "org:view_members", "role:create", "role:update", "role:delete", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability", "ai:manage_config"];
+const AGENT_PERMISSIONS = ["org:view_members", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability"];
+const MEMBER_PERMISSIONS = ["org:view_members"];
+const OWNER_ROLE = { id: "role-owner", name: "OWNER", permissions: ALL_PERMISSIONS, level: 100, isSystem: true };
+const AGENT_ROLE = { id: "role-agent", name: "AGENT", permissions: AGENT_PERMISSIONS, level: 50, isSystem: true };
+const MEMBER_ROLE = { id: "role-member", name: "MEMBER", permissions: MEMBER_PERMISSIONS, level: 10, isSystem: true };
+
 const mockCreateTicketService = jest.fn();
 const mockCreateTicketAttachmentService = jest.fn();
 const mockCreateTicketCommentService = jest.fn();
@@ -214,7 +221,7 @@ describe("Ticket Controller", () => {
       id: "membership-1",
       organizationId: "org-1",
       userId: "user-1",
-      role: "AGENT",
+      role: AGENT_ROLE,
       isAvailable: false,
     };
     req.body = { organizationId: "org-1", isAvailable: false };

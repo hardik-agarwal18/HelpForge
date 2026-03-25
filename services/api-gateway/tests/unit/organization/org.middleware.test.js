@@ -1,24 +1,81 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import {
+  PERMISSIONS,
+  ALL_PERMISSIONS,
+} from "../../../src/modules/organization/org.constants.js";
 
-// Setup mocks first
-const mockFindUnique = jest.fn();
+// ── Test role fixtures ──────────────────────────────────────────────
+const OWNER_ROLE = {
+  id: "role-owner",
+  name: "OWNER",
+  permissions: ALL_PERMISSIONS,
+  level: 100,
+  isSystem: true,
+  organizationId: "org-1",
+};
 
-// Mock prisma properly for ES modules
-jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
-  default: {
-    read: {
-      membership: {
-        findUnique: mockFindUnique,
-      },
-    },
-    write: {},
-  },
+const ADMIN_ROLE = {
+  id: "role-admin",
+  name: "ADMIN",
+  permissions: [
+    PERMISSIONS.ORG_UPDATE,
+    PERMISSIONS.ORG_INVITE_MEMBER,
+    PERMISSIONS.ORG_MANAGE_MEMBER,
+    PERMISSIONS.ORG_VIEW_MEMBERS,
+    PERMISSIONS.ROLE_CREATE,
+    PERMISSIONS.ROLE_UPDATE,
+    PERMISSIONS.ROLE_DELETE,
+    PERMISSIONS.TICKET_VIEW_ALL,
+    PERMISSIONS.TICKET_EDIT_ALL,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    PERMISSIONS.AI_MANAGE_CONFIG,
+  ],
+  level: 75,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const AGENT_ROLE = {
+  id: "role-agent",
+  name: "AGENT",
+  permissions: [
+    PERMISSIONS.ORG_VIEW_MEMBERS,
+    PERMISSIONS.TICKET_VIEW_ALL,
+    PERMISSIONS.TICKET_EDIT_ALL,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    PERMISSIONS.AGENT_UPDATE_AVAILABILITY,
+  ],
+  level: 50,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const MEMBER_ROLE = {
+  id: "role-member",
+  name: "MEMBER",
+  permissions: [PERMISSIONS.ORG_VIEW_MEMBERS],
+  level: 10,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+// ── Mocks ───────────────────────────────────────────────────────────
+const mockGetUserMembershipInOrganization = jest.fn();
+
+jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => ({
+  getUserMembershipInOrganization: mockGetUserMembershipInOrganization,
 }));
 
 // Import after mocking
 const {
   verifyOrganizationMembership,
-  requireRole,
+  requirePermission,
   requireOwnerOrAdmin,
   requireOwner,
 } = await import("../../../src/modules/organization/org.middleware.js");
@@ -55,20 +112,13 @@ describe("Organization Middleware", () => {
 
     it("should return 403 if membership is not found", async () => {
       mockReq.params.orgId = "org-1";
-      mockFindUnique.mockResolvedValue(null);
+      mockGetUserMembershipInOrganization.mockResolvedValue(null);
 
       await verifyOrganizationMembership(mockReq, mockRes, mockNext);
 
-      expect(mockFindUnique).toHaveBeenCalledWith({
-        where: {
-          userId_organizationId: {
-            userId: "user-1",
-            organizationId: "org-1",
-          },
-        },
-        include: {
-          organization: true,
-        },
+      expect(mockGetUserMembershipInOrganization).toHaveBeenCalledWith({
+        userId: "user-1",
+        orgId: "org-1",
       });
       expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -84,11 +134,11 @@ describe("Organization Middleware", () => {
         id: "mem-1",
         userId: "user-1",
         organizationId: "org-1",
-        role: "MEMBER",
+        role: MEMBER_ROLE,
         organization: { id: "org-1", name: "Test Org" },
       };
-      
-      mockFindUnique.mockResolvedValue(mockMembership);
+
+      mockGetUserMembershipInOrganization.mockResolvedValue(mockMembership);
 
       await verifyOrganizationMembership(mockReq, mockRes, mockNext);
 
@@ -100,7 +150,7 @@ describe("Organization Middleware", () => {
     it("should call next with error if exception is thrown", async () => {
       mockReq.params.orgId = "org-1";
       const error = new Error("DB Error");
-      mockFindUnique.mockRejectedValue(error);
+      mockGetUserMembershipInOrganization.mockRejectedValue(error);
 
       await verifyOrganizationMembership(mockReq, mockRes, mockNext);
 
@@ -108,9 +158,9 @@ describe("Organization Middleware", () => {
     });
   });
 
-  describe("requireRole", () => {
+  describe("requirePermission", () => {
     it("should return 500 if membership is not verified beforehand", () => {
-      const middleware = requireRole("OWNER");
+      const middleware = requirePermission(PERMISSIONS.ORG_DELETE);
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
@@ -120,10 +170,10 @@ describe("Organization Middleware", () => {
       });
     });
 
-    it("should return 403 if user role is not allowed", () => {
-      mockReq.membership = { role: "MEMBER" };
-      const middleware = requireRole("ADMIN", "OWNER");
-      
+    it("should return 403 if user does not have the required permission", () => {
+      mockReq.membership = { role: MEMBER_ROLE };
+      const middleware = requirePermission(PERMISSIONS.ORG_UPDATE);
+
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(403);
@@ -133,10 +183,28 @@ describe("Organization Middleware", () => {
       });
     });
 
-    it("should call next if user has an allowed role", () => {
-      mockReq.membership = { role: "ADMIN" };
-      const middleware = requireRole("ADMIN", "OWNER");
-      
+    it("should call next if user has the required permission", () => {
+      mockReq.membership = { role: ADMIN_ROLE };
+      const middleware = requirePermission(PERMISSIONS.ORG_UPDATE);
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith();
+    });
+
+    it("should return 403 if user is missing one of multiple required permissions", () => {
+      mockReq.membership = { role: MEMBER_ROLE };
+      const middleware = requirePermission(PERMISSIONS.ORG_VIEW_MEMBERS, PERMISSIONS.ORG_UPDATE);
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockRes.status).toHaveBeenCalledWith(403);
+    });
+
+    it("should call next if user has all required permissions", () => {
+      mockReq.membership = { role: OWNER_ROLE };
+      const middleware = requirePermission(PERMISSIONS.ORG_UPDATE, PERMISSIONS.ORG_DELETE);
+
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith();
@@ -144,34 +212,34 @@ describe("Organization Middleware", () => {
   });
 
   describe("requireOwnerOrAdmin", () => {
-    it("should pass for OWNER role", () => {
-      mockReq.membership = { role: "OWNER" };
+    it("should pass for OWNER role (has org:update permission)", () => {
+      mockReq.membership = { role: OWNER_ROLE };
       requireOwnerOrAdmin(mockReq, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledWith();
     });
 
-    it("should pass for ADMIN role", () => {
-      mockReq.membership = { role: "ADMIN" };
+    it("should pass for ADMIN role (has org:update permission)", () => {
+      mockReq.membership = { role: ADMIN_ROLE };
       requireOwnerOrAdmin(mockReq, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledWith();
     });
 
-    it("should fail for MEMBER role", () => {
-      mockReq.membership = { role: "MEMBER" };
+    it("should fail for MEMBER role (lacks org:update permission)", () => {
+      mockReq.membership = { role: MEMBER_ROLE };
       requireOwnerOrAdmin(mockReq, mockRes, mockNext);
       expect(mockRes.status).toHaveBeenCalledWith(403);
     });
   });
 
   describe("requireOwner", () => {
-    it("should pass for OWNER role", () => {
-      mockReq.membership = { role: "OWNER" };
+    it("should pass for OWNER role (has org:delete permission)", () => {
+      mockReq.membership = { role: OWNER_ROLE };
       requireOwner(mockReq, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledWith();
     });
 
-    it("should fail for ADMIN role", () => {
-      mockReq.membership = { role: "ADMIN" };
+    it("should fail for ADMIN role (lacks org:delete permission)", () => {
+      mockReq.membership = { role: ADMIN_ROLE };
       requireOwner(mockReq, mockRes, mockNext);
       expect(mockRes.status).toHaveBeenCalledWith(403);
     });

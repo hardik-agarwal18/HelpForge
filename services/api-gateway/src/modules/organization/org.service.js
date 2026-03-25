@@ -1,16 +1,26 @@
 import {
   createOrganization,
+  createOrgRole,
+  createOrgRoles,
   deleteOrganization,
+  deleteOrgRole,
   findOrganizationByOwner,
   getOrganizationMembersById,
   getOrganizationMembershipByUserId,
   getOrganizationsByUserId,
+  getOrgRoleById,
+  getOrgRoleByName,
+  getOrgRoles,
   inviteMemberInOrganization,
   patchOrganization,
   updateMembershipRole,
+  updateOrgRole,
 } from "./org.repo.js";
 import { ApiError } from "../../utils/errorHandler.js";
-import { normalizeRole, assertCanInviteRole, assertCanUpdateRole } from "./org.utils.js";
+import { DEFAULT_ROLES } from "./org.constants.js";
+import { assertCanInviteRole, assertCanUpdateRole } from "./org.utils.js";
+
+// ── Organization CRUD ────────────────────────────────────────────────
 
 export const getOrganizationByUserIdService = async (userId) => {
   const organizations = await getOrganizationsByUserId(userId);
@@ -24,13 +34,53 @@ export const createOrganizationService = async ({ name, userId }) => {
     throw new ApiError(409, "User already owns an organization", "USER_ALREADY_OWNER");
   }
 
-  const organization = await createOrganization({ name, userId });
+  // Create org first (without membership) then create roles, then add owner membership
+  const org = await createOrganizationWithRoles(name, userId);
 
-  if (!organization || !organization.id) {
+  if (!org || !org.id) {
     throw new ApiError(500, "Failed to create organization", "ORG_CREATION_FAILED");
   }
 
-  return organization;
+  return org;
+};
+
+const createOrganizationWithRoles = async (name, userId) => {
+  // We need to create the org, seed default roles, then attach the owner membership.
+  // createOrgRoles uses createMany which doesn't return records, so we look up the OWNER role after.
+  const tempOrg = await createOrganizationTemp(name);
+
+  await createOrgRoles(tempOrg.id, DEFAULT_ROLES);
+
+  const ownerRole = await getOrgRoleByName(tempOrg.id, "OWNER");
+
+  return await addOwnerMembership(tempOrg.id, userId, ownerRole.id);
+};
+
+// Helper: create org without membership
+import db from "../../config/database.config.js";
+
+const createOrganizationTemp = async (name) => {
+  return await db.write.organization.create({
+    data: { name },
+  });
+};
+
+const addOwnerMembership = async (orgId, userId, ownerRoleId) => {
+  await db.write.membership.create({
+    data: {
+      organizationId: orgId,
+      userId,
+      roleId: ownerRoleId,
+    },
+  });
+
+  return await db.read.organization.findUnique({
+    where: { id: orgId },
+    include: {
+      memberships: { include: { role: true } },
+      roles: true,
+    },
+  });
 };
 
 export const updateOrganizationService = async ({ orgId, name }) => {
@@ -53,6 +103,8 @@ export const deleteOrganizationService = async ({ orgId }) => {
   return deletedOrganization;
 };
 
+// ── Members ──────────────────────────────────────────────────────────
+
 export const viewAllMembersInOrganizationService = async (orgId) => {
   const members = await getOrganizationMembersById(orgId);
   return members || [];
@@ -61,13 +113,18 @@ export const viewAllMembersInOrganizationService = async (orgId) => {
 export const inviteMemberInOrganizationService = async (
   orgId,
   userId,
-  role,
+  roleId,
   actorMembership,
 ) => {
-  const normalizedRole = normalizeRole(role);
-  assertCanInviteRole(actorMembership?.role, normalizedRole);
+  const targetRole = await getOrgRoleById(roleId);
 
-  const membership = await inviteMemberInOrganization(orgId, userId, normalizedRole);
+  if (!targetRole || targetRole.organizationId !== orgId) {
+    throw new ApiError(400, "Invalid role for this organization", "INVALID_ROLE");
+  }
+
+  assertCanInviteRole(actorMembership.role, targetRole);
+
+  const membership = await inviteMemberInOrganization(orgId, userId, roleId);
 
   if (!membership || !membership.id) {
     throw new ApiError(500, "Failed to invite member to organization", "MEMBER_INVITE_FAILED");
@@ -79,23 +136,113 @@ export const inviteMemberInOrganizationService = async (
 export const updateMemberFromOrganizationService = async (
   orgId,
   userId,
-  role,
+  roleId,
   actorMembership,
 ) => {
-  const normalizedRole = normalizeRole(role);
   const targetMembership = await getOrganizationMembershipByUserId(orgId, userId);
 
   if (!targetMembership || !targetMembership.id) {
     throw new ApiError(404, "Member not found in organization", "MEMBER_NOT_FOUND");
   }
 
-  assertCanUpdateRole(actorMembership, targetMembership, normalizedRole);
+  const nextRole = await getOrgRoleById(roleId);
 
-  const updatedMembership = await updateMembershipRole(orgId, userId, normalizedRole);
+  if (!nextRole || nextRole.organizationId !== orgId) {
+    throw new ApiError(400, "Invalid role for this organization", "INVALID_ROLE");
+  }
+
+  assertCanUpdateRole(actorMembership, targetMembership, nextRole);
+
+  const updatedMembership = await updateMembershipRole(orgId, userId, roleId);
 
   if (!updatedMembership || !updatedMembership.id) {
     throw new ApiError(500, "Failed to update member in organization", "MEMBER_UPDATE_FAILED");
   }
 
   return updatedMembership;
+};
+
+// ── Role CRUD ────────────────────────────────────────────────────────
+
+export const getRolesService = async (orgId) => {
+  const roles = await getOrgRoles(orgId);
+  return roles || [];
+};
+
+export const createRoleService = async (orgId, { name, permissions, level }, actorMembership) => {
+  if (level >= actorMembership.role.level) {
+    throw new ApiError(403, "Cannot create a role with level equal to or higher than yours", "ROLE_LEVEL_FORBIDDEN");
+  }
+
+  const existing = await getOrgRoleByName(orgId, name);
+  if (existing) {
+    throw new ApiError(409, "A role with this name already exists", "ROLE_NAME_EXISTS");
+  }
+
+  const role = await createOrgRole(orgId, { name, permissions, level });
+
+  if (!role || !role.id) {
+    throw new ApiError(500, "Failed to create role", "ROLE_CREATION_FAILED");
+  }
+
+  return role;
+};
+
+export const updateRoleService = async (orgId, roleId, updates, actorMembership) => {
+  const role = await getOrgRoleById(roleId);
+
+  if (!role || role.organizationId !== orgId) {
+    throw new ApiError(404, "Role not found", "ROLE_NOT_FOUND");
+  }
+
+  if (role.isSystem) {
+    throw new ApiError(403, "System roles cannot be modified", "SYSTEM_ROLE_IMMUTABLE");
+  }
+
+  if (role.level >= actorMembership.role.level) {
+    throw new ApiError(403, "Cannot modify a role with level equal to or higher than yours", "ROLE_LEVEL_FORBIDDEN");
+  }
+
+  if (updates.level !== undefined && updates.level >= actorMembership.role.level) {
+    throw new ApiError(403, "Cannot set role level equal to or higher than yours", "ROLE_LEVEL_FORBIDDEN");
+  }
+
+  if (updates.name) {
+    const existing = await getOrgRoleByName(orgId, updates.name);
+    if (existing && existing.id !== roleId) {
+      throw new ApiError(409, "A role with this name already exists", "ROLE_NAME_EXISTS");
+    }
+  }
+
+  const updatedRole = await updateOrgRole(roleId, updates);
+
+  if (!updatedRole || !updatedRole.id) {
+    throw new ApiError(500, "Failed to update role", "ROLE_UPDATE_FAILED");
+  }
+
+  return updatedRole;
+};
+
+export const deleteRoleService = async (orgId, roleId, actorMembership) => {
+  const role = await getOrgRoleById(roleId);
+
+  if (!role || role.organizationId !== orgId) {
+    throw new ApiError(404, "Role not found", "ROLE_NOT_FOUND");
+  }
+
+  if (role.isSystem) {
+    throw new ApiError(403, "System roles cannot be deleted", "SYSTEM_ROLE_IMMUTABLE");
+  }
+
+  if (role.level >= actorMembership.role.level) {
+    throw new ApiError(403, "Cannot delete a role with level equal to or higher than yours", "ROLE_LEVEL_FORBIDDEN");
+  }
+
+  const deletedRole = await deleteOrgRole(roleId);
+
+  if (!deletedRole || !deletedRole.id) {
+    throw new ApiError(500, "Failed to delete role", "ROLE_DELETION_FAILED");
+  }
+
+  return deletedRole;
 };

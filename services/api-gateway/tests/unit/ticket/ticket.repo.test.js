@@ -123,11 +123,12 @@ describe("Ticket Repo", () => {
     expect(mockMembershipFindMany).toHaveBeenCalledWith({
       where: {
         organizationId: "org-1",
-        role: "AGENT",
+        role: { name: "AGENT" },
         isAvailable: true,
       },
       include: {
         user: true,
+        role: true,
       },
       orderBy: {
         createdAt: "asc",

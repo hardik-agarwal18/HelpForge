@@ -34,6 +34,10 @@ const waitFor = async (
   throw lastError;
 };
 
+const ALL_PERMISSIONS = ["org:update", "org:delete", "org:invite_member", "org:manage_member", "org:view_members", "role:create", "role:update", "role:delete", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability", "ai:manage_config"];
+const AGENT_PERMISSIONS = ["org:view_members", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability"];
+const MEMBER_PERMISSIONS = ["org:view_members"];
+
 describe("Ticket API Integration Tests", () => {
   let user1;
   let user2;
@@ -44,6 +48,9 @@ describe("Ticket API Integration Tests", () => {
   let user3Token;
   let user4Token;
   let organization;
+  let ownerRole;
+  let agentRole;
+  let memberRole;
 
   const signToken = (user) =>
     jwt.sign({ sub: user.id, type: "access", jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1000) }, config.jwtSecret, {
@@ -81,23 +88,25 @@ describe("Ticket API Integration Tests", () => {
     organization = await prisma.organization.create({
       data: {
         name: `Org_${Date.now()}`,
-        memberships: {
-          create: [
-            {
-              userId: user1.id,
-              role: "OWNER",
-            },
-            {
-              userId: user2.id,
-              role: "AGENT",
-            },
-            {
-              userId: user4.id,
-              role: "MEMBER",
-            },
-          ],
-        },
       },
+    });
+
+    ownerRole = await prisma.orgRole.create({
+      data: { name: "OWNER", organizationId: organization.id, permissions: ALL_PERMISSIONS, level: 100, isSystem: true },
+    });
+    agentRole = await prisma.orgRole.create({
+      data: { name: "AGENT", organizationId: organization.id, permissions: AGENT_PERMISSIONS, level: 50, isSystem: true },
+    });
+    memberRole = await prisma.orgRole.create({
+      data: { name: "MEMBER", organizationId: organization.id, permissions: MEMBER_PERMISSIONS, level: 10, isSystem: true },
+    });
+
+    await prisma.membership.createMany({
+      data: [
+        { userId: user1.id, organizationId: organization.id, roleId: ownerRole.id },
+        { userId: user2.id, organizationId: organization.id, roleId: agentRole.id },
+        { userId: user4.id, organizationId: organization.id, roleId: memberRole.id },
+      ],
     });
   });
 
@@ -149,7 +158,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: secondAgent.id,
           organizationId: organization.id,
-          role: "AGENT",
+          roleId: agentRole.id,
         },
       });
       await prisma.agentWorkload.createMany({
@@ -384,7 +393,7 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe(
-        "Only agents can update their availability",
+        "You do not have permission to update availability",
       );
     });
 
@@ -410,7 +419,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: secondAgent.id,
           organizationId: organization.id,
-          role: "AGENT",
+          roleId: agentRole.id,
         },
       });
       await prisma.agentWorkload.create({
@@ -921,7 +930,7 @@ describe("Ticket API Integration Tests", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe(
-        "Members can only update title, description, and priority on their own tickets",
+        "You can only update title, description, and priority on your own tickets",
       );
     });
 
@@ -1063,7 +1072,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: secondAgent.id,
           organizationId: organization.id,
-          role: "AGENT",
+          roleId: agentRole.id,
         },
       });
       await prisma.agentWorkload.createMany({
@@ -1281,7 +1290,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
 
@@ -1373,7 +1382,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
 
@@ -1464,7 +1473,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
 
@@ -1575,7 +1584,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
       const unrelatedComment = await prisma.ticketComment.create({
@@ -1713,7 +1722,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
 
@@ -1815,7 +1824,7 @@ describe("Ticket API Integration Tests", () => {
         data: {
           userId: unrelatedMember.id,
           organizationId: organization.id,
-          role: "MEMBER",
+          roleId: memberRole.id,
         },
       });
 

@@ -85,8 +85,9 @@ describe("Organization API Integration Tests", () => {
           userId: user1Id,
           organizationId: response.body.data.organization.id,
         },
+        include: { role: true },
       });
-      expect(membership.role).toBe("OWNER");
+      expect(membership.role.name).toBe("OWNER");
     });
   });
 
@@ -131,6 +132,10 @@ describe("Organization API Integration Tests", () => {
     let user3Id;
     let user4Token;
     let user4Id;
+    let ownerRole;
+    let adminRole;
+    let agentRole;
+    let memberRole;
 
     beforeEach(async () => {
       // User 1 creates an organization (is OWNER)
@@ -140,6 +145,15 @@ describe("Organization API Integration Tests", () => {
         .send({ name: "My Startup" });
 
       orgId = res.body.data.organization.id;
+
+      // Look up roles created by the organization creation service
+      const roles = await prisma.orgRole.findMany({
+        where: { organizationId: orgId },
+      });
+      ownerRole = roles.find((r) => r.name === "OWNER");
+      adminRole = roles.find((r) => r.name === "ADMIN");
+      agentRole = roles.find((r) => r.name === "AGENT");
+      memberRole = roles.find((r) => r.name === "MEMBER");
 
       const u3 = await registerUser(
         `user3_${Date.now()}@example.com`,
@@ -195,7 +209,7 @@ describe("Organization API Integration Tests", () => {
           data: {
             userId: user2Id,
             organizationId: orgId,
-            role: "ADMIN",
+            roleId: adminRole.id,
           },
         });
 
@@ -217,7 +231,7 @@ describe("Organization API Integration Tests", () => {
           data: {
             userId: user3Id,
             organizationId: orgId,
-            role: "MEMBER",
+            roleId: memberRole.id,
           },
         });
 
@@ -235,10 +249,10 @@ describe("Organization API Integration Tests", () => {
       beforeEach(async () => {
         // attach user 2 as ADMIN, user 3 as MEMBER
         await prisma.membership.create({
-          data: { userId: user2Id, organizationId: orgId, role: "ADMIN" },
+          data: { userId: user2Id, organizationId: orgId, roleId: adminRole.id },
         });
         await prisma.membership.create({
-          data: { userId: user3Id, organizationId: orgId, role: "MEMBER" },
+          data: { userId: user3Id, organizationId: orgId, roleId: memberRole.id },
         });
       });
 
@@ -276,11 +290,10 @@ describe("Organization API Integration Tests", () => {
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ userId: user2Id, role: "admin" })
+          .send({ userId: user2Id, roleId: adminRole.id })
           .expect(201);
 
         expect(response.body.success).toBe(true);
-        expect(response.body.data.membership.role).toBe("ADMIN");
 
         const membership = await prisma.membership.findUnique({
           where: {
@@ -289,9 +302,10 @@ describe("Organization API Integration Tests", () => {
               organizationId: orgId,
             },
           },
+          include: { role: true },
         });
 
-        expect(membership.role).toBe("ADMIN");
+        expect(membership.role.name).toBe("ADMIN");
       });
 
       it("should allow ADMIN to invite an AGENT", async () => {
@@ -299,36 +313,35 @@ describe("Organization API Integration Tests", () => {
           data: {
             userId: user2Id,
             organizationId: orgId,
-            role: "ADMIN",
+            roleId: adminRole.id,
           },
         });
 
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user2Token}`)
-          .send({ userId: user3Id, role: "agent" })
+          .send({ userId: user3Id, roleId: agentRole.id })
           .expect(201);
 
         expect(response.body.success).toBe(true);
-        expect(response.body.data.membership.role).toBe("AGENT");
       });
 
       it("should reject invalid payload with 400", async () => {
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ role: "ADMIN" })
+          .send({ roleId: adminRole.id })
           .expect(400);
 
         expect(response.body.success).toBe(false);
         expect(response.body.message).toBe("Validation error");
       });
 
-      it("should reject invalid role with 400", async () => {
+      it("should reject invalid roleId with 400", async () => {
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ userId: user2Id, role: "viewer" })
+          .send({ userId: user2Id, roleId: "not-a-uuid" })
           .expect(400);
 
         expect(response.body.success).toBe(false);
@@ -340,14 +353,14 @@ describe("Organization API Integration Tests", () => {
           data: {
             userId: user3Id,
             organizationId: orgId,
-            role: "MEMBER",
+            roleId: memberRole.id,
           },
         });
 
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user3Token}`)
-          .send({ userId: user4Id, role: "MEMBER" })
+          .send({ userId: user4Id, roleId: memberRole.id })
           .expect(403);
 
         expect(response.body.success).toBe(false);
@@ -358,19 +371,19 @@ describe("Organization API Integration Tests", () => {
           data: {
             userId: user2Id,
             organizationId: orgId,
-            role: "ADMIN",
+            roleId: adminRole.id,
           },
         });
 
         const response = await request(app)
           .post(`/api/organizations/${orgId}/members`)
           .set("Authorization", `Bearer ${user2Token}`)
-          .send({ userId: user3Id, role: "ADMIN" })
+          .send({ userId: user3Id, roleId: adminRole.id })
           .expect(403);
 
         expect(response.body.success).toBe(false);
         expect(response.body.message).toBe(
-          "You do not have permission to invite this role",
+          "You cannot invite a member with a role equal to or higher than yours",
         );
       });
     });
@@ -382,12 +395,12 @@ describe("Organization API Integration Tests", () => {
             {
               userId: user2Id,
               organizationId: orgId,
-              role: "ADMIN",
+              roleId: adminRole.id,
             },
             {
               userId: user3Id,
               organizationId: orgId,
-              role: "MEMBER",
+              roleId: memberRole.id,
             },
           ],
         });
@@ -418,17 +431,17 @@ describe("Organization API Integration Tests", () => {
             {
               userId: user2Id,
               organizationId: orgId,
-              role: "ADMIN",
+              roleId: adminRole.id,
             },
             {
               userId: user3Id,
               organizationId: orgId,
-              role: "AGENT",
+              roleId: agentRole.id,
             },
             {
               userId: user4Id,
               organizationId: orgId,
-              role: "MEMBER",
+              roleId: memberRole.id,
             },
           ],
         });
@@ -438,45 +451,43 @@ describe("Organization API Integration Tests", () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user2Id}`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ role: "agent" })
+          .send({ roleId: agentRole.id })
           .expect(200);
 
         expect(response.body.success).toBe(true);
-        expect(response.body.data.membership.role).toBe("AGENT");
       });
 
       it("should allow ADMIN to update MEMBER to AGENT", async () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user4Id}`)
           .set("Authorization", `Bearer ${user2Token}`)
-          .send({ role: "agent" })
+          .send({ roleId: agentRole.id })
           .expect(200);
 
         expect(response.body.success).toBe(true);
-        expect(response.body.data.membership.role).toBe("AGENT");
       });
 
-      it("should reject invalid role payload with 400", async () => {
+      it("should reject invalid roleId payload with 400", async () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user4Id}`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ role: "viewer" })
+          .send({ roleId: "not-a-uuid" })
           .expect(400);
 
         expect(response.body.success).toBe(false);
         expect(response.body.message).toBe("Validation error");
       });
 
-      it("should reject OWNER assigning OWNER with 400", async () => {
+      it("should reject OWNER assigning OWNER role with 403", async () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user2Id}`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ role: "OWNER" })
-          .expect(400);
+          .send({ roleId: ownerRole.id })
+          .expect(403);
 
         expect(response.body.success).toBe(false);
         expect(response.body.message).toBe(
-          "Cannot assign OWNER role to a member",
+          "You cannot promote a member to your role level or higher",
         );
       });
 
@@ -484,18 +495,24 @@ describe("Organization API Integration Tests", () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user1Id}`)
           .set("Authorization", `Bearer ${user1Token}`)
-          .send({ role: "ADMIN" })
+          .send({ roleId: adminRole.id })
           .expect(400);
 
         expect(response.body.success).toBe(false);
-        expect(response.body.message).toBe("Owner cannot change their own role");
+        expect(response.body.message).toBe("You cannot change your own role");
       });
 
       it("should reject ADMIN updating another ADMIN with 403", async () => {
+        // Promote user3 to ADMIN so we have two ADMINs
+        await prisma.membership.update({
+          where: { userId_organizationId: { userId: user3Id, organizationId: orgId } },
+          data: { roleId: adminRole.id },
+        });
+
         const response = await request(app)
-          .patch(`/api/organizations/${orgId}/members/${user2Id}`)
+          .patch(`/api/organizations/${orgId}/members/${user3Id}`)
           .set("Authorization", `Bearer ${user2Token}`)
-          .send({ role: "MEMBER" })
+          .send({ roleId: memberRole.id })
           .expect(403);
 
         expect(response.body.success).toBe(false);
@@ -508,12 +525,12 @@ describe("Organization API Integration Tests", () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user3Id}`)
           .set("Authorization", `Bearer ${user2Token}`)
-          .send({ role: "ADMIN" })
+          .send({ roleId: adminRole.id })
           .expect(403);
 
         expect(response.body.success).toBe(false);
         expect(response.body.message).toBe(
-          "You cannot promote a member to your role or higher",
+          "You cannot promote a member to your role level or higher",
         );
       });
 
@@ -521,7 +538,7 @@ describe("Organization API Integration Tests", () => {
         const response = await request(app)
           .patch(`/api/organizations/${orgId}/members/${user3Id}`)
           .set("Authorization", `Bearer ${user4Token}`)
-          .send({ role: "MEMBER" })
+          .send({ roleId: memberRole.id })
           .expect(403);
 
         expect(response.body.success).toBe(false);

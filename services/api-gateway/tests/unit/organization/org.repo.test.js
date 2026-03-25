@@ -1,7 +1,74 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import {
+  PERMISSIONS,
+  ALL_PERMISSIONS,
+} from "../../../src/modules/organization/org.constants.js";
 
+// ── Test role fixtures ──────────────────────────────────────────────
+const OWNER_ROLE = {
+  id: "role-owner",
+  name: "OWNER",
+  permissions: ALL_PERMISSIONS,
+  level: 100,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const AGENT_ROLE = {
+  id: "role-agent",
+  name: "AGENT",
+  permissions: [
+    PERMISSIONS.ORG_VIEW_MEMBERS,
+    PERMISSIONS.TICKET_VIEW_ALL,
+    PERMISSIONS.TICKET_EDIT_ALL,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    PERMISSIONS.AGENT_UPDATE_AVAILABILITY,
+  ],
+  level: 50,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const ADMIN_ROLE = {
+  id: "role-admin",
+  name: "ADMIN",
+  permissions: [
+    PERMISSIONS.ORG_UPDATE,
+    PERMISSIONS.ORG_INVITE_MEMBER,
+    PERMISSIONS.ORG_MANAGE_MEMBER,
+    PERMISSIONS.ORG_VIEW_MEMBERS,
+    PERMISSIONS.ROLE_CREATE,
+    PERMISSIONS.ROLE_UPDATE,
+    PERMISSIONS.ROLE_DELETE,
+    PERMISSIONS.TICKET_VIEW_ALL,
+    PERMISSIONS.TICKET_EDIT_ALL,
+    PERMISSIONS.TICKET_ASSIGN,
+    PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    PERMISSIONS.AI_MANAGE_CONFIG,
+  ],
+  level: 75,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+const MEMBER_ROLE = {
+  id: "role-member",
+  name: "MEMBER",
+  permissions: [PERMISSIONS.ORG_VIEW_MEMBERS],
+  level: 10,
+  isSystem: true,
+  organizationId: "org-1",
+};
+
+// ── Mocks ───────────────────────────────────────────────────────────
 const mockOrganizationCreate = jest.fn();
 const mockOrganizationFindMany = jest.fn();
+const mockOrganizationFindFirst = jest.fn();
 const mockOrganizationUpdate = jest.fn();
 const mockOrganizationDelete = jest.fn();
 const mockMembershipCreate = jest.fn();
@@ -9,6 +76,7 @@ const mockMembershipFindMany = jest.fn();
 const mockMembershipFindUnique = jest.fn();
 const mockMembershipUpdate = jest.fn();
 const mockMembershipDeleteMany = jest.fn();
+const mockOrgRoleDeleteMany = jest.fn();
 const mockTransaction = jest.fn();
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
@@ -16,7 +84,7 @@ jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
     read: {
       organization: {
         findMany: mockOrganizationFindMany,
-        findFirst: jest.fn(),
+        findFirst: mockOrganizationFindFirst,
       },
       membership: {
         findMany: mockMembershipFindMany,
@@ -42,9 +110,11 @@ jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
 const {
   createOrganization,
   deleteOrganization,
+  findOrganizationByOwner,
   getOrganizationMembersById,
   getOrganizationMembershipByUserId,
   getOrganizationsByUserId,
+  getUserMembershipInOrganization,
   inviteMemberInOrganization,
   patchOrganization,
   updateMembershipRole,
@@ -55,11 +125,15 @@ describe("Organization Repo", () => {
     jest.clearAllMocks();
   });
 
-  it("should create an organization with an owner membership", async () => {
+  it("should create an organization with an owner membership using roleId", async () => {
     const created = { id: "org-1" };
     mockOrganizationCreate.mockResolvedValue(created);
 
-    const result = await createOrganization({ name: "Test Org", userId: "user-1" });
+    const result = await createOrganization({
+      name: "Test Org",
+      userId: "user-1",
+      ownerRoleId: OWNER_ROLE.id,
+    });
 
     expect(mockOrganizationCreate).toHaveBeenCalledWith({
       data: {
@@ -67,12 +141,12 @@ describe("Organization Repo", () => {
         memberships: {
           create: {
             userId: "user-1",
-            role: "OWNER",
+            roleId: OWNER_ROLE.id,
           },
         },
       },
       include: {
-        memberships: true,
+        memberships: { include: { role: true } },
       },
     });
     expect(result).toBe(created);
@@ -96,7 +170,7 @@ describe("Organization Repo", () => {
     expect(result).toBe(organizations);
   });
 
-  it("should patch an organization name", async () => {
+  it("should patch an organization name and include memberships with roles", async () => {
     const updated = { id: "org-1", name: "Updated Org" };
     mockOrganizationUpdate.mockResolvedValue(updated);
 
@@ -109,19 +183,42 @@ describe("Organization Repo", () => {
       data: {
         name: "Updated Org",
       },
-      include: { memberships: true },
+      include: { memberships: { include: { role: true } } },
     });
     expect(result).toBe(updated);
   });
 
-  it("should delete an organization inside a transaction", async () => {
+  it("should find organization by owner using role relation filter", async () => {
+    const org = { id: "org-1" };
+    mockOrganizationFindFirst.mockResolvedValue(org);
+
+    const result = await findOrganizationByOwner({ userId: "user-1" });
+
+    expect(mockOrganizationFindFirst).toHaveBeenCalledWith({
+      where: {
+        memberships: {
+          some: {
+            userId: "user-1",
+            role: { name: "OWNER", isSystem: true },
+          },
+        },
+      },
+    });
+    expect(result).toBe(org);
+  });
+
+  it("should delete an organization inside a transaction (memberships + roles + org)", async () => {
     const deleted = { id: "org-1" };
     mockMembershipDeleteMany.mockResolvedValue({ count: 2 });
+    mockOrgRoleDeleteMany.mockResolvedValue({ count: 4 });
     mockOrganizationDelete.mockResolvedValue(deleted);
     mockTransaction.mockImplementation(async (callback) =>
       callback({
         membership: {
           deleteMany: mockMembershipDeleteMany,
+        },
+        orgRole: {
+          deleteMany: mockOrgRoleDeleteMany,
         },
         organization: {
           delete: mockOrganizationDelete,
@@ -137,6 +234,11 @@ describe("Organization Repo", () => {
         organizationId: "org-1",
       },
     });
+    expect(mockOrgRoleDeleteMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+      },
+    });
     expect(mockOrganizationDelete).toHaveBeenCalledWith({
       where: {
         id: "org-1",
@@ -145,38 +247,25 @@ describe("Organization Repo", () => {
     expect(result).toBe(deleted);
   });
 
-  it("should invite a member with an explicit role", async () => {
-    const membership = { id: "membership-1", role: "AGENT" };
+  it("should invite a member with a roleId", async () => {
+    const membership = { id: "membership-1", role: AGENT_ROLE };
     mockMembershipCreate.mockResolvedValue(membership);
 
-    const result = await inviteMemberInOrganization("org-1", "user-2", "AGENT");
+    const result = await inviteMemberInOrganization("org-1", "user-2", AGENT_ROLE.id);
 
     expect(mockMembershipCreate).toHaveBeenCalledWith({
       data: {
         organizationId: "org-1",
         userId: "user-2",
-        role: "AGENT",
+        roleId: AGENT_ROLE.id,
       },
+      include: { role: true },
     });
     expect(result).toBe(membership);
   });
 
-  it("should default invited member role to MEMBER when role is missing", async () => {
-    mockMembershipCreate.mockResolvedValue({ id: "membership-1", role: "MEMBER" });
-
-    await inviteMemberInOrganization("org-1", "user-2");
-
-    expect(mockMembershipCreate).toHaveBeenCalledWith({
-      data: {
-        organizationId: "org-1",
-        userId: "user-2",
-        role: "MEMBER",
-      },
-    });
-  });
-
-  it("should get all members for an organization", async () => {
-    const members = [{ id: "membership-1" }];
+  it("should get all members for an organization including role", async () => {
+    const members = [{ id: "membership-1", role: OWNER_ROLE }];
     mockMembershipFindMany.mockResolvedValue(members);
 
     const result = await getOrganizationMembersById("org-1");
@@ -187,13 +276,14 @@ describe("Organization Repo", () => {
       },
       include: {
         user: true,
+        role: true,
       },
     });
     expect(result).toBe(members);
   });
 
-  it("should get one membership by organization and user id", async () => {
-    const membership = { id: "membership-1" };
+  it("should get one membership by organization and user id including role", async () => {
+    const membership = { id: "membership-1", role: AGENT_ROLE };
     mockMembershipFindUnique.mockResolvedValue(membership);
 
     const result = await getOrganizationMembershipByUserId("org-1", "user-2");
@@ -205,15 +295,41 @@ describe("Organization Repo", () => {
           organizationId: "org-1",
         },
       },
+      include: { role: true },
     });
     expect(result).toBe(membership);
   });
 
-  it("should update a membership role", async () => {
-    const membership = { id: "membership-1", role: "ADMIN" };
+  it("should get user membership in organization including organization and role", async () => {
+    const membership = {
+      id: "membership-1",
+      role: MEMBER_ROLE,
+      organization: { id: "org-1", name: "Test Org" },
+    };
+    mockMembershipFindUnique.mockResolvedValue(membership);
+
+    const result = await getUserMembershipInOrganization({
+      userId: "user-1",
+      orgId: "org-1",
+    });
+
+    expect(mockMembershipFindUnique).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: {
+          userId: "user-1",
+          organizationId: "org-1",
+        },
+      },
+      include: { organization: true, role: true },
+    });
+    expect(result).toBe(membership);
+  });
+
+  it("should update a membership role using roleId", async () => {
+    const membership = { id: "membership-1", role: ADMIN_ROLE };
     mockMembershipUpdate.mockResolvedValue(membership);
 
-    const result = await updateMembershipRole("org-1", "user-2", "ADMIN");
+    const result = await updateMembershipRole("org-1", "user-2", ADMIN_ROLE.id);
 
     expect(mockMembershipUpdate).toHaveBeenCalledWith({
       where: {
@@ -222,7 +338,8 @@ describe("Organization Repo", () => {
           organizationId: "org-1",
         },
       },
-      data: { role: "ADMIN" },
+      data: { roleId: ADMIN_ROLE.id },
+      include: { role: true },
     });
     expect(result).toBe(membership);
   });

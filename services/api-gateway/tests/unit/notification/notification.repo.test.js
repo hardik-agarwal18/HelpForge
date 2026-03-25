@@ -250,7 +250,7 @@ describe("notification.repo", () => {
         where: {
           organizationId: "org-1",
           role: {
-            in: ["OWNER", "ADMIN", "AGENT"],
+            permissions: { has: "ticket:view_all" },
           },
         },
         select: {
