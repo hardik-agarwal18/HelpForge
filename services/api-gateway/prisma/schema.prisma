@@ -7,11 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  OWNER
-  ADMIN
-  AGENT
-  MEMBER
+model OrgRole {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  permissions String[]
+  level       Int
+  isSystem    Boolean @default(false)
+
+  memberships Membership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 enum TicketStatus {
@@ -91,6 +103,7 @@ model Organization {
   createdAt DateTime @default(now())
 
   memberships            Membership[]
+  roles                  OrgRole[]
   tickets                Ticket[]
   tags                   Tag[]
   agentWorkloads         AgentWorkload[]
@@ -106,8 +119,7 @@ model Membership {
 
   userId         String
   organizationId String
-
-  role Role @default(MEMBER)
+  roleId         String
 
   isAvailable       Boolean @default(true)
   maxTicketsPerDay  Int?    @default(10)
@@ -115,11 +127,12 @@ model Membership {
 
   user         User         @relation(fields: [userId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
+  role         OrgRole      @relation(fields: [roleId], references: [id])
 
   createdAt DateTime @default(now())
 
   @@unique([userId, organizationId])
-  @@index([organizationId, role, isAvailable, createdAt])
+  @@index([organizationId, roleId, isAvailable, createdAt])
 }
 
 model Ticket {
