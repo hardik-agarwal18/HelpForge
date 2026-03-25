@@ -1,5 +1,12 @@
 import db from "../../config/database.config.js";
+import { invalidateUserPermissionSnapshot } from "../auth/auth.repo.js";
 import { ALL_PERMISSION_DETAILS } from "./org.constants.js";
+import {
+  getCachedOrganizationMembership,
+  invalidateOrganizationMembershipCache,
+  invalidateOrganizationMembershipCacheByOrg,
+  setCachedOrganizationMembership,
+} from "./org.cache.js";
 import {
   normalizeMembershipRole,
   normalizeRolePermissions,
@@ -37,6 +44,23 @@ const normalizeOrganization = (organization) => {
   return normalized;
 };
 
+const getOrganizationMemberUserIds = async (tx, organizationId) => {
+  const memberships = await tx.membership.findMany({
+    where: { organizationId },
+    select: { userId: true },
+  });
+
+  return [...new Set(memberships.map(({ userId }) => userId))];
+};
+
+const invalidateUserPermissionSnapshots = async (userIds = []) => {
+  await Promise.all(
+    [...new Set(userIds.filter(Boolean))].map((userId) =>
+      invalidateUserPermissionSnapshot(userId),
+    ),
+  );
+};
+
 const ensurePermissionsExist = async (tx, permissions = []) => {
   const permissionSet = new Set(permissions);
 
@@ -64,13 +88,16 @@ const toRolePermissionConnect = (permissions = []) =>
 // Organization CRUD
 
 export const getOrganizationsByUserId = async (userId) => {
-  return await db.read.organization.findMany({
+  const memberships = await db.read.membership.findMany({
     where: {
-      memberships: {
-        some: { userId },
-      },
+      userId,
+    },
+    select: {
+      organization: true,
     },
   });
+
+  return memberships.map(({ organization }) => organization);
 };
 
 export const createOrganization = async ({ name, userId, ownerRoleId }) => {
@@ -137,7 +164,7 @@ export const createOrganizationWithRolesAndOwner = async ({
       return null;
     }
 
-    await tx.membership.create({
+    const membership = await tx.membership.create({
       data: {
         organizationId: organization.id,
         userId,
@@ -155,7 +182,17 @@ export const createOrganizationWithRolesAndOwner = async ({
       },
     });
 
-    return normalizeOrganization(hydratedOrganization);
+    const normalizedOrganization = normalizeOrganization(hydratedOrganization);
+
+    const ownerMembership = normalizedOrganization?.memberships?.find(
+      (entry) => entry.userId === membership.userId,
+    );
+    if (ownerMembership) {
+      await setCachedOrganizationMembership(ownerMembership);
+    }
+    await invalidateUserPermissionSnapshot(userId);
+
+    return normalizedOrganization;
   });
 };
 
@@ -170,29 +207,39 @@ export const patchOrganization = async ({ orgId, name }) => {
 };
 
 export const findOrganizationByOwner = async ({ userId }) => {
-  return await db.read.organization.findFirst({
+  const membership = await db.read.membership.findFirst({
     where: {
-      memberships: {
-        some: {
-          userId,
-          role: { name: "OWNER", isSystem: true },
-        },
-      },
+      userId,
+      role: { name: "OWNER", isSystem: true },
+    },
+    select: {
+      organization: true,
     },
   });
+
+  return membership?.organization ?? null;
 };
 
 export const deleteOrganization = async ({ orgId }) => {
   return await db.write.$transaction(async (tx) => {
+    const userIds = await getOrganizationMemberUserIds(tx, orgId);
+
     await tx.membership.deleteMany({
       where: { organizationId: orgId },
     });
     await tx.orgRole.deleteMany({
       where: { organizationId: orgId },
     });
-    return await tx.organization.delete({
+    const deletedOrganization = await tx.organization.delete({
       where: { id: orgId },
     });
+
+    return { deletedOrganization, userIds };
+  }).finally(async () => {
+    await invalidateOrganizationMembershipCacheByOrg(orgId);
+  }).then(async ({ deletedOrganization, userIds }) => {
+    await invalidateUserPermissionSnapshots(userIds);
+    return deletedOrganization;
   });
 };
 
@@ -213,6 +260,11 @@ export const getOrganizationMembersById = async (orgId) => {
 };
 
 export const getOrganizationMembershipByUserId = async (orgId, userId) => {
+  const cachedMembership = await getCachedOrganizationMembership(orgId, userId);
+  if (cachedMembership) {
+    return cachedMembership;
+  }
+
   const membership = await db.read.membership.findUnique({
     where: {
       userId_organizationId: { userId, organizationId: orgId },
@@ -224,10 +276,20 @@ export const getOrganizationMembershipByUserId = async (orgId, userId) => {
     },
   });
 
-  return normalizeMembershipRole(membership);
+  const normalizedMembership = normalizeMembershipRole(membership);
+  if (normalizedMembership) {
+    await setCachedOrganizationMembership(normalizedMembership);
+  }
+
+  return normalizedMembership;
 };
 
 export const getUserMembershipInOrganization = async ({ userId, orgId }) => {
+  const cachedMembership = await getCachedOrganizationMembership(orgId, userId);
+  if (cachedMembership?.organization) {
+    return cachedMembership;
+  }
+
   const membership = await db.read.membership.findUnique({
     where: {
       userId_organizationId: { userId, organizationId: orgId },
@@ -240,7 +302,12 @@ export const getUserMembershipInOrganization = async ({ userId, orgId }) => {
     },
   });
 
-  return normalizeMembershipRole(membership);
+  const normalizedMembership = normalizeMembershipRole(membership);
+  if (normalizedMembership) {
+    await setCachedOrganizationMembership(normalizedMembership);
+  }
+
+  return normalizedMembership;
 };
 
 export const inviteMemberInOrganization = async (orgId, userId, roleId) => {
@@ -257,7 +324,10 @@ export const inviteMemberInOrganization = async (orgId, userId, roleId) => {
     },
   });
 
-  return normalizeMembershipRole(membership);
+  const normalizedMembership = normalizeMembershipRole(membership);
+  await setCachedOrganizationMembership(normalizedMembership);
+  await invalidateUserPermissionSnapshot(userId);
+  return normalizedMembership;
 };
 
 export const updateMembershipRole = async (orgId, userId, roleId) => {
@@ -273,7 +343,10 @@ export const updateMembershipRole = async (orgId, userId, roleId) => {
     },
   });
 
-  return normalizeMembershipRole(membership);
+  const normalizedMembership = normalizeMembershipRole(membership);
+  await setCachedOrganizationMembership(normalizedMembership);
+  await invalidateUserPermissionSnapshot(userId);
+  return normalizedMembership;
 };
 
 // OrgRole CRUD
@@ -354,6 +427,10 @@ export const createOrgRole = async (orgId, { name, permissions, level }) => {
     });
 
     return normalizeRolePermissions(role);
+  }).then(async (role) => {
+    const userIds = await getOrganizationMemberUserIds(db.read, orgId);
+    await invalidateUserPermissionSnapshots(userIds);
+    return role;
   });
 };
 
@@ -378,12 +455,27 @@ export const updateOrgRole = async (roleId, { name, permissions, level }) => {
       include: rolePermissionInclude,
     });
 
-    return normalizeRolePermissions(role);
+    const userIds = await getOrganizationMemberUserIds(tx, role.organizationId);
+
+    return {
+      role: normalizeRolePermissions(role),
+      userIds,
+    };
+  }).then(async (role) => {
+    await invalidateOrganizationMembershipCacheByOrg(role.role.organizationId);
+    await invalidateUserPermissionSnapshots(role.userIds);
+    return role.role;
   });
 };
 
 export const deleteOrgRole = async (roleId) => {
-  return await db.write.orgRole.delete({
+  const role = await db.write.orgRole.delete({
     where: { id: roleId },
   });
+
+  const userIds = await getOrganizationMemberUserIds(db.read, role.organizationId);
+  await invalidateOrganizationMembershipCacheByOrg(role.organizationId);
+  await invalidateUserPermissionSnapshots(userIds);
+
+  return role;
 };

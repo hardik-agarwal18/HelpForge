@@ -48,7 +48,11 @@ export const requirePermission = (...requiredPermissions) => {
       });
     }
 
-    const memberPermissions = extractPermissionValues(req.membership.role.permissions);
+    const tokenPermissions =
+      req.auth?.orgPermissions?.[req.params.orgId]?.permissions ?? [];
+    const memberPermissions = tokenPermissions.length > 0
+      ? tokenPermissions
+      : extractPermissionValues(req.membership.role.permissions);
     const hasAll = requiredPermissions.every((p) => memberPermissions.includes(p));
 
     if (!hasAll) {

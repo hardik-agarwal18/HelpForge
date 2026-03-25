@@ -1,4 +1,9 @@
 import db from "../../config/database.config.js";
+import {
+  getCachedOrganizationMembership,
+  invalidateOrganizationMembershipCache,
+  setCachedOrganizationMembership,
+} from "../organization/org.cache.js";
 import { normalizeMembershipRole } from "../organization/org.utils.js";
 
 const rolePermissionInclude = {
@@ -13,6 +18,14 @@ export const getTicketOrganizationMembership = async (
   organizationId,
   userId,
 ) => {
+  const cachedMembership = await getCachedOrganizationMembership(
+    organizationId,
+    userId,
+  );
+  if (cachedMembership) {
+    return cachedMembership;
+  }
+
   const membership = await db.read.membership.findUnique({
     where: {
       userId_organizationId: {
@@ -27,7 +40,12 @@ export const getTicketOrganizationMembership = async (
     },
   });
 
-  return normalizeMembershipRole(membership);
+  const normalizedMembership = normalizeMembershipRole(membership);
+  if (normalizedMembership) {
+    await setCachedOrganizationMembership(normalizedMembership);
+  }
+
+  return normalizedMembership;
 };
 
 export const getTicketMembershipsByUserId = async (userId) => {
@@ -50,7 +68,7 @@ export const updateAgentAvailability = async (
   userId,
   isAvailable,
 ) => {
-  return await db.write.membership.update({
+  const membership = await db.write.membership.update({
     where: {
       userId_organizationId: {
         userId,
@@ -61,6 +79,9 @@ export const updateAgentAvailability = async (
       isAvailable,
     },
   });
+
+  await invalidateOrganizationMembershipCache(organizationId, userId);
+  return membership;
 };
 
 export const getOrganizationAvailableAgents = async (organizationId) => {
