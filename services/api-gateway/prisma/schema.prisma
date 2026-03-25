@@ -13,9 +13,9 @@ model OrgRole {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  permissions String[]
-  level       Int
-  isSystem    Boolean @default(false)
+  rolePermissions RolePermission[]
+  level           Int
+  isSystem        Boolean @default(false)
 
   memberships Membership[]
 
@@ -24,6 +24,27 @@ model OrgRole {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  resource    String
+  action      String
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       OrgRole     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
 }
 
 enum TicketStatus {
