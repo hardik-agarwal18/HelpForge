@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
+const rolePermissionInclude = {
+  include: {
+    rolePermissions: {
+      include: {
+        permission: true,
+      },
+    },
+  },
+};
+
 const mockMembershipFindMany = jest.fn();
 const mockMembershipFindUnique = jest.fn();
 const mockMembershipUpdate = jest.fn();
@@ -128,13 +138,13 @@ describe("Ticket Repo", () => {
       },
       include: {
         user: true,
-        role: true,
+        role: rolePermissionInclude,
       },
       orderBy: {
         createdAt: "asc",
       },
     });
-    expect(result).toBe(memberships);
+    expect(result).toEqual(memberships);
   });
 
   it("should fetch organization agent workloads", async () => {

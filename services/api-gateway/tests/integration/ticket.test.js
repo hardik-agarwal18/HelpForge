@@ -38,6 +38,44 @@ const ALL_PERMISSIONS = ["org:update", "org:delete", "org:invite_member", "org:m
 const AGENT_PERMISSIONS = ["org:view_members", "ticket:view_all", "ticket:edit_all", "ticket:assign", "ticket:create_internal_comment", "ticket:delete_any_comment", "ticket:delete_any_attachment", "agent:update_availability"];
 const MEMBER_PERMISSIONS = ["org:view_members"];
 
+const buildRolePermissionCreates = (permissions) =>
+  permissions.map((name) => {
+    const [resource, action] = name.split(":");
+
+    return {
+      permission: {
+        connectOrCreate: {
+          where: { name },
+          create: {
+            name,
+            description: name,
+            resource,
+            action,
+          },
+        },
+      },
+    };
+  });
+
+const createRoleWithPermissions = ({
+  name,
+  organizationId,
+  permissions,
+  level,
+  isSystem,
+}) =>
+  prisma.orgRole.create({
+    data: {
+      name,
+      organizationId,
+      level,
+      isSystem,
+      rolePermissions: {
+        create: buildRolePermissionCreates(permissions),
+      },
+    },
+  });
+
 describe("Ticket API Integration Tests", () => {
   let user1;
   let user2;
@@ -91,14 +129,26 @@ describe("Ticket API Integration Tests", () => {
       },
     });
 
-    ownerRole = await prisma.orgRole.create({
-      data: { name: "OWNER", organizationId: organization.id, permissions: ALL_PERMISSIONS, level: 100, isSystem: true },
+    ownerRole = await createRoleWithPermissions({
+      name: "OWNER",
+      organizationId: organization.id,
+      permissions: ALL_PERMISSIONS,
+      level: 100,
+      isSystem: true,
     });
-    agentRole = await prisma.orgRole.create({
-      data: { name: "AGENT", organizationId: organization.id, permissions: AGENT_PERMISSIONS, level: 50, isSystem: true },
+    agentRole = await createRoleWithPermissions({
+      name: "AGENT",
+      organizationId: organization.id,
+      permissions: AGENT_PERMISSIONS,
+      level: 50,
+      isSystem: true,
     });
-    memberRole = await prisma.orgRole.create({
-      data: { name: "MEMBER", organizationId: organization.id, permissions: MEMBER_PERMISSIONS, level: 10, isSystem: true },
+    memberRole = await createRoleWithPermissions({
+      name: "MEMBER",
+      organizationId: organization.id,
+      permissions: MEMBER_PERMISSIONS,
+      level: 10,
+      isSystem: true,
     });
 
     await prisma.membership.createMany({

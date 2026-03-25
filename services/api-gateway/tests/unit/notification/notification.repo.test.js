@@ -250,7 +250,13 @@ describe("notification.repo", () => {
         where: {
           organizationId: "org-1",
           role: {
-            permissions: { has: "ticket:view_all" },
+            rolePermissions: {
+              some: {
+                permission: {
+                  name: "ticket:view_all",
+                },
+              },
+            },
           },
         },
         select: {

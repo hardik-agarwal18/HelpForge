@@ -4,6 +4,16 @@ import {
   ALL_PERMISSIONS,
 } from "../../../src/modules/organization/org.constants.js";
 
+const rolePermissionInclude = {
+  include: {
+    rolePermissions: {
+      include: {
+        permission: true,
+      },
+    },
+  },
+};
+
 // ── Test role fixtures ──────────────────────────────────────────────
 const OWNER_ROLE = {
   id: "role-owner",
@@ -64,6 +74,15 @@ const MEMBER_ROLE = {
   isSystem: true,
   organizationId: "org-1",
 };
+
+const withRolePermissions = (role) => ({
+  ...role,
+  rolePermissions: role.permissions.map((name) => ({
+    permission: {
+      name,
+    },
+  })),
+});
 
 // ── Mocks ───────────────────────────────────────────────────────────
 const mockOrganizationCreate = jest.fn();
@@ -126,7 +145,10 @@ describe("Organization Repo", () => {
   });
 
   it("should create an organization with an owner membership using roleId", async () => {
-    const created = { id: "org-1" };
+    const created = {
+      id: "org-1",
+      memberships: [{ role: withRolePermissions(OWNER_ROLE) }],
+    };
     mockOrganizationCreate.mockResolvedValue(created);
 
     const result = await createOrganization({
@@ -146,10 +168,13 @@ describe("Organization Repo", () => {
         },
       },
       include: {
-        memberships: { include: { role: true } },
+        memberships: { include: { role: rolePermissionInclude } },
       },
     });
-    expect(result).toBe(created);
+    expect(result).toEqual({
+      ...created,
+      memberships: [{ role: OWNER_ROLE }],
+    });
   });
 
   it("should get organizations by user id", async () => {
@@ -171,7 +196,11 @@ describe("Organization Repo", () => {
   });
 
   it("should patch an organization name and include memberships with roles", async () => {
-    const updated = { id: "org-1", name: "Updated Org" };
+    const updated = {
+      id: "org-1",
+      name: "Updated Org",
+      memberships: [{ role: withRolePermissions(OWNER_ROLE) }],
+    };
     mockOrganizationUpdate.mockResolvedValue(updated);
 
     const result = await patchOrganization({ orgId: "org-1", name: "Updated Org" });
@@ -183,9 +212,12 @@ describe("Organization Repo", () => {
       data: {
         name: "Updated Org",
       },
-      include: { memberships: { include: { role: true } } },
+      include: { memberships: { include: { role: rolePermissionInclude } } },
     });
-    expect(result).toBe(updated);
+    expect(result).toEqual({
+      ...updated,
+      memberships: [{ role: OWNER_ROLE }],
+    });
   });
 
   it("should find organization by owner using role relation filter", async () => {
@@ -248,7 +280,10 @@ describe("Organization Repo", () => {
   });
 
   it("should invite a member with a roleId", async () => {
-    const membership = { id: "membership-1", role: AGENT_ROLE };
+    const membership = {
+      id: "membership-1",
+      role: withRolePermissions(AGENT_ROLE),
+    };
     mockMembershipCreate.mockResolvedValue(membership);
 
     const result = await inviteMemberInOrganization("org-1", "user-2", AGENT_ROLE.id);
@@ -259,13 +294,16 @@ describe("Organization Repo", () => {
         userId: "user-2",
         roleId: AGENT_ROLE.id,
       },
-      include: { role: true },
+      include: { role: rolePermissionInclude },
     });
-    expect(result).toBe(membership);
+    expect(result).toEqual({
+      ...membership,
+      role: AGENT_ROLE,
+    });
   });
 
   it("should get all members for an organization including role", async () => {
-    const members = [{ id: "membership-1", role: OWNER_ROLE }];
+    const members = [{ id: "membership-1", role: withRolePermissions(OWNER_ROLE) }];
     mockMembershipFindMany.mockResolvedValue(members);
 
     const result = await getOrganizationMembersById("org-1");
@@ -276,14 +314,14 @@ describe("Organization Repo", () => {
       },
       include: {
         user: true,
-        role: true,
+        role: rolePermissionInclude,
       },
     });
-    expect(result).toBe(members);
+    expect(result).toEqual([{ id: "membership-1", role: OWNER_ROLE }]);
   });
 
   it("should get one membership by organization and user id including role", async () => {
-    const membership = { id: "membership-1", role: AGENT_ROLE };
+    const membership = { id: "membership-1", role: withRolePermissions(AGENT_ROLE) };
     mockMembershipFindUnique.mockResolvedValue(membership);
 
     const result = await getOrganizationMembershipByUserId("org-1", "user-2");
@@ -295,15 +333,15 @@ describe("Organization Repo", () => {
           organizationId: "org-1",
         },
       },
-      include: { role: true },
+      include: { role: rolePermissionInclude },
     });
-    expect(result).toBe(membership);
+    expect(result).toEqual({ id: "membership-1", role: AGENT_ROLE });
   });
 
   it("should get user membership in organization including organization and role", async () => {
     const membership = {
       id: "membership-1",
-      role: MEMBER_ROLE,
+      role: withRolePermissions(MEMBER_ROLE),
       organization: { id: "org-1", name: "Test Org" },
     };
     mockMembershipFindUnique.mockResolvedValue(membership);
@@ -320,13 +358,17 @@ describe("Organization Repo", () => {
           organizationId: "org-1",
         },
       },
-      include: { organization: true, role: true },
+      include: { organization: true, role: rolePermissionInclude },
     });
-    expect(result).toBe(membership);
+    expect(result).toEqual({
+      id: "membership-1",
+      role: MEMBER_ROLE,
+      organization: { id: "org-1", name: "Test Org" },
+    });
   });
 
   it("should update a membership role using roleId", async () => {
-    const membership = { id: "membership-1", role: ADMIN_ROLE };
+    const membership = { id: "membership-1", role: withRolePermissions(ADMIN_ROLE) };
     mockMembershipUpdate.mockResolvedValue(membership);
 
     const result = await updateMembershipRole("org-1", "user-2", ADMIN_ROLE.id);
@@ -339,8 +381,8 @@ describe("Organization Repo", () => {
         },
       },
       data: { roleId: ADMIN_ROLE.id },
-      include: { role: true },
+      include: { role: rolePermissionInclude },
     });
-    expect(result).toBe(membership);
+    expect(result).toEqual({ id: "membership-1", role: ADMIN_ROLE });
   });
 });

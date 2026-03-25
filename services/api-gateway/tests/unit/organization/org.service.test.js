@@ -68,6 +68,7 @@ const MEMBER_ROLE = {
 
 // ── Mocks ───────────────────────────────────────────────────────────
 const mockCreateOrganization = jest.fn();
+const mockCreateOrganizationWithRolesAndOwner = jest.fn();
 const mockGetOrganizationsByUserId = jest.fn();
 const mockPatchOrganization = jest.fn();
 const mockDeleteOrganization = jest.fn();
@@ -80,13 +81,10 @@ const mockGetOrgRoleById = jest.fn();
 const mockGetOrgRoleByName = jest.fn();
 const mockCreateOrgRoles = jest.fn();
 
-const mockOrganizationCreate = jest.fn();
-const mockMembershipCreate = jest.fn();
-const mockOrganizationFindUnique = jest.fn();
-
 // Mock the repository
 jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => ({
   createOrganization: mockCreateOrganization,
+  createOrganizationWithRolesAndOwner: mockCreateOrganizationWithRolesAndOwner,
   getOrganizationsByUserId: mockGetOrganizationsByUserId,
   patchOrganization: mockPatchOrganization,
   deleteOrganization: mockDeleteOrganization,
@@ -102,25 +100,6 @@ jest.unstable_mockModule("../../../src/modules/organization/org.repo.js", () => 
   createOrgRole: jest.fn(),
   updateOrgRole: jest.fn(),
   deleteOrgRole: jest.fn(),
-}));
-
-// Mock the database config (used directly by createOrganizationService internals)
-jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
-  default: {
-    read: {
-      organization: {
-        findUnique: mockOrganizationFindUnique,
-      },
-    },
-    write: {
-      organization: {
-        create: mockOrganizationCreate,
-      },
-      membership: {
-        create: mockMembershipCreate,
-      },
-    },
-  },
 }));
 
 // Import after mocking
@@ -148,24 +127,21 @@ describe("Organization Service", () => {
         roles: [OWNER_ROLE, ADMIN_ROLE, AGENT_ROLE, MEMBER_ROLE],
       };
       mockFindOrganizationByOwner.mockResolvedValue(null);
-      mockOrganizationCreate.mockResolvedValue({ id: "org-1" });
-      mockCreateOrgRoles.mockResolvedValue({ count: 4 });
-      mockGetOrgRoleByName.mockResolvedValue(OWNER_ROLE);
-      mockMembershipCreate.mockResolvedValue({ id: "mem-1" });
-      mockOrganizationFindUnique.mockResolvedValue(mockOrg);
+      mockCreateOrganizationWithRolesAndOwner.mockResolvedValue(mockOrg);
 
       const result = await createOrganizationService({ name: "Test Org", userId: "user-1" });
 
+      expect(mockCreateOrganizationWithRolesAndOwner).toHaveBeenCalledWith({
+        name: "Test Org",
+        userId: "user-1",
+        roles: expect.any(Array),
+      });
       expect(result).toEqual(mockOrg);
     });
 
     it("should throw ApiError if organization creation fails", async () => {
       mockFindOrganizationByOwner.mockResolvedValue(null);
-      mockOrganizationCreate.mockResolvedValue({ id: "org-1" });
-      mockCreateOrgRoles.mockResolvedValue({ count: 4 });
-      mockGetOrgRoleByName.mockResolvedValue(OWNER_ROLE);
-      mockMembershipCreate.mockResolvedValue({ id: "mem-1" });
-      mockOrganizationFindUnique.mockResolvedValue(null);
+      mockCreateOrganizationWithRolesAndOwner.mockResolvedValue(null);
 
       await expect(
         createOrganizationService({ name: "Test Org", userId: "user-1" }),
