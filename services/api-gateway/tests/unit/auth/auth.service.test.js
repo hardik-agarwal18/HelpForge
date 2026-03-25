@@ -3,6 +3,7 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 const mockFindUserByEmail = jest.fn();
 const mockCreateUser = jest.fn();
 const mockFindUserById = jest.fn();
+const mockGetUserPermissionSnapshot = jest.fn();
 const mockCreateRefreshToken = jest.fn();
 const mockFindRefreshToken = jest.fn();
 const mockDeleteRefreshToken = jest.fn();
@@ -20,6 +21,7 @@ jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserByEmail: mockFindUserByEmail,
   createUser: mockCreateUser,
   findUserById: mockFindUserById,
+  getUserPermissionSnapshot: mockGetUserPermissionSnapshot,
   createRefreshToken: mockCreateRefreshToken,
   findRefreshToken: mockFindRefreshToken,
   deleteRefreshToken: mockDeleteRefreshToken,
@@ -63,6 +65,11 @@ describe("Auth Service Unit Tests", () => {
       accessToken: "mock-access-token",
       expiresIn: "15m",
     });
+    mockGetUserPermissionSnapshot.mockResolvedValue({
+      "org-1": {
+        permissions: ["ticket:view_all"],
+      },
+    });
     mockGenerateRefreshToken.mockReturnValue("mock-refresh-token");
     mockCreateRefreshToken.mockResolvedValue({});
     mockBlacklistToken.mockResolvedValue({});
@@ -91,7 +98,16 @@ describe("Auth Service Unit Tests", () => {
 
       const result = await registerUser(mockUserData);
 
-      expect(mockGenerateAccessToken).toHaveBeenCalledWith(mockCreatedUser);
+      expect(mockGenerateAccessToken).toHaveBeenCalledWith(
+        mockCreatedUser,
+        {
+          orgPermissions: {
+            "org-1": {
+              permissions: ["ticket:view_all"],
+            },
+          },
+        },
+      );
       expect(mockGenerateRefreshToken).toHaveBeenCalled();
       expect(mockCreateRefreshToken).toHaveBeenCalledWith(
         expect.objectContaining({

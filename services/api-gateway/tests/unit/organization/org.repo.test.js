@@ -92,11 +92,28 @@ const mockOrganizationUpdate = jest.fn();
 const mockOrganizationDelete = jest.fn();
 const mockMembershipCreate = jest.fn();
 const mockMembershipFindMany = jest.fn();
+const mockMembershipFindFirst = jest.fn();
 const mockMembershipFindUnique = jest.fn();
 const mockMembershipUpdate = jest.fn();
 const mockMembershipDeleteMany = jest.fn();
 const mockOrgRoleDeleteMany = jest.fn();
 const mockTransaction = jest.fn();
+const mockInvalidateUserPermissionSnapshot = jest.fn();
+const mockGetCachedOrganizationMembership = jest.fn();
+const mockSetCachedOrganizationMembership = jest.fn();
+const mockInvalidateOrganizationMembershipCache = jest.fn();
+const mockInvalidateOrganizationMembershipCacheByOrg = jest.fn();
+
+jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
+  invalidateUserPermissionSnapshot: mockInvalidateUserPermissionSnapshot,
+}));
+
+jest.unstable_mockModule("../../../src/modules/organization/org.cache.js", () => ({
+  getCachedOrganizationMembership: mockGetCachedOrganizationMembership,
+  setCachedOrganizationMembership: mockSetCachedOrganizationMembership,
+  invalidateOrganizationMembershipCache: mockInvalidateOrganizationMembershipCache,
+  invalidateOrganizationMembershipCacheByOrg: mockInvalidateOrganizationMembershipCacheByOrg,
+}));
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
@@ -107,6 +124,7 @@ jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
       },
       membership: {
         findMany: mockMembershipFindMany,
+        findFirst: mockMembershipFindFirst,
         findUnique: mockMembershipFindUnique,
       },
     },
@@ -142,6 +160,7 @@ const {
 describe("Organization Repo", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCachedOrganizationMembership.mockResolvedValue(null);
   });
 
   it("should create an organization with an owner membership using roleId", async () => {
@@ -178,21 +197,23 @@ describe("Organization Repo", () => {
   });
 
   it("should get organizations by user id", async () => {
-    const organizations = [{ id: "org-1" }];
-    mockOrganizationFindMany.mockResolvedValue(organizations);
+    const memberships = [
+      { organization: { id: "org-1" } },
+      { organization: { id: "org-2" } },
+    ];
+    mockMembershipFindMany.mockResolvedValue(memberships);
 
     const result = await getOrganizationsByUserId("user-1");
 
-    expect(mockOrganizationFindMany).toHaveBeenCalledWith({
+    expect(mockMembershipFindMany).toHaveBeenCalledWith({
       where: {
-        memberships: {
-          some: {
-            userId: "user-1",
-          },
-        },
+        userId: "user-1",
+      },
+      select: {
+        organization: true,
       },
     });
-    expect(result).toBe(organizations);
+    expect(result).toEqual([{ id: "org-1" }, { id: "org-2" }]);
   });
 
   it("should patch an organization name and include memberships with roles", async () => {
@@ -221,32 +242,36 @@ describe("Organization Repo", () => {
   });
 
   it("should find organization by owner using role relation filter", async () => {
-    const org = { id: "org-1" };
-    mockOrganizationFindFirst.mockResolvedValue(org);
+    const membership = {
+      organization: { id: "org-1" },
+    };
+    mockMembershipFindFirst.mockResolvedValue(membership);
 
     const result = await findOrganizationByOwner({ userId: "user-1" });
 
-    expect(mockOrganizationFindFirst).toHaveBeenCalledWith({
+    expect(mockMembershipFindFirst).toHaveBeenCalledWith({
       where: {
-        memberships: {
-          some: {
-            userId: "user-1",
-            role: { name: "OWNER", isSystem: true },
-          },
-        },
+        userId: "user-1",
+        role: { name: "OWNER", isSystem: true },
+      },
+      select: {
+        organization: true,
       },
     });
-    expect(result).toBe(org);
+    expect(result).toEqual({ id: "org-1" });
   });
 
   it("should delete an organization inside a transaction (memberships + roles + org)", async () => {
     const deleted = { id: "org-1" };
+    const memberships = [{ userId: "user-1" }, { userId: "user-2" }];
+    mockMembershipFindMany.mockResolvedValue(memberships);
     mockMembershipDeleteMany.mockResolvedValue({ count: 2 });
     mockOrgRoleDeleteMany.mockResolvedValue({ count: 4 });
     mockOrganizationDelete.mockResolvedValue(deleted);
     mockTransaction.mockImplementation(async (callback) =>
       callback({
         membership: {
+          findMany: mockMembershipFindMany,
           deleteMany: mockMembershipDeleteMany,
         },
         orgRole: {
@@ -261,6 +286,14 @@ describe("Organization Repo", () => {
     const result = await deleteOrganization({ orgId: "org-1" });
 
     expect(mockTransaction).toHaveBeenCalled();
+    expect(mockMembershipFindMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+      },
+      select: {
+        userId: true,
+      },
+    });
     expect(mockMembershipDeleteMany).toHaveBeenCalledWith({
       where: {
         organizationId: "org-1",
@@ -276,6 +309,16 @@ describe("Organization Repo", () => {
         id: "org-1",
       },
     });
+    expect(mockInvalidateOrganizationMembershipCacheByOrg).toHaveBeenCalledWith("org-1");
+    expect(mockInvalidateUserPermissionSnapshot).toHaveBeenCalledTimes(2);
+    expect(mockInvalidateUserPermissionSnapshot).toHaveBeenNthCalledWith(
+      1,
+      "user-1",
+    );
+    expect(mockInvalidateUserPermissionSnapshot).toHaveBeenNthCalledWith(
+      2,
+      "user-2",
+    );
     expect(result).toBe(deleted);
   });
 

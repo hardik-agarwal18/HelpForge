@@ -18,6 +18,15 @@ const mockAgentWorkloadUpsert = jest.fn();
 const mockTicketUpdate = jest.fn();
 const mockTicketActivityLogCreate = jest.fn();
 const mockTransaction = jest.fn();
+const mockGetCachedOrganizationMembership = jest.fn();
+const mockSetCachedOrganizationMembership = jest.fn();
+const mockInvalidateOrganizationMembershipCache = jest.fn();
+
+jest.unstable_mockModule("../../../src/modules/organization/org.cache.js", () => ({
+  getCachedOrganizationMembership: mockGetCachedOrganizationMembership,
+  setCachedOrganizationMembership: mockSetCachedOrganizationMembership,
+  invalidateOrganizationMembershipCache: mockInvalidateOrganizationMembershipCache,
+}));
 
 jest.unstable_mockModule("../../../src/config/database.config.js", () => ({
   default: {
@@ -97,6 +106,7 @@ const {
 describe("Ticket Repo", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCachedOrganizationMembership.mockResolvedValue(null);
   });
 
   it("should update agent availability by organization and user id", async () => {

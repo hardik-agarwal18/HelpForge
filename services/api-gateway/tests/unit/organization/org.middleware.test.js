@@ -192,6 +192,23 @@ describe("Organization Middleware", () => {
       expect(mockNext).toHaveBeenCalledWith();
     });
 
+    it("should use JWT embedded org permissions when available", () => {
+      mockReq.params.orgId = "org-1";
+      mockReq.auth = {
+        orgPermissions: {
+          "org-1": {
+            permissions: [PERMISSIONS.ORG_UPDATE],
+          },
+        },
+      };
+      mockReq.membership = { role: MEMBER_ROLE };
+      const middleware = requirePermission(PERMISSIONS.ORG_UPDATE);
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalledWith();
+    });
+
     it("should return 403 if user is missing one of multiple required permissions", () => {
       mockReq.membership = { role: MEMBER_ROLE };
       const middleware = requirePermission(PERMISSIONS.ORG_VIEW_MEMBERS, PERMISSIONS.ORG_UPDATE);

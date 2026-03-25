@@ -83,18 +83,29 @@ describe("Auth Utils", () => {
   });
 
   describe("generateAccessToken", () => {
-    it("should include jti, iat, sub, and type in payload", () => {
+    it("should include jti, iat, sub, type, and additional claims in payload", () => {
       mockRandomUUID.mockReturnValue("test-jti-uuid");
       mockJwtSign.mockReturnValue("signed-token");
 
       const user = { id: "user-123", email: "test@example.com" };
-      const result = generateAccessToken(user);
+      const result = generateAccessToken(user, {
+        orgPermissions: {
+          "org-1": {
+            permissions: ["ticket:view_all"],
+          },
+        },
+      });
 
       const payload = mockJwtSign.mock.calls[0][0];
       expect(payload.sub).toBe("user-123");
       expect(payload.type).toBe("access");
       expect(payload.jti).toBe("test-jti-uuid");
       expect(payload.iat).toEqual(expect.any(Number));
+      expect(payload.orgPermissions).toEqual({
+        "org-1": {
+          permissions: ["ticket:view_all"],
+        },
+      });
       expect(payload).not.toHaveProperty("email");
 
       expect(mockJwtSign).toHaveBeenCalledWith(

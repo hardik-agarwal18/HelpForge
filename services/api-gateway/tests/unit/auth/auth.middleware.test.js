@@ -40,7 +40,17 @@ describe("Auth Middleware", () => {
   it("should authenticate with valid access token and set req.user", async () => {
     const mockUser = { id: "user-123", email: "test@example.com", name: "Test", tokenIssuedAt: null };
     req.headers.authorization = "Bearer valid-token";
-    mockVerifyAccessToken.mockReturnValue({ sub: "user-123", type: "access", jti: "jti-1", iat: Math.floor(Date.now() / 1000) });
+    mockVerifyAccessToken.mockReturnValue({
+      sub: "user-123",
+      type: "access",
+      jti: "jti-1",
+      iat: Math.floor(Date.now() / 1000),
+      orgPermissions: {
+        "org-1": {
+          permissions: ["ticket:view_all"],
+        },
+      },
+    });
     mockFindUserById.mockResolvedValue(mockUser);
 
     await authenticate(req, res, next);
@@ -49,6 +59,15 @@ describe("Auth Middleware", () => {
     expect(mockIsTokenBlacklisted).toHaveBeenCalledWith("jti-1");
     expect(mockFindUserById).toHaveBeenCalledWith("user-123");
     expect(req.user).toEqual(mockUser);
+    expect(req.auth).toEqual(
+      expect.objectContaining({
+        orgPermissions: {
+          "org-1": {
+            permissions: ["ticket:view_all"],
+          },
+        },
+      }),
+    );
     expect(next).toHaveBeenCalledWith();
   });
 
