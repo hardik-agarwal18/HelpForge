@@ -1,6 +1,6 @@
 import db from "../../config/database.config.js";
 
-const STAFF_ROLES = ["OWNER", "ADMIN", "AGENT"];
+import { PERMISSIONS } from "../organization/org.constants.js";
 
 export const createNotifications = async (notifications) => {
   if (!Array.isArray(notifications) || notifications.length === 0) {
@@ -87,7 +87,9 @@ export const getOrganizationStaffRecipientIds = async (organizationId) => {
     where: {
       organizationId,
       role: {
-        in: STAFF_ROLES,
+        permissions: {
+          has: PERMISSIONS.TICKET_VIEW_ALL,
+        },
       },
     },
     select: {

@@ -11,6 +11,7 @@ export const getTicketOrganizationMembership = async (
         organizationId,
       },
     },
+    include: { role: true },
   });
 };
 
@@ -19,6 +20,7 @@ export const getTicketMembershipsByUserId = async (userId) => {
     where: {
       userId,
     },
+    include: { role: true },
   });
 };
 
@@ -44,11 +46,12 @@ export const getOrganizationAvailableAgents = async (organizationId) => {
   return await db.read.membership.findMany({
     where: {
       organizationId,
-      role: "AGENT",
+      role: { name: "AGENT" },
       isAvailable: true,
     },
     include: {
       user: true,
+      role: true,
     },
     orderBy: {
       createdAt: "asc",

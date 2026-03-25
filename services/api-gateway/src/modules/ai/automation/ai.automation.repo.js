@@ -154,7 +154,7 @@ export const getAvailableAgents = async (organizationId) => {
           memberships: {
             some: {
               isAvailable: true,
-              role: { in: ["AGENT", "ADMIN"] },
+              role: { permissions: { has: "agent:update_availability" } },
             },
           },
         },
@@ -291,7 +291,6 @@ export const getOrganizationMembers = async (organizationId) => {
     return await db.read.membership.findMany({
       where: {
         organizationId,
-        role: { in: ["AGENT", "ADMIN"] },
       },
       include: {
         user: {
