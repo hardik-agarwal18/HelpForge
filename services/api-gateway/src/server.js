@@ -30,6 +30,21 @@ const PORT = config.port;
 
 const server = http.createServer(app);
 
+const listen = () =>
+  new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off("error", onError);
+      reject(error);
+    };
+
+    server.once("error", onError);
+    server.listen(PORT, () => {
+      server.off("error", onError);
+      logger.info({ port: PORT }, "API Gateway is running");
+      resolve();
+    });
+  });
+
 const startServer = async () => {
   await db.connect();
   await connectRedis();
@@ -41,9 +56,8 @@ const startServer = async () => {
   startScraperWorker();
   scheduleScrapeCleanup();
 
-  server.listen(PORT, () => {
-    logger.info({ port: PORT }, "API Gateway is running");
-  });
+  await listen();
+  logger.info("System ready: DB + Redis + Workers + API = OK");
 };
 
 const SHUTDOWN_TIMEOUT_MS = config.server.shutdownTimeoutMs;
