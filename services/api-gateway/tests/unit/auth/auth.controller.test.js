@@ -145,7 +145,7 @@ describe("Auth Controller Unit Tests", () => {
 
       await logout(req, res, next);
 
-      expect(mockLogoutUser).toHaveBeenCalledWith("my-access-token", "my-refresh-token");
+      expect(mockLogoutUser).toHaveBeenCalledWith({ accessToken: "my-access-token", refreshToken: "my-refresh-token" });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
@@ -159,7 +159,7 @@ describe("Auth Controller Unit Tests", () => {
 
       await logout(req, res, next);
 
-      expect(mockLogoutUser).toHaveBeenCalledWith(null, "rf");
+      expect(mockLogoutUser).toHaveBeenCalledWith({ accessToken: null, refreshToken: "rf" });
       expect(res.status).toHaveBeenCalledWith(200);
     });
   });

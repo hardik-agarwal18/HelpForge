@@ -140,7 +140,7 @@ describe("Auth Service Unit Tests", () => {
       mockFindUserByEmail.mockResolvedValue(mockUser);
       mockComparePassword.mockResolvedValue(true);
 
-      const result = await loginUser(mockEmail, mockPassword);
+      const result = await loginUser({ email: mockEmail, password: mockPassword });
 
       expect(result.accessToken).toBe("mock-access-token");
       expect(result.refreshToken).toBe("mock-refresh-token");
@@ -150,20 +150,20 @@ describe("Auth Service Unit Tests", () => {
     it("should throw 401 if user not found", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
 
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
+      await expect(loginUser({ email: mockEmail, password: mockPassword })).rejects.toThrow("Invalid credentials");
     });
 
     it("should throw 401 if password is incorrect", async () => {
       mockFindUserByEmail.mockResolvedValue(mockUser);
       mockComparePassword.mockResolvedValue(false);
 
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
+      await expect(loginUser({ email: mockEmail, password: mockPassword })).rejects.toThrow("Invalid credentials");
     });
 
     it("should throw 401 when user password is corrupted", async () => {
       mockFindUserByEmail.mockResolvedValue({ ...mockUser, password: null });
 
-      await expect(loginUser(mockEmail, mockPassword)).rejects.toThrow("Invalid credentials");
+      await expect(loginUser({ email: mockEmail, password: mockPassword })).rejects.toThrow("Invalid credentials");
     });
   });
 
@@ -212,7 +212,7 @@ describe("Auth Service Unit Tests", () => {
     it("should blacklist access token and delete refresh token", async () => {
       mockVerifyAccessToken.mockReturnValue({ jti: "token-jti", exp: 9999999999 });
 
-      await logoutUser("access-token-value", "refresh-token-value");
+      await logoutUser({ accessToken: "access-token-value", refreshToken: "refresh-token-value" });
 
       expect(mockBlacklistToken).toHaveBeenCalledWith({
         jti: "token-jti",
@@ -226,11 +226,11 @@ describe("Auth Service Unit Tests", () => {
         throw new Error("expired");
       });
 
-      await expect(logoutUser("expired-token", "refresh")).resolves.not.toThrow();
+      await expect(logoutUser({ accessToken: "expired-token", refreshToken: "refresh" })).resolves.not.toThrow();
     });
 
     it("should handle missing tokens gracefully", async () => {
-      await expect(logoutUser(null, null)).resolves.not.toThrow();
+      await expect(logoutUser({ accessToken: null, refreshToken: null })).resolves.not.toThrow();
     });
   });
 

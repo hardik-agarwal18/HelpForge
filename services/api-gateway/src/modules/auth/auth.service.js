@@ -63,7 +63,7 @@ export const registerUser = async (userData) => {
   return { user: sanitizeUser(newUser), ...tokens };
 };
 
-export const loginUser = async (email, password) => {
+export const loginUser = async ({ email, password }) => {
   const user = await findUserByEmail(email);
   if (!user) {
     throw new ApiError(401, "Invalid credentials", "INVALID_CREDENTIALS");
@@ -107,7 +107,7 @@ export const refreshAccessToken = async (refreshToken) => {
   return { user: sanitizeUser(user), ...tokens };
 };
 
-export const logoutUser = async (accessToken, refreshToken) => {
+export const logoutUser = async ({ accessToken, refreshToken }) => {
   if (accessToken) {
     try {
       const decoded = verifyAccessToken(accessToken);
@@ -123,7 +123,9 @@ export const logoutUser = async (accessToken, refreshToken) => {
   }
 
   if (refreshToken) {
-    await deleteRefreshToken(refreshToken).catch(() => {});
+    await deleteRefreshToken(refreshToken).catch((err) => {
+      if (err?.code !== "P2025") throw err; // re-throw unless "record not found"
+    });
   }
 };
 

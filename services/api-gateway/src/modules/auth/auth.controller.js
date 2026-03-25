@@ -8,7 +8,12 @@ import {
 import { ApiError } from "../../utils/errorHandler.js";
 import { extractBearerToken, formatUserResponse } from "./auth.utils.js";
 
-const tokenResponse = (res, status, message, { user, accessToken, refreshToken, expiresIn }) =>
+const tokenResponse = (
+  res,
+  status,
+  message,
+  { user, accessToken, refreshToken, expiresIn },
+) =>
   res.status(status).json({
     success: true,
     message,
@@ -37,7 +42,7 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const result = await loginUser(email, password);
+    const result = await loginUser({ email, password });
 
     return tokenResponse(res, 200, "Login successful", result);
   } catch (error) {
@@ -50,7 +55,11 @@ export const refresh = async (req, res, next) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      throw new ApiError(400, "Refresh token is required", "REFRESH_TOKEN_MISSING");
+      throw new ApiError(
+        400,
+        "Refresh token is required",
+        "REFRESH_TOKEN_MISSING",
+      );
     }
 
     const result = await refreshAccessToken(refreshToken);
@@ -66,7 +75,7 @@ export const logout = async (req, res, next) => {
     const { refreshToken } = req.body;
     const accessToken = extractBearerToken(req.headers.authorization);
 
-    await logoutUser(accessToken, refreshToken);
+    await logoutUser({ accessToken, refreshToken });
 
     return res.status(200).json({
       success: true,
