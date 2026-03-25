@@ -1,45 +1,67 @@
 # HelpForge
 
-HelpForge is a multi-tenant support platform implemented in a modular API architecture.
-The current codebase already includes core operations for authentication, organization management, ticketing workflows, and agent operations.
+HelpForge is a multi-tenant support platform implemented in a modular microservices architecture.
+The platform provides core operations for authentication, organization management, ticketing workflows, agent operations, AI-assisted automation, real-time notifications, and an AI-powered chatbot service.
 
 ## 1) Product Snapshot
 
 ### What is already implemented
 
-- Auth with JWT access tokens and protected routes
+- Auth with JWT access/refresh tokens and protected routes
 - Organization lifecycle and membership management with role-based checks
 - Ticket lifecycle with assignment, status updates, comments, attachments, tags, and activity logs
 - Agent-focused APIs (my tickets, my stats, availability)
+- AI automation queue with asynchronous comment analysis
+- AI augmentation with context-aware agent suggestions
+- Per-organization AI configuration and cost tracking
+- Web scraping and content ingestion pipeline
+- Real-time notifications via WebSocket (Socket.io) with queue-based delivery
+- RAG-powered chatbot service (Python/FastAPI) for customer interactions
+- Prometheus metrics and Grafana dashboards for observability
+- Docker Compose deployment with full monitoring stack
+- CI/CD with GitHub Actions (unit tests, integration tests, Docker build and push)
 - Prisma-based relational domain model with migrations
-- Unit and integration tests across auth, organization, and ticket modules
+- Unit, integration, and performance tests
 
 ### What is next
 
-- Knowledge/document ingestion and retrieval
-- AI-assisted response and triage flows
+- Knowledge/document ingestion and retrieval via vector store (Qdrant)
+- Advanced AI-assisted triage and auto-resolution flows
 - Notification integrations and automation workflows
-- Production hardening (observability, CI/CD, deployment topology)
+- Production hardening (deployment topology, scaling)
 
 ## 2) Runtime and Architecture
 
-Current implementation exists under services/api-gateway and is organized by feature module:
+The platform consists of two services:
+
+- **API Gateway** (`services/api-gateway`) — Node.js/Express backend organized by feature module
+- **Chatbot Service** (`services/chatbot-service`) — Python/FastAPI RAG-powered AI chatbot
+
+Supporting infrastructure: PostgreSQL, Redis, Prometheus, Grafana.
+
+### API Gateway modules
 
 - auth
 - organization
 - tickets
+- ai (automation, augmentation, config, scraper)
+- notifications
 
-Request flow:
+### Request flow
 
 1. Request enters Express app
-2. Auth middleware validates bearer token where required
-3. Validation middleware checks payload/query/params using Zod
-4. Controller delegates to service layer
-5. Service applies business and permission rules
-6. Repository executes Prisma DB operations
-7. Error handler normalizes failure responses
+2. Shutdown check middleware (reject if shutting down)
+3. Request timeout middleware (504 after configurable timeout)
+4. Request ID attachment and AsyncLocalStorage context
+5. Prometheus metrics middleware
+6. Auth middleware validates bearer token where required
+7. Validation middleware checks payload/query/params using Zod
+8. Controller delegates to service layer
+9. Service applies business and permission rules
+10. Repository executes Prisma DB operations
+11. Error handler normalizes failure responses
 
-## 3) Implemented API Surface (Detailed)
+## 3) Implemented API Surface
 
 ### Auth endpoints
 
@@ -93,6 +115,33 @@ Request flow:
 | GET    | /api/agents/me/stats        | Yes           | Aggregated stats by status and priority            |
 | PATCH  | /api/agents/me/availability | Yes           | Update current agent availability for organization |
 
+### AI and automation endpoints
+
+| Method | Path                  | Auth Required | Description                              |
+| ------ | --------------------- | ------------- | ---------------------------------------- |
+| *      | /api/ai/automation/*  | Yes           | AI decision queue management             |
+| *      | /api/ai/augmentation/*| Yes           | Context-aware suggestion APIs            |
+| *      | /api/ai/config/*      | Yes           | Per-organization AI settings             |
+| *      | /api/ai/scraper/*     | Yes           | URL content ingestion                    |
+| *      | /api/ai/internal/*    | Internal      | Inter-service communication              |
+
+### Notification endpoints
+
+| Method | Path                  | Auth Required | Description                              |
+| ------ | --------------------- | ------------- | ---------------------------------------- |
+| *      | /api/notifications/*  | Yes           | Preferences and event subscriptions      |
+
+### Health and observability endpoints
+
+| Method | Path           | Auth Required | Description                  |
+| ------ | -------------- | ------------- | ---------------------------- |
+| GET    | /health        | No            | Basic health check           |
+| GET    | /health/live   | No            | Kubernetes liveness probe    |
+| GET    | /health/ready  | No            | Kubernetes readiness probe   |
+| GET    | /metrics       | No            | Prometheus metrics           |
+| GET    | /metrics/db    | No            | Database diagnostics (JSON)  |
+| GET    | /metrics/redis | No            | Redis diagnostics (JSON)     |
+
 ## 4) Authorization and Role Policies
 
 ### Organization roles
@@ -109,7 +158,7 @@ Request flow:
 - MEMBER visibility is restricted to relevant tickets (created by or assigned to the member)
 - Internal comments are filtered for non-privileged visibility contexts
 
-## 5) Ticketing Behavior (Implemented)
+## 5) Ticketing Behavior
 
 ### Ticket filters in list API
 
@@ -141,7 +190,7 @@ Supported query filtering includes:
 - attachment added/deleted
 - tag added/removed
 
-## 6) Data Model (Current Prisma Domain)
+## 6) Data Model (Prisma)
 
 Implemented core models:
 
@@ -155,6 +204,12 @@ Implemented core models:
 - TicketTag
 - TicketActivityLog
 - AgentWorkload
+- Notification
+- AIUsage
+- AIConfig
+- ScrapedPage
+- RefreshToken
+- TokenBlacklist
 
 Domain enums in use:
 
@@ -176,13 +231,15 @@ Domain enums in use:
 
 ```bash
 cd services/api-gateway
-npm test
-npm run test:unit
-npm run test:integration
-npm run test:coverage
+npm test                  # All tests (unit + integration)
+npm run test:unit         # Unit tests only
+npm run test:integration  # Integration tests only
+npm run test:coverage     # Tests with coverage report
+npm run test:unit:coverage # Unit tests with coverage
+npm run test:watch        # Watch mode
 ```
 
-### Test scope currently included
+### Test scope
 
 - Auth integration and unit tests
 - Organization integration and unit tests
@@ -194,9 +251,11 @@ npm run test:coverage
 ### Prerequisites
 
 - Node.js 20+
+- Python 3.12+ (for chatbot service)
 - PostgreSQL 16+
+- Redis 7+
 
-### Start locally
+### Start API Gateway
 
 ```bash
 cd services/api-gateway
@@ -206,9 +265,36 @@ npm run db:migrate
 npm run dev
 ```
 
-## 12) Performance Testing (k6)
+### Start Chatbot Service
 
-HelpForge now includes baseline k6 scripts in `services/api-gateway/perf`:
+```bash
+cd services/chatbot-service
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+### Start with Docker Compose
+
+```bash
+cd monitoring
+docker-compose up
+```
+
+This brings up all services (API Gateway, Chatbot, Redis) plus the monitoring stack (Prometheus, Grafana).
+
+## 10) CI/CD
+
+GitHub Actions workflows are defined in `.github/workflows/`:
+
+- **Docker Build and Push** — Builds and pushes service images to GitHub Container Registry on push to main and PRs, with path filtering per service
+- **Unit Tests** — Runs `npm run test:unit:coverage` on push to main and all PRs
+- **Integration Tests** — Spins up PostgreSQL and Redis services, runs `npm run test:integration` on push to main and all PRs
+
+## 11) Performance Testing (k6)
+
+Baseline k6 scripts live in `services/api-gateway/perf`:
 
 - `smoke.js`: lightweight health path (login, profile, ticket list, optional ticket create)
 - `load-ticket-list.js`: ramping load test for `GET /api/tickets`
@@ -221,7 +307,7 @@ HelpForge now includes baseline k6 scripts in `services/api-gateway/perf`:
 
 ```bash
 cd services/api-gateway
-BASE_URL=http://localhost:3000 \
+BASE_URL=http://localhost:5000 \
 EMAIL=your-user@example.com \
 PASSWORD='YourPassword123!' \
 ORG_ID=your-org-id \
@@ -238,7 +324,7 @@ CREATE_SMOKE_TICKET=true npm run perf:smoke
 
 ```bash
 cd services/api-gateway
-BASE_URL=http://localhost:3000 \
+BASE_URL=http://localhost:5000 \
 EMAIL=your-user@example.com \
 PASSWORD='YourPassword123!' \
 ORG_ID=your-org-id \
@@ -256,19 +342,16 @@ npm run perf:load
 - `checks > 99%`
 - `http_req_duration p(95) < 500ms` (load script)
 
-## 13) Observability (Prometheus)
+## 12) Observability (Prometheus and Grafana)
 
-Prometheus metrics are now exposed by both backend services:
+Prometheus metrics are exposed by both services:
 
-- API Gateway: `GET /metrics` on the API Gateway host/port
-- Chatbot Service: `GET /metrics` on the chatbot host/port
+- API Gateway: `GET /metrics` (port 5000)
+- Chatbot Service: `GET /metrics` (port 8000)
 
-Additional JSON diagnostics remain available in API Gateway:
+Additional JSON diagnostics in API Gateway: `GET /metrics/db`, `GET /metrics/redis`
 
-- `GET /metrics/db`
-- `GET /metrics/redis`
-
-### Metric families added
+### Metric families
 
 - API Gateway:
   - `helpforge_api_gateway_http_requests_total`
@@ -290,7 +373,7 @@ global:
 scrape_configs:
   - job_name: "helpforge-api-gateway"
     static_configs:
-      - targets: ["localhost:3000"]
+      - targets: ["localhost:5000"]
     metrics_path: /metrics
 
   - job_name: "helpforge-chatbot-service"
@@ -299,17 +382,23 @@ scrape_configs:
     metrics_path: /metrics
 ```
 
-## 10) Documentation Index
+### Grafana
+
+Grafana dashboards are auto-provisioned via the Docker Compose monitoring stack on port 3001. Default credentials: `admin/admin`.
+
+## 13) Documentation Index
 
 - docs/PROJECT_ROADMAP.md
 - docs/uml/index.md
 - services/api-gateway/TEST_DOCUMENTATION.md
 - CHANGELOG.md
 
-## 11) Current Delivery Phase
+## 14) Current Delivery Phase
 
 - Phase 1 Foundation: Complete
-- Phase 2 Core Product (Auth + Organization + Ticketing + Agent workflows): Implemented in API Gateway
-- Phase 3 AI and automation: Next
+- Phase 2 Core Product (Auth + Organization + Ticketing + Agent workflows): Complete
+- Phase 3 AI and Automation: In progress
+- Phase 4 Integrations and Notifications: Planned
+- Phase 5 Production Hardening: Planned
 
-Last updated: 2026-03-14
+Last updated: 2026-03-25
