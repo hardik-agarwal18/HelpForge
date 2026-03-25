@@ -19,6 +19,7 @@ const cacheKey = {
   userById: (id) => `auth:user:id:${id}`,
   emailToId: (email) => `auth:user:email-to-id:${email}`,
   blacklist: (jti) => `auth:blacklist:${jti}`,
+  accessScope: (userId) => `auth:user:scope:${userId}`,
 };
 
 const getCache = async (key) => {
@@ -86,8 +87,10 @@ const stripPassword = ({ password, ...rest }) => rest;
 
 const cacheUser = async (user) => {
   const safe = user.password !== undefined ? stripPassword(user) : user;
-  await setCache(cacheKey.userById(safe.id), safe);
-  await setCache(cacheKey.emailToId(safe.email), safe.id);
+  await Promise.all([
+    setCache(cacheKey.userById(safe.id), safe),
+    setCache(cacheKey.emailToId(safe.email), safe.id),
+  ]);
 };
 
 const invalidateUser = async (id, email) => {
@@ -101,12 +104,16 @@ const invalidateUser = async (id, email) => {
 export const findUserByEmail = async (email) => {
   // Always hits DB — returns password for auth flow (login / register check).
   // Only caches the password-free version for findUserById consumers.
-  const user = await db.read.user.findFirst({
-    where: { email, isDeleted: false },
+  const user = await db.read.user.findUnique({
+    where: { email },
     select: userSelectWithPassword,
   });
 
-  if (user) await cacheUser(user);
+  if (!user || user.isDeleted) {
+    return null;
+  }
+
+  await cacheUser(user);
   return user;
 };
 
@@ -124,13 +131,69 @@ export const findUserById = async (id) => {
   const cached = await getCache(cacheKey.userById(id));
   if (cached) return cached; // no password — safe for middleware / token refresh
 
-  const user = await db.read.user.findFirst({
-    where: { id, isDeleted: false },
+  const user = await db.read.user.findUnique({
+    where: { id },
     select: userSelectPublic,
   });
 
-  if (user) await cacheUser(user);
+  if (!user || user.isDeleted) {
+    return null;
+  }
+
+  await cacheUser(user);
   return user;
+};
+
+export const getUserPermissionSnapshot = async (userId) => {
+  const cached = await getCache(cacheKey.accessScope(userId));
+  if (cached) {
+    return cached;
+  }
+
+  const memberships = await db.read.membership.findMany({
+    where: {
+      userId,
+    },
+    select: {
+      organizationId: true,
+      roleId: true,
+      role: {
+        select: {
+          name: true,
+          level: true,
+          rolePermissions: {
+            select: {
+              permission: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const snapshot = memberships.reduce((accumulator, membership) => {
+    accumulator[membership.organizationId] = {
+      roleId: membership.roleId,
+      roleName: membership.role.name,
+      level: membership.role.level,
+      permissions: membership.role.rolePermissions.map(
+        ({ permission }) => permission.name,
+      ),
+    };
+
+    return accumulator;
+  }, {});
+
+  await setCache(cacheKey.accessScope(userId), snapshot);
+  return snapshot;
+};
+
+export const invalidateUserPermissionSnapshot = async (userId) => {
+  await delCache(cacheKey.accessScope(userId));
 };
 
 export const updateUserTokenIssuedAt = async (userId) => {
@@ -141,6 +204,7 @@ export const updateUserTokenIssuedAt = async (userId) => {
   });
 
   await cacheUser(user);
+  await invalidateUserPermissionSnapshot(userId);
   return user;
 };
 
@@ -152,6 +216,7 @@ export const softDeleteUser = async (userId) => {
   });
 
   await invalidateUser(userId, user.email);
+  await invalidateUserPermissionSnapshot(userId);
   return user;
 };
 

@@ -26,6 +26,7 @@ export const authenticate = async (req, res, next) => {
       throw new ApiError(401, "Token has been revoked", "TOKEN_REVOKED");
     }
 
+    req.auth = decoded;
     req.user = user;
     next();
   } catch (error) {

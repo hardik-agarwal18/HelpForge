@@ -2,6 +2,7 @@ import {
   createUser,
   findUserByEmail,
   findUserById,
+  getUserPermissionSnapshot,
   createRefreshToken,
   findRefreshToken,
   deleteRefreshToken,
@@ -22,7 +23,10 @@ import {
 import config from "../../config/index.js";
 
 const issueTokens = async (user) => {
-  const { accessToken, expiresIn } = generateAccessToken(user);
+  const orgPermissions = await getUserPermissionSnapshot(user.id);
+  const { accessToken, expiresIn } = generateAccessToken(user, {
+    orgPermissions,
+  });
 
   const refreshToken = generateRefreshToken();
   const refreshExpiresAt = new Date(

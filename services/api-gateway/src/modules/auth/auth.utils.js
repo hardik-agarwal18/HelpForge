@@ -14,11 +14,11 @@ export const hashPassword = (password) =>
 export const comparePassword = (plain, hashed) =>
   bcrypt.compare(plain, hashed);
 
-export const generateAccessToken = (user) => {
+export const generateAccessToken = (user, additionalClaims = {}) => {
   const jti = crypto.randomUUID();
   const iat = Math.floor(Date.now() / 1000);
   const token = jwt.sign(
-    { sub: user.id, type: "access", jti, iat },
+    { sub: user.id, type: "access", jti, iat, ...additionalClaims },
     config.jwtSecret,
     {
       algorithm: JWT_ALGORITHM,
