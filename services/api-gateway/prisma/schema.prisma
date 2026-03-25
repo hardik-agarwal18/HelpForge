@@ -153,6 +153,7 @@ model Membership {
   createdAt DateTime @default(now())
 
   @@unique([userId, organizationId])
+  @@index([userId])
   @@index([organizationId, roleId, isAvailable, createdAt])
 }
 
