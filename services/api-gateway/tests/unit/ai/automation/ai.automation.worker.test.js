@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockWorkerOn = jest.fn();
+const mockWorkerWaitUntilReady = jest.fn();
 const mockWorkerConstructor = jest.fn();
 const mockQueueConstructor = jest.fn();
 const mockCreateRedisClient = jest.fn();
@@ -68,7 +69,9 @@ describe("ai.automation.worker", () => {
     jest.clearAllMocks();
     mockWorkerConstructor.mockImplementation(() => ({
       on: mockWorkerOn,
+      waitUntilReady: mockWorkerWaitUntilReady,
     }));
+    mockWorkerWaitUntilReady.mockResolvedValue(undefined);
     mockQueueConstructor.mockImplementation(() => ({}));
     mockGetAIAutomationQueueName.mockReturnValue("ai-automation");
   });
@@ -91,10 +94,10 @@ describe("ai.automation.worker", () => {
     });
   });
 
-  it("starts a BullMQ worker when Redis is configured", () => {
+  it("starts a BullMQ worker when Redis is configured", async () => {
     mockCreateRedisClient.mockReturnValue({ redis: true });
 
-    const worker = workerModule.startAIAutomationWorker();
+    const worker = await workerModule.startAIAutomationWorker();
 
     expect(mockWorkerConstructor).toHaveBeenCalledWith(
       "ai-automation",
@@ -105,6 +108,7 @@ describe("ai.automation.worker", () => {
       },
     );
     expect(mockWorkerOn).toHaveBeenCalledTimes(2);
+    expect(mockWorkerWaitUntilReady).toHaveBeenCalledTimes(1);
     expect(worker).toBeDefined();
   });
 });

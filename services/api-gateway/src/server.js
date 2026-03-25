@@ -50,10 +50,12 @@ const startServer = async () => {
   await connectRedis();
 
   initializeWebsocketGateway(server);
-  startAIAutomationWorker();
-  startChatbotBridgeWorker();
-  startNotificationWorker();
-  startScraperWorker();
+  await Promise.all([
+    startAIAutomationWorker(),
+    startChatbotBridgeWorker(),
+    startNotificationWorker(),
+    startScraperWorker(),
+  ]);
   scheduleScrapeCleanup();
 
   await listen();
@@ -82,7 +84,10 @@ const gracefulShutdown = async (signal) => {
   app.locals.isShuttingDown = true;
 
   const shutdownStart = Date.now();
-  logger.info({ phase: "shutdown_started", signal }, "Graceful shutdown initiated");
+  logger.info(
+    { phase: "shutdown_started", signal },
+    "Graceful shutdown initiated",
+  );
 
   // Force exit if shutdown hangs
   const forceTimer = setTimeout(() => {
@@ -104,9 +109,12 @@ const gracefulShutdown = async (signal) => {
         else resolve();
       });
 
-      setTimeout(() => {
-        server.closeAllConnections();
-      }, Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6));
+      setTimeout(
+        () => {
+          server.closeAllConnections();
+        },
+        Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6),
+      );
     });
 
     logger.info(
@@ -124,10 +132,42 @@ const gracefulShutdown = async (signal) => {
 
     // Phase 3: Stop workers that depend on queues (consume jobs)
     const workerStops = [
-      ["scraper", () => withTimeout(stopScraperWorker(), WORKER_STOP_TIMEOUT_MS, "scraper-worker")],
-      ["chatbot-bridge", () => withTimeout(stopChatbotBridgeWorker(), WORKER_STOP_TIMEOUT_MS, "chatbot-bridge-worker")],
-      ["ai-automation", () => withTimeout(stopAIAutomationWorker(), WORKER_STOP_TIMEOUT_MS, "ai-automation-worker")],
-      ["notification", () => withTimeout(stopNotificationWorker(), WORKER_STOP_TIMEOUT_MS, "notification-worker")],
+      [
+        "scraper",
+        () =>
+          withTimeout(
+            stopScraperWorker(),
+            WORKER_STOP_TIMEOUT_MS,
+            "scraper-worker",
+          ),
+      ],
+      [
+        "chatbot-bridge",
+        () =>
+          withTimeout(
+            stopChatbotBridgeWorker(),
+            WORKER_STOP_TIMEOUT_MS,
+            "chatbot-bridge-worker",
+          ),
+      ],
+      [
+        "ai-automation",
+        () =>
+          withTimeout(
+            stopAIAutomationWorker(),
+            WORKER_STOP_TIMEOUT_MS,
+            "ai-automation-worker",
+          ),
+      ],
+      [
+        "notification",
+        () =>
+          withTimeout(
+            stopNotificationWorker(),
+            WORKER_STOP_TIMEOUT_MS,
+            "notification-worker",
+          ),
+      ],
     ];
 
     const workerResults = await Promise.allSettled(
@@ -138,7 +178,12 @@ const gracefulShutdown = async (signal) => {
       const result = workerResults[i];
       if (result.status === "rejected") {
         logger.warn(
-          { phase: "workers_stopped", worker: name, error: result.reason?.message, stack: result.reason?.stack },
+          {
+            phase: "workers_stopped",
+            worker: name,
+            error: result.reason?.message,
+            stack: result.reason?.stack,
+          },
           `Worker stop failed: ${name}`,
         );
       }
@@ -163,7 +208,12 @@ const gracefulShutdown = async (signal) => {
       const result = storeResults[i];
       if (result.status === "rejected") {
         logger.warn(
-          { phase: "stores_disconnected", store: name, error: result.reason?.message, stack: result.reason?.stack },
+          {
+            phase: "stores_disconnected",
+            store: name,
+            error: result.reason?.message,
+            stack: result.reason?.stack,
+          },
           `Data store disconnect failed: ${name}`,
         );
       }
@@ -181,7 +231,11 @@ const gracefulShutdown = async (signal) => {
     process.exit(0);
   } catch (error) {
     logger.error(
-      { phase: "shutdown_error", error: error.message, elapsedMs: Date.now() - shutdownStart },
+      {
+        phase: "shutdown_error",
+        error: error.message,
+        elapsedMs: Date.now() - shutdownStart,
+      },
       "Error during graceful shutdown",
     );
     process.exit(1);
@@ -193,7 +247,10 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 process.on("unhandledRejection", (reason) => {
   logger.error(
-    { error: reason instanceof Error ? reason.message : reason, stack: reason?.stack },
+    {
+      error: reason instanceof Error ? reason.message : reason,
+      stack: reason?.stack,
+    },
     "Unhandled promise rejection",
   );
 });

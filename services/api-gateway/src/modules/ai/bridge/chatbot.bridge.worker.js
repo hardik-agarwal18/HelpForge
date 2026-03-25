@@ -134,13 +134,16 @@ const handlers = {
 
 let worker;
 
-export const startChatbotBridgeWorker = () => {
+export const startChatbotBridgeWorker = async () => {
   if (!config.redis.url || config.nodeEnv === "test") {
     logger.info("Chatbot bridge worker skipped (missing REDIS_URL or test mode)");
     return null;
   }
 
-  if (worker) return worker;
+  if (worker) {
+    await worker.waitUntilReady();
+    return worker;
+  }
 
   const connection = createWorkerConnection("chatbot-bridge");
   if (!connection) {
@@ -194,8 +197,16 @@ export const startChatbotBridgeWorker = () => {
     );
   });
 
-  logger.info("Chatbot bridge worker started");
-  return worker;
+  try {
+    await worker.waitUntilReady();
+    logger.info("Chatbot bridge worker ready");
+    return worker;
+  } catch (error) {
+    logger.error({ err: error }, "Chatbot bridge worker failed to become ready");
+    await worker.close().catch(() => {});
+    worker = null;
+    throw error;
+  }
 };
 
 export const stopChatbotBridgeWorker = async () => {

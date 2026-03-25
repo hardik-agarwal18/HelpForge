@@ -91,13 +91,16 @@ const persistFailure = async (job, error) => {
 
 let worker;
 
-export const startScraperWorker = () => {
+export const startScraperWorker = async () => {
   if (!config.redis.url || config.nodeEnv === "test") {
     logger.info("Scraper worker skipped (missing REDIS_URL or test mode)");
     return null;
   }
 
-  if (worker) return worker;
+  if (worker) {
+    await worker.waitUntilReady();
+    return worker;
+  }
 
   const connection = createWorkerConnection("scraper");
   if (!connection) {
@@ -160,8 +163,16 @@ export const startScraperWorker = () => {
     logger.error({ err }, "scraper.worker: worker-level error");
   });
 
-  logger.info({ concurrency: CONCURRENCY }, "Scraper worker started");
-  return worker;
+  try {
+    await worker.waitUntilReady();
+    logger.info({ concurrency: CONCURRENCY }, "Scraper worker ready");
+    return worker;
+  } catch (error) {
+    logger.error({ err: error }, "Scraper worker failed to become ready");
+    await worker.close().catch(() => {});
+    worker = null;
+    throw error;
+  }
 };
 
 /**

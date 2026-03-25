@@ -19,7 +19,7 @@ export const processAICommentJob = async (job) => {
   };
 };
 
-export const startAIAutomationWorker = () => {
+export const startAIAutomationWorker = async () => {
   if (!config.redis.url || config.nodeEnv === "test") {
     logger.info(
       "AI automation worker skipped (missing REDIS_URL or test mode)",
@@ -28,6 +28,7 @@ export const startAIAutomationWorker = () => {
   }
 
   if (worker) {
+    await worker.waitUntilReady();
     return worker;
   }
 
@@ -85,7 +86,16 @@ export const startAIAutomationWorker = () => {
     }
   });
 
-  return worker;
+  try {
+    await worker.waitUntilReady();
+    logger.info("AI automation worker ready");
+    return worker;
+  } catch (error) {
+    logger.error({ err: error }, "AI automation worker failed to become ready");
+    await worker.close().catch(() => {});
+    worker = null;
+    throw error;
+  }
 };
 
 export const stopAIAutomationWorker = async () => {

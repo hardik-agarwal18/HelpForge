@@ -16,13 +16,14 @@ export const processNotificationJob = async (job) => {
   };
 };
 
-export const startNotificationWorker = () => {
+export const startNotificationWorker = async () => {
   if (!config.redis.url || config.nodeEnv === "test") {
     logger.info("Notification worker skipped (missing REDIS_URL or test mode)");
     return null;
   }
 
   if (worker) {
+    await worker.waitUntilReady();
     return worker;
   }
 
@@ -51,7 +52,16 @@ export const startNotificationWorker = () => {
     );
   });
 
-  return worker;
+  try {
+    await worker.waitUntilReady();
+    logger.info("Notification worker ready");
+    return worker;
+  } catch (error) {
+    logger.error({ err: error }, "Notification worker failed to become ready");
+    await worker.close().catch(() => {});
+    worker = null;
+    throw error;
+  }
 };
 
 export const stopNotificationWorker = async () => {
