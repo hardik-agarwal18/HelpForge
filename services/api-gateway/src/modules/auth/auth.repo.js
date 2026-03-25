@@ -127,6 +127,32 @@ export const createUser = async (userData) => {
   return user;
 };
 
+export const createUserWithRefreshToken = async ({
+  userData,
+  token,
+  expiresAt,
+}) => {
+  const user = await db.write.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: userData,
+      select: userSelectWithPassword,
+    });
+
+    await tx.refreshToken.create({
+      data: {
+        token,
+        userId: createdUser.id,
+        expiresAt,
+      },
+    });
+
+    return createdUser;
+  });
+
+  await cacheUser(user);
+  return user;
+};
+
 export const findUserById = async (id) => {
   const cached = await getCache(cacheKey.userById(id));
   if (cached) return cached; // no password — safe for middleware / token refresh

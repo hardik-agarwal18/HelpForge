@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
 const mockFindUserByEmail = jest.fn();
-const mockCreateUser = jest.fn();
+const mockCreateUserWithRefreshToken = jest.fn();
 const mockFindUserById = jest.fn();
 const mockGetUserPermissionSnapshot = jest.fn();
 const mockCreateRefreshToken = jest.fn();
@@ -19,7 +19,7 @@ const mockSanitizeUser = jest.fn();
 
 jest.unstable_mockModule("../../../src/modules/auth/auth.repo.js", () => ({
   findUserByEmail: mockFindUserByEmail,
-  createUser: mockCreateUser,
+  createUserWithRefreshToken: mockCreateUserWithRefreshToken,
   findUserById: mockFindUserById,
   getUserPermissionSnapshot: mockGetUserPermissionSnapshot,
   createRefreshToken: mockCreateRefreshToken,
@@ -94,27 +94,28 @@ describe("Auth Service Unit Tests", () => {
     it("should register a new user and return both tokens", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
       mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue(mockCreatedUser);
+      mockCreateUserWithRefreshToken.mockResolvedValue(mockCreatedUser);
 
       const result = await registerUser(mockUserData);
 
       expect(mockGenerateAccessToken).toHaveBeenCalledWith(
         mockCreatedUser,
         {
-          orgPermissions: {
-            "org-1": {
-              permissions: ["ticket:view_all"],
-            },
-          },
+          orgPermissions: {},
         },
       );
       expect(mockGenerateRefreshToken).toHaveBeenCalled();
-      expect(mockCreateRefreshToken).toHaveBeenCalledWith(
+      expect(mockCreateUserWithRefreshToken).toHaveBeenCalledWith(
         expect.objectContaining({
           token: "mock-refresh-token",
-          userId: "user-123",
+          userData: expect.objectContaining({
+            email: "test@example.com",
+            name: "Test User",
+            password: "hashedPassword123",
+          }),
         }),
       );
+      expect(mockCreateRefreshToken).not.toHaveBeenCalled();
       expect(result.accessToken).toBe("mock-access-token");
       expect(result.refreshToken).toBe("mock-refresh-token");
       expect(result.user).not.toHaveProperty("password");
@@ -136,7 +137,7 @@ describe("Auth Service Unit Tests", () => {
     it("should throw 500 when user creation fails", async () => {
       mockFindUserByEmail.mockResolvedValue(null);
       mockHashPassword.mockResolvedValue("hashedPassword123");
-      mockCreateUser.mockResolvedValue(null);
+      mockCreateUserWithRefreshToken.mockResolvedValue(null);
 
       await expect(registerUser(mockUserData)).rejects.toThrow("Failed to create user");
     });

@@ -1,5 +1,5 @@
 import {
-  createUser,
+  createUserWithRefreshToken,
   findUserByEmail,
   findUserById,
   getUserPermissionSnapshot,
@@ -53,18 +53,34 @@ export const registerUser = async (userData) => {
     throw new ApiError(500, "Failed to hash password", "HASH_FAILED");
   }
 
-  const newUser = await createUser({
-    ...userData,
-    password: hashedPassword,
+  const refreshToken = generateRefreshToken();
+  const refreshExpiresAt = new Date(
+    Date.now() + parseDuration(config.refreshTokenExpiresIn),
+  );
+
+  const newUser = await createUserWithRefreshToken({
+    userData: {
+      ...userData,
+      password: hashedPassword,
+    },
+    token: refreshToken,
+    expiresAt: refreshExpiresAt,
   });
 
   if (!newUser || !newUser.id) {
     throw new ApiError(500, "Failed to create user", "USER_CREATION_FAILED");
   }
 
-  const tokens = await issueTokens(newUser);
+  const { accessToken, expiresIn } = generateAccessToken(newUser, {
+    orgPermissions: {},
+  });
 
-  return { user: sanitizeUser(newUser), ...tokens };
+  return {
+    user: sanitizeUser(newUser),
+    accessToken,
+    refreshToken,
+    expiresIn,
+  };
 };
 
 export const loginUser = async ({ email, password }) => {
