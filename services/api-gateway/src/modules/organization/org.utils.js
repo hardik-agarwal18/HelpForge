@@ -1,8 +1,56 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import { PERMISSIONS } from "./org.constants.js";
 
+export const extractPermissionValues = (permissions = []) => {
+  if (!Array.isArray(permissions)) {
+    return [];
+  }
+
+  return permissions
+    .map((permission) => {
+      if (typeof permission === "string") {
+        return permission;
+      }
+
+      if (typeof permission?.name === "string") {
+        return permission.name;
+      }
+
+      if (typeof permission?.permission?.name === "string") {
+        return permission.permission.name;
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+};
+
+export const normalizeRolePermissions = (role) => {
+  if (!role) {
+    return role;
+  }
+
+  const { rolePermissions, ...rest } = role;
+
+  return {
+    ...rest,
+    permissions: extractPermissionValues(role.permissions || rolePermissions),
+  };
+};
+
+export const normalizeMembershipRole = (membership) => {
+  if (!membership?.role) {
+    return membership;
+  }
+
+  return {
+    ...membership,
+    role: normalizeRolePermissions(membership.role),
+  };
+};
+
 export const hasPermission = (role, permission) => {
-  return role?.permissions?.includes(permission) ?? false;
+  return extractPermissionValues(role?.permissions || role?.rolePermissions).includes(permission);
 };
 
 export const hasAllPermissions = (role, permissions) => {

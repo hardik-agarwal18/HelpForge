@@ -1,5 +1,6 @@
 import { getUserMembershipInOrganization } from "./org.repo.js";
 import { PERMISSIONS } from "./org.constants.js";
+import { extractPermissionValues } from "./org.utils.js";
 
 /**
  * Middleware to verify user membership in an organization
@@ -47,7 +48,7 @@ export const requirePermission = (...requiredPermissions) => {
       });
     }
 
-    const memberPermissions = req.membership.role.permissions || [];
+    const memberPermissions = extractPermissionValues(req.membership.role.permissions);
     const hasAll = requiredPermissions.every((p) => memberPermissions.includes(p));
 
     if (!hasAll) {

@@ -1,8 +1,9 @@
 import { ApiError } from "../../utils/errorHandler.js";
 import { PERMISSIONS } from "../organization/org.constants.js";
+import { extractPermissionValues } from "../organization/org.utils.js";
 
 const has = (permissions, permission) =>
-  Array.isArray(permissions) && permissions.includes(permission);
+  extractPermissionValues(permissions).includes(permission);
 
 export const canViewAllOrganizationTickets = (permissions) =>
   has(permissions, PERMISSIONS.TICKET_VIEW_ALL);

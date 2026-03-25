@@ -1,7 +1,6 @@
 import {
-  createOrganization,
+  createOrganizationWithRolesAndOwner,
   createOrgRole,
-  createOrgRoles,
   deleteOrganization,
   deleteOrgRole,
   findOrganizationByOwner,
@@ -9,7 +8,6 @@ import {
   getOrganizationMembershipByUserId,
   getOrganizationsByUserId,
   getOrgRoleById,
-  getOrgRoleByName,
   getOrgRoles,
   inviteMemberInOrganization,
   patchOrganization,
@@ -35,52 +33,17 @@ export const createOrganizationService = async ({ name, userId }) => {
   }
 
   // Create org first (without membership) then create roles, then add owner membership
-  const org = await createOrganizationWithRoles(name, userId);
+  const org = await createOrganizationWithRolesAndOwner({
+    name,
+    userId,
+    roles: DEFAULT_ROLES,
+  });
 
   if (!org || !org.id) {
     throw new ApiError(500, "Failed to create organization", "ORG_CREATION_FAILED");
   }
 
   return org;
-};
-
-const createOrganizationWithRoles = async (name, userId) => {
-  // We need to create the org, seed default roles, then attach the owner membership.
-  // createOrgRoles uses createMany which doesn't return records, so we look up the OWNER role after.
-  const tempOrg = await createOrganizationTemp(name);
-
-  await createOrgRoles(tempOrg.id, DEFAULT_ROLES);
-
-  const ownerRole = await getOrgRoleByName(tempOrg.id, "OWNER");
-
-  return await addOwnerMembership(tempOrg.id, userId, ownerRole.id);
-};
-
-// Helper: create org without membership
-import db from "../../config/database.config.js";
-
-const createOrganizationTemp = async (name) => {
-  return await db.write.organization.create({
-    data: { name },
-  });
-};
-
-const addOwnerMembership = async (orgId, userId, ownerRoleId) => {
-  await db.write.membership.create({
-    data: {
-      organizationId: orgId,
-      userId,
-      roleId: ownerRoleId,
-    },
-  });
-
-  return await db.read.organization.findUnique({
-    where: { id: orgId },
-    include: {
-      memberships: { include: { role: true } },
-      roles: true,
-    },
-  });
 };
 
 export const updateOrganizationService = async ({ orgId, name }) => {

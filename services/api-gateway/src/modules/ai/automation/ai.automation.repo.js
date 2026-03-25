@@ -154,7 +154,15 @@ export const getAvailableAgents = async (organizationId) => {
           memberships: {
             some: {
               isAvailable: true,
-              role: { permissions: { has: "agent:update_availability" } },
+              role: {
+                rolePermissions: {
+                  some: {
+                    permission: {
+                      name: "agent:update_availability",
+                    },
+                  },
+                },
+              },
             },
           },
         },

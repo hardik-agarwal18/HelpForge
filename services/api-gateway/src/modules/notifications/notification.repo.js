@@ -87,8 +87,12 @@ export const getOrganizationStaffRecipientIds = async (organizationId) => {
     where: {
       organizationId,
       role: {
-        permissions: {
-          has: PERMISSIONS.TICKET_VIEW_ALL,
+        rolePermissions: {
+          some: {
+            permission: {
+              name: PERMISSIONS.TICKET_VIEW_ALL,
+            },
+          },
         },
       },
     },

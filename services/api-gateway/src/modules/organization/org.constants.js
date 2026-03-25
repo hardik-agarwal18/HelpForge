@@ -28,6 +28,109 @@ export const PERMISSIONS = {
 
 export const ALL_PERMISSIONS = Object.values(PERMISSIONS);
 
+export const PERMISSION_DETAILS = {
+  [PERMISSIONS.ORG_UPDATE]: {
+    name: PERMISSIONS.ORG_UPDATE,
+    description: "Update organization settings",
+    resource: "org",
+    action: "update",
+  },
+  [PERMISSIONS.ORG_DELETE]: {
+    name: PERMISSIONS.ORG_DELETE,
+    description: "Delete the organization",
+    resource: "org",
+    action: "delete",
+  },
+  [PERMISSIONS.ORG_INVITE_MEMBER]: {
+    name: PERMISSIONS.ORG_INVITE_MEMBER,
+    description: "Invite members to the organization",
+    resource: "org",
+    action: "invite_member",
+  },
+  [PERMISSIONS.ORG_MANAGE_MEMBER]: {
+    name: PERMISSIONS.ORG_MANAGE_MEMBER,
+    description: "Manage organization members",
+    resource: "org",
+    action: "manage_member",
+  },
+  [PERMISSIONS.ORG_VIEW_MEMBERS]: {
+    name: PERMISSIONS.ORG_VIEW_MEMBERS,
+    description: "View organization members",
+    resource: "org",
+    action: "view_members",
+  },
+  [PERMISSIONS.ROLE_CREATE]: {
+    name: PERMISSIONS.ROLE_CREATE,
+    description: "Create custom roles",
+    resource: "role",
+    action: "create",
+  },
+  [PERMISSIONS.ROLE_UPDATE]: {
+    name: PERMISSIONS.ROLE_UPDATE,
+    description: "Update custom roles",
+    resource: "role",
+    action: "update",
+  },
+  [PERMISSIONS.ROLE_DELETE]: {
+    name: PERMISSIONS.ROLE_DELETE,
+    description: "Delete custom roles",
+    resource: "role",
+    action: "delete",
+  },
+  [PERMISSIONS.TICKET_VIEW_ALL]: {
+    name: PERMISSIONS.TICKET_VIEW_ALL,
+    description: "View all organization tickets",
+    resource: "ticket",
+    action: "view_all",
+  },
+  [PERMISSIONS.TICKET_EDIT_ALL]: {
+    name: PERMISSIONS.TICKET_EDIT_ALL,
+    description: "Edit all organization tickets",
+    resource: "ticket",
+    action: "edit_all",
+  },
+  [PERMISSIONS.TICKET_ASSIGN]: {
+    name: PERMISSIONS.TICKET_ASSIGN,
+    description: "Assign organization tickets",
+    resource: "ticket",
+    action: "assign",
+  },
+  [PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT]: {
+    name: PERMISSIONS.TICKET_CREATE_INTERNAL_COMMENT,
+    description: "Create internal ticket comments",
+    resource: "ticket",
+    action: "create_internal_comment",
+  },
+  [PERMISSIONS.TICKET_DELETE_ANY_COMMENT]: {
+    name: PERMISSIONS.TICKET_DELETE_ANY_COMMENT,
+    description: "Delete any ticket comment",
+    resource: "ticket",
+    action: "delete_any_comment",
+  },
+  [PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT]: {
+    name: PERMISSIONS.TICKET_DELETE_ANY_ATTACHMENT,
+    description: "Delete any ticket attachment",
+    resource: "ticket",
+    action: "delete_any_attachment",
+  },
+  [PERMISSIONS.AGENT_UPDATE_AVAILABILITY]: {
+    name: PERMISSIONS.AGENT_UPDATE_AVAILABILITY,
+    description: "Update agent availability",
+    resource: "agent",
+    action: "update_availability",
+  },
+  [PERMISSIONS.AI_MANAGE_CONFIG]: {
+    name: PERMISSIONS.AI_MANAGE_CONFIG,
+    description: "Manage AI configuration",
+    resource: "ai",
+    action: "manage_config",
+  },
+};
+
+export const ALL_PERMISSION_DETAILS = ALL_PERMISSIONS.map(
+  (permission) => PERMISSION_DETAILS[permission],
+);
+
 export const DEFAULT_ROLES = [
   {
     name: "OWNER",

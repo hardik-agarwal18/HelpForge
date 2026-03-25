@@ -1,27 +1,48 @@
 import db from "../../config/database.config.js";
+import { normalizeMembershipRole } from "../organization/org.utils.js";
+
+const rolePermissionInclude = {
+  rolePermissions: {
+    include: {
+      permission: true,
+    },
+  },
+};
 
 export const getTicketOrganizationMembership = async (
   organizationId,
   userId,
 ) => {
-  return await db.read.membership.findUnique({
+  const membership = await db.read.membership.findUnique({
     where: {
       userId_organizationId: {
         userId,
         organizationId,
       },
     },
-    include: { role: true },
+    include: {
+      role: {
+        include: rolePermissionInclude,
+      },
+    },
   });
+
+  return normalizeMembershipRole(membership);
 };
 
 export const getTicketMembershipsByUserId = async (userId) => {
-  return await db.read.membership.findMany({
+  const memberships = await db.read.membership.findMany({
     where: {
       userId,
     },
-    include: { role: true },
+    include: {
+      role: {
+        include: rolePermissionInclude,
+      },
+    },
   });
+
+  return memberships.map(normalizeMembershipRole);
 };
 
 export const updateAgentAvailability = async (
@@ -43,7 +64,7 @@ export const updateAgentAvailability = async (
 };
 
 export const getOrganizationAvailableAgents = async (organizationId) => {
-  return await db.read.membership.findMany({
+  const memberships = await db.read.membership.findMany({
     where: {
       organizationId,
       role: { name: "AGENT" },
@@ -51,12 +72,16 @@ export const getOrganizationAvailableAgents = async (organizationId) => {
     },
     include: {
       user: true,
-      role: true,
+      role: {
+        include: rolePermissionInclude,
+      },
     },
     orderBy: {
       createdAt: "asc",
     },
   });
+
+  return memberships.map(normalizeMembershipRole);
 };
 
 export const getOrganizationAgentWorkloads = async (organizationId) => {
