@@ -15,7 +15,7 @@ The platform provides core operations for authentication, organization managemen
 - AI augmentation with context-aware agent suggestions
 - Per-organization AI configuration and cost tracking
 - Web scraping and content ingestion pipeline
-- Real-time notifications via WebSocket (Socket.io) with queue-based delivery
+- In-app notifications with preferences, BullMQ-backed delivery, and real-time WebSocket (Socket.IO) fan-out
 - RAG-powered chatbot service (Python/FastAPI) for customer interactions
 - Prometheus metrics and Grafana dashboards for observability
 - Docker Compose deployment with full monitoring stack
@@ -27,7 +27,7 @@ The platform provides core operations for authentication, organization managemen
 
 - Knowledge/document ingestion and retrieval via vector store (Qdrant)
 - Advanced AI-assisted triage and auto-resolution flows
-- Notification integrations and automation workflows
+- Production-ready email/push notification channels and broader automation workflows
 - Production hardening (deployment topology, scaling)
 
 ## 2) Runtime and Architecture
@@ -129,7 +129,7 @@ Supporting infrastructure: PostgreSQL, Redis, Prometheus, Grafana.
 
 | Method | Path                  | Auth Required | Description                              |
 | ------ | --------------------- | ------------- | ---------------------------------------- |
-| *      | /api/notifications/*  | Yes           | Preferences and event subscriptions      |
+| *      | /api/notifications/*  | Yes           | List/read notifications and manage preferences |
 
 ### Health and observability endpoints
 
@@ -398,7 +398,7 @@ Grafana dashboards are auto-provisioned via the Docker Compose monitoring stack 
 - Phase 1 Foundation: Complete
 - Phase 2 Core Product (Auth + Organization + Ticketing + Agent workflows): Complete
 - Phase 3 AI and Automation: In progress
-- Phase 4 Integrations and Notifications: Planned
+- Phase 4 Integrations and Notifications: Partial (in-app, preferences, BullMQ delivery, WebSocket realtime; email and push still placeholders)
 - Phase 5 Production Hardening: Planned
 
-Last updated: 2026-03-25
+Last updated: 2026-03-26

@@ -15,13 +15,13 @@ import logger from "../../../config/logger.js";
 import { getQueueConnection } from "../../../config/redis.config.js";
 
 // ── Job name constants ────────────────────────────────────────────────────────
-export const CHATBOT_BRIDGE_QUEUE    = "chatbot-bridge";
-export const JOB_PROCESS_DOCUMENT    = "process-document";
-export const JOB_EMBED_TEXTS         = "embed-texts";
-export const JOB_ANALYZE_FEEDBACK    = "analyze-feedback";
-export const JOB_RE_EMBED_ORG        = "re-embed-org";
+export const CHATBOT_BRIDGE_QUEUE = "chatbot-bridge";
+export const JOB_PROCESS_DOCUMENT = "process-document";
+export const JOB_EMBED_TEXTS = "embed-texts";
+export const JOB_ANALYZE_FEEDBACK = "analyze-feedback";
+export const JOB_RE_EMBED_ORG = "re-embed-org";
 /** Delete a batch of Qdrant documents by document_id (used by scraper cleanup). */
-export const JOB_DELETE_DOCUMENTS    = "delete-documents";
+export const JOB_DELETE_DOCUMENTS = "delete-documents";
 
 // ── Queue singleton ───────────────────────────────────────────────────────────
 let queue;
@@ -53,7 +53,12 @@ const getQueue = () => {
  * @param {string} content  - Raw text content
  * @param {Object} metadata - { filename, type, uploadedBy, … }
  */
-export const enqueueProcessDocument = async (orgId, documentId, content, metadata = {}) => {
+export const enqueueProcessDocument = async (
+  orgId,
+  documentId,
+  content,
+  metadata = {},
+) => {
   const q = getQueue();
   if (!q) {
     logger.warn("Chatbot bridge queue disabled — REDIS_URL not set");
@@ -68,7 +73,10 @@ export const enqueueProcessDocument = async (orgId, documentId, content, metadat
     chunk: true,
   });
 
-  logger.info({ jobId: job.id, orgId, documentId }, "Queued process-document job");
+  logger.info(
+    { jobId: job.id, orgId, documentId },
+    "Queued process-document job",
+  );
   return { queued: true, jobId: job.id };
 };
 
@@ -91,7 +99,10 @@ export const enqueueEmbedTexts = async (orgId, texts, metadata = []) => {
     metadata,
   });
 
-  logger.info({ jobId: job.id, orgId, count: texts.length }, "Queued embed-texts job");
+  logger.info(
+    { jobId: job.id, orgId, count: texts.length },
+    "Queued embed-texts job",
+  );
   return { queued: true, jobId: job.id };
 };
 
@@ -165,6 +176,9 @@ export const enqueueDeleteDocuments = async (orgId, documentIds) => {
     { removeOnComplete: { count: 100 }, removeOnFail: { count: 100 } },
   );
 
-  logger.info({ jobId: job.id, orgId, count: documentIds.length }, "Queued delete-documents job");
+  logger.info(
+    { jobId: job.id, orgId, count: documentIds.length },
+    "Queued delete-documents job",
+  );
   return { queued: true, jobId: job.id };
 };

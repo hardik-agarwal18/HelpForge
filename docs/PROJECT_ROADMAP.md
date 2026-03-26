@@ -164,14 +164,20 @@ Definition of done:
 - Queries can retrieve contextually relevant chunks
 - AI responses include grounded context references
 
-### Phase 4 - Automation and Integrations
+### Phase 4 - Automation and Integrations (Partial)
 
 Goal: Operational automation and external system interoperability.
 
+Current status:
+
+- Partial. In-app notifications, notification preferences, BullMQ-backed delivery, and Socket.IO/WebSocket real-time fan-out are implemented.
+- Email and push channels are still placeholders, and broader automation/integration work remains.
+
 Target capabilities:
 
-- [ ] Event emission for ticket lifecycle actions
-- [ ] Notification triggers (email/webhook)
+- [x] Event emission for ticket lifecycle actions
+- [x] In-app notification triggers with BullMQ delivery and Socket.IO/WebSocket fan-out
+- [ ] Production-ready notification channels (email/push/webhook)
 - [ ] Automation hooks for assignment/escalation rules
 - [ ] Metrics aggregation for operational dashboards
 
@@ -202,7 +208,7 @@ Definition of done:
 
 1. Implement knowledge/document ingestion and metadata model.
 2. Add retrieval pipeline integrated with organization and ticket context.
-3. Introduce notification hooks for high-value ticket events.
+3. Expand notification hooks and ship production-ready external notification channels.
 4. Establish deployment and observability baseline.
 
 ## 9) Non-Goals for Current Sprint Window
@@ -211,4 +217,4 @@ Definition of done:
 - Full UI-first analytics suite before backend event foundations
 - Broad multi-model LLM support before baseline RAG stability
 
-Last updated: 2026-03-14
+Last updated: 2026-03-26
