@@ -183,6 +183,39 @@ const collectInfraMetrics = () => {
   }
 };
 
+// ── Backpressure ────────────────────────────────────────────────────────────
+
+const MAX_IN_FLIGHT = 500;
+const MAX_EVENT_LOOP_LAG_S = 0.25; // 250 ms
+
+let lastLagSample = 0;
+
+const httpRequestsShedTotal = new client.Counter({
+  name: "helpforge_api_gateway_http_requests_shed_total",
+  help: "Total HTTP requests shed due to backpressure",
+  registers: [register],
+});
+
+export const checkBackpressure = () => {
+  const inflight = inFlightRequests.hashMap[""]?.value ?? 0;
+  if (inflight >= MAX_IN_FLIGHT) {
+    httpRequestsShedTotal.inc();
+    return "max_inflight";
+  }
+  if (lastLagSample > MAX_EVENT_LOOP_LAG_S) {
+    httpRequestsShedTotal.inc();
+    return "eventloop_lag";
+  }
+  return null;
+};
+
+// Hook into the event loop monitor to update the lag sample
+const _origObserve = eventLoopLag.observe.bind(eventLoopLag);
+eventLoopLag.observe = (val) => {
+  lastLagSample = val;
+  return _origObserve(val);
+};
+
 // ── Abort Metrics ───────────────────────────────────────────────────────────
 
 const httpRequestAbortedTotal = new client.Counter({

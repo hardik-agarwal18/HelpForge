@@ -19,6 +19,7 @@ import {
   metricsHandler,
   metricsMiddleware,
   recordAbort,
+  checkBackpressure,
 } from "./observability/prometheus.js";
 
 const app = express();
@@ -28,12 +29,19 @@ const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 
 app.use(express.json());
 
-// Reject new requests during shutdown
+// Reject new requests during shutdown or overload
 app.use((_req, res, next) => {
   if (app.locals.isShuttingDown) {
     res.set("Connection", "close");
     return res.status(503).json({ error: "Server is shutting down" });
   }
+
+  const shedReason = checkBackpressure();
+  if (shedReason) {
+    res.set("Retry-After", "5");
+    return res.status(503).json({ error: "Server overloaded", reason: shedReason });
+  }
+
   next();
 });
 
