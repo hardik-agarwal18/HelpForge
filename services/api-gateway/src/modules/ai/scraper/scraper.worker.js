@@ -27,6 +27,7 @@ import db from "../../../config/database.config.js";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { createWorkerConnection } from "../../../config/redis.config.js";
+import { runWithJobContext } from "../../../utils/requestId.js";
 import {
   JOB_CLEANUP_STALE,
   JOB_SCRAPE_PAGE,
@@ -110,7 +111,7 @@ export const startScraperWorker = async () => {
 
   worker = new Worker(
     SCRAPER_QUEUE,
-    async (job) => {
+    runWithJobContext(async (job) => {
       const handler = handlers[job.name];
       if (!handler) {
         logger.warn({ jobName: job.name }, "scraper.worker: no handler for job");
@@ -127,7 +128,7 @@ export const startScraperWorker = async () => {
         "scraper.worker: job done",
       );
       return result;
-    },
+    }),
     { connection, concurrency: CONCURRENCY },
   );
 

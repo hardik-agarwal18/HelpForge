@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import config from "../../../../config/index.js";
 import logger from "../../../../config/logger.js";
 import { createWorkerConnection } from "../../../../config/redis.config.js";
+import { runWithJobContext } from "../../../../utils/requestId.js";
 import { handleCommentAdded } from "../ai.automation.service.js";
 import {
   getAIAutomationQueueName,
@@ -39,7 +40,7 @@ export const startAIAutomationWorker = async () => {
     return null;
   }
 
-  worker = new Worker(getAIAutomationQueueName(), processAICommentJob, {
+  worker = new Worker(getAIAutomationQueueName(), runWithJobContext(processAICommentJob), {
     connection,
     concurrency: 5, // or dynamic
   });

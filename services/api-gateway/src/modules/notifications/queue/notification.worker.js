@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { createWorkerConnection } from "../../../config/redis.config.js";
+import { runWithJobContext } from "../../../utils/requestId.js";
 import { sendNotification } from "../notification.provider.js";
 import { getNotificationQueueName } from "./notification.queue.js";
 
@@ -34,7 +35,7 @@ export const startNotificationWorker = async () => {
     return null;
   }
 
-  worker = new Worker(getNotificationQueueName(), processNotificationJob, {
+  worker = new Worker(getNotificationQueueName(), runWithJobContext(processNotificationJob), {
     connection,
   });
 

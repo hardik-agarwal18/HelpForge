@@ -13,6 +13,7 @@
 import { Queue } from "bullmq";
 import logger from "../../../config/logger.js";
 import { getQueueConnection } from "../../../config/redis.config.js";
+import { withRequestId } from "../../../utils/requestId.js";
 
 // ── Job name constants ────────────────────────────────────────────────────────
 export const CHATBOT_BRIDGE_QUEUE = "chatbot-bridge";
@@ -65,13 +66,13 @@ export const enqueueProcessDocument = async (
     return { queued: false };
   }
 
-  const job = await q.add(JOB_PROCESS_DOCUMENT, {
+  const job = await q.add(JOB_PROCESS_DOCUMENT, withRequestId({
     org_id: orgId,
     document_id: documentId,
     content,
     metadata,
     chunk: true,
-  });
+  }));
 
   logger.info(
     { jobId: job.id, orgId, documentId },
@@ -93,11 +94,11 @@ export const enqueueEmbedTexts = async (orgId, texts, metadata = []) => {
     return { queued: false };
   }
 
-  const job = await q.add(JOB_EMBED_TEXTS, {
+  const job = await q.add(JOB_EMBED_TEXTS, withRequestId({
     org_id: orgId,
     texts,
     metadata,
-  });
+  }));
 
   logger.info(
     { jobId: job.id, orgId, count: texts.length },
@@ -115,10 +116,10 @@ export const enqueueAnalyzeFeedback = async (orgId, feedbackData = {}) => {
   const q = getQueue();
   if (!q) return { queued: false };
 
-  const job = await q.add(JOB_ANALYZE_FEEDBACK, {
+  const job = await q.add(JOB_ANALYZE_FEEDBACK, withRequestId({
     org_id: orgId,
     feedback_data: feedbackData,
-  });
+  }));
 
   return { queued: true, jobId: job.id };
 };
@@ -141,10 +142,10 @@ export const enqueueReEmbedOrg = async (orgId, options = {}) => {
 
   const job = await q.add(
     JOB_RE_EMBED_ORG,
-    {
+    withRequestId({
       org_id: orgId,
       target_version: options.targetVersion ?? null,
-    },
+    }),
     {
       // Migration jobs are long-running; keep a smaller completed history
       removeOnComplete: { count: 100 },
@@ -172,7 +173,7 @@ export const enqueueDeleteDocuments = async (orgId, documentIds) => {
 
   const job = await q.add(
     JOB_DELETE_DOCUMENTS,
-    { org_id: orgId, document_ids: documentIds },
+    withRequestId({ org_id: orgId, document_ids: documentIds }),
     { removeOnComplete: { count: 100 }, removeOnFail: { count: 100 } },
   );
 

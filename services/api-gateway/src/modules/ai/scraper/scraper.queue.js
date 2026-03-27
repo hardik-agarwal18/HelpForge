@@ -28,6 +28,7 @@ import { Queue } from "bullmq";
 import { createHash } from "node:crypto";
 import { getQueueConnection } from "../../../config/redis.config.js";
 import logger from "../../../config/logger.js";
+import { withRequestId } from "../../../utils/requestId.js";
 
 export const SCRAPER_QUEUE    = "scraper-jobs";
 export const JOB_SCRAPE_PAGE  = "scrape-page";
@@ -81,7 +82,7 @@ export const enqueueScrapingJob = async (orgId, url, priority = "normal") => {
 
   const job = await queue.add(
     JOB_SCRAPE_PAGE,
-    { org_id: orgId, url, url_hash: urlHash },
+    withRequestId({ org_id: orgId, url, url_hash: urlHash }),
     {
       ...DEFAULT_JOB_OPTIONS,
       priority: bullPrio,
@@ -107,7 +108,7 @@ export const enqueueCleanupJob = async (orgId, olderThan) => {
 
   const job = await queue.add(
     JOB_CLEANUP_STALE,
-    { org_id: orgId, older_than_iso: olderThan.toISOString() },
+    withRequestId({ org_id: orgId, older_than_iso: olderThan.toISOString() }),
     {
       ...DEFAULT_JOB_OPTIONS,
       priority: PRIORITY_MAP.low,

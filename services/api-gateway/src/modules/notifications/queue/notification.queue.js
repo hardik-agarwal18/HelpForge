@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { getQueueConnection } from "../../../config/redis.config.js";
+import { withRequestId } from "../../../utils/requestId.js";
 
 const NOTIFICATION_QUEUE_NAME = "notification-delivery";
 
@@ -47,7 +48,7 @@ export const enqueueNotification = async (notification) => {
     };
   }
 
-  const job = await notificationQueue.add("deliver-notification", notification);
+  const job = await notificationQueue.add("deliver-notification", withRequestId(notification));
 
   return {
     queued: true,

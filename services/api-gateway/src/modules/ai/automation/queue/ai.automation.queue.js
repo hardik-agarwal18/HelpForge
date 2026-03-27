@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import logger from "../../../../config/logger.js";
 import { getQueueConnection } from "../../../../config/redis.config.js";
+import { withRequestId } from "../../../../utils/requestId.js";
 import aiConfig from "../../core/config/ai.config.js";
 import {
   createAIProcessingFailure,
@@ -131,7 +132,7 @@ export const enqueueAICommentProcessing = async (payload) => {
     };
   }
 
-  const job = await automationQueue.add(PROCESS_COMMENT_JOB_NAME, payload, {
+  const job = await automationQueue.add(PROCESS_COMMENT_JOB_NAME, withRequestId(payload), {
     jobId: `${payload.ticketId}:${payload.commentId}`,
   });
 

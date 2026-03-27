@@ -17,6 +17,7 @@ import { Worker } from "bullmq";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 import { createWorkerConnection } from "../../../config/redis.config.js";
+import { runWithJobContext } from "../../../utils/requestId.js";
 import {
   CHATBOT_BRIDGE_QUEUE,
   JOB_ANALYZE_FEEDBACK,
@@ -101,32 +102,35 @@ const callChatbot = async (path, body, requestId) => {
 
 // ── Job handlers ──────────────────────────────────────────────────────────────
 
-// Each handler receives (data, job) — job.id is used as X-Request-ID so
-// Node and Python logs for the same BullMQ job carry the same trace ID.
+// Each handler receives (data, job). The originating HTTP requestId is stored
+// in data.requestId by withRequestId() at enqueue time. We forward it as
+// X-Request-ID so Python logs correlate back to the same HTTP request.
+const getTraceId = (data, job) => data.requestId ?? job.id;
+
 const handlers = {
   [JOB_PROCESS_DOCUMENT]: async (data, job) => {
-    logger.info({ orgId: data.org_id, documentId: data.document_id, requestId: job.id }, "Processing document");
-    return callChatbot("/internal/process-document", data, job.id);
+    logger.info({ orgId: data.org_id, documentId: data.document_id }, "Processing document");
+    return callChatbot("/internal/process-document", data, getTraceId(data, job));
   },
 
   [JOB_EMBED_TEXTS]: async (data, job) => {
-    logger.info({ orgId: data.org_id, count: data.texts?.length, requestId: job.id }, "Embedding texts");
-    return callChatbot("/internal/embed", data, job.id);
+    logger.info({ orgId: data.org_id, count: data.texts?.length }, "Embedding texts");
+    return callChatbot("/internal/embed", data, getTraceId(data, job));
   },
 
   [JOB_ANALYZE_FEEDBACK]: async (data, job) => {
-    logger.info({ orgId: data.org_id, requestId: job.id }, "Analyzing feedback");
-    return callChatbot("/internal/analyze-feedback", data, job.id);
+    logger.info({ orgId: data.org_id }, "Analyzing feedback");
+    return callChatbot("/internal/analyze-feedback", data, getTraceId(data, job));
   },
 
   [JOB_RE_EMBED_ORG]: async (data, job) => {
-    logger.info({ orgId: data.org_id, targetVersion: data.target_version, requestId: job.id }, "Re-embedding stale vectors");
-    return callChatbot("/internal/re-embed-org", data, job.id);
+    logger.info({ orgId: data.org_id, targetVersion: data.target_version }, "Re-embedding stale vectors");
+    return callChatbot("/internal/re-embed-org", data, getTraceId(data, job));
   },
 
   [JOB_DELETE_DOCUMENTS]: async (data, job) => {
-    logger.info({ orgId: data.org_id, count: data.document_ids?.length, requestId: job.id }, "Deleting scraped-page vectors");
-    return callChatbot("/internal/scraper/delete-documents", data, job.id);
+    logger.info({ orgId: data.org_id, count: data.document_ids?.length }, "Deleting scraped-page vectors");
+    return callChatbot("/internal/scraper/delete-documents", data, getTraceId(data, job));
   },
 };
 
@@ -154,7 +158,7 @@ export const startChatbotBridgeWorker = async () => {
   worker = new Worker(
     CHATBOT_BRIDGE_QUEUE,
     // BullMQ passes the lock token as the second arg — required for moveToDelayed
-    async (job, token) => {
+    runWithJobContext(async (job, token) => {
       const handler = handlers[job.name];
       if (!handler) {
         logger.warn({ jobName: job.name }, "No handler for chatbot bridge job");
@@ -179,7 +183,7 @@ export const startChatbotBridgeWorker = async () => {
         }
         throw err; // real errors → normal BullMQ retry + backoff
       }
-    },
+    }),
     {
       connection,
       concurrency: 3,
