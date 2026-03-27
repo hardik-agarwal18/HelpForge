@@ -83,8 +83,19 @@ export const emitNotificationToUser = (userId, payload) => {
 
 export const getIoInstance = () => ioInstance;
 
+export const closeWebsocketGateway = () =>
+  new Promise((resolve, reject) => {
+    if (!ioInstance) return resolve();
+    ioInstance.close((err) => {
+      ioInstance = null;
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
 export default {
   initializeWebsocketGateway,
   emitNotificationToUser,
   getIoInstance,
+  closeWebsocketGateway,
 };

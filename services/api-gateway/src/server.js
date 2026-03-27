@@ -4,11 +4,21 @@ import config from "./config/index.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
 import { connectRedis, disconnectRedis } from "./config/redis.config.js";
-import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
+import {
+  initializeWebsocketGateway,
+  closeWebsocketGateway,
+} from "./modules/notifications/realtime/socket.gateway.js";
 
 const PORT = config.port;
 
 const server = http.createServer(app);
+
+const connections = new Set();
+
+server.on("connection", (socket) => {
+  connections.add(socket);
+  socket.on("close", () => connections.delete(socket));
+});
 
 const listen = () =>
   new Promise((resolve, reject) => {
@@ -60,21 +70,27 @@ const gracefulShutdown = async (signal) => {
   forceTimer.unref();
 
   try {
-    // Phase 1: Stop accepting new connections + drain in-flight requests
-    await new Promise((resolve, reject) => {
-      server.closeIdleConnections();
+    // Phase 1: Close WebSocket gateway
+    await closeWebsocketGateway();
 
+    logger.info(
+      { phase: "websocket_closed", elapsedMs: Date.now() - shutdownStart },
+      "WebSocket gateway closed",
+    );
+
+    // Phase 2: Stop accepting new connections + drain in-flight requests
+    await new Promise((resolve, reject) => {
       server.close((err) => {
         if (err) reject(err);
         else resolve();
       });
 
-      setTimeout(
-        () => {
-          server.closeAllConnections();
-        },
-        Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6),
-      );
+      setTimeout(() => {
+        for (const socket of connections) {
+          socket.destroy();
+        }
+        connections.clear();
+      }, Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6));
     });
 
     logger.info(
@@ -82,7 +98,7 @@ const gracefulShutdown = async (signal) => {
       "HTTP server closed — in-flight requests drained",
     );
 
-    // Phase 2: Disconnect data stores
+    // Phase 3: Disconnect data stores
     const storeStops = [
       ["database", () => db.disconnect()],
       ["redis", () => disconnectRedis()],
