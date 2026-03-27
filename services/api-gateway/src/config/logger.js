@@ -42,7 +42,13 @@ const serializers = {
 
 const mixin = () => {
   const store = requestContext.getStore();
-  return store?.requestId ? { requestId: store.requestId } : {};
+  if (!store?.requestId) return {};
+  const ctx = { requestId: store.requestId };
+  if (store.signal?.aborted) {
+    ctx.aborted = true;
+    ctx.abortReason = store.signal.reason?.message ?? "unknown";
+  }
+  return ctx;
 };
 
 // ── Transports ──────────────────────────────────────────────────────────────

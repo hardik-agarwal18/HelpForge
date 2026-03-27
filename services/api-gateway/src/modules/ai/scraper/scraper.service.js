@@ -42,6 +42,7 @@ import { createHash } from "node:crypto";
 import db from "../../../config/database.config.js";
 import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
+import { getRequestSignal } from "../../../utils/requestId.js";
 import {
   enqueueDeleteDocuments,
   enqueueProcessDocument,
@@ -85,6 +86,13 @@ const hashContent = (text) =>
 const fetchPage = async (url) => {
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  // Also abort if the originating HTTP request was cancelled
+  const requestSignal = getRequestSignal();
+  if (requestSignal) {
+    if (requestSignal.aborted) { controller.abort(); }
+    else { requestSignal.addEventListener("abort", () => controller.abort(), { once: true }); }
+  }
 
   let response;
   try {

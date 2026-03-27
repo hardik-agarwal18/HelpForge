@@ -18,6 +18,7 @@ import config from "./config/index.js";
 import {
   metricsHandler,
   metricsMiddleware,
+  recordAbort,
 } from "./observability/prometheus.js";
 
 const app = express();
@@ -36,25 +37,43 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Request timeout — abort if handler doesn't respond within the limit
-app.use((_req, res, next) => {
+// Request timeout — abort downstream work if handler doesn't respond in time
+app.use((req, res, next) => {
+  const ac = new AbortController();
+  req.signal = ac.signal;
+
+  const emitAbort = (reason) => {
+    const route = req.route?.path
+      ? `${req.baseUrl || ""}${req.route.path}`
+      : req.path;
+    recordAbort(reason, req.method, route);
+  };
+
   const timer = setTimeout(() => {
+    ac.abort(new Error("REQUEST_TIMEOUT"));
+    emitAbort("timeout");
     if (!res.headersSent) {
       res.status(504).json({ error: "Request timed out" });
     }
   }, REQUEST_TIMEOUT_MS);
 
-  res.on("close", () => clearTimeout(timer));
+  res.on("close", () => {
+    clearTimeout(timer);
+    if (!ac.signal.aborted) {
+      ac.abort(new Error("CLIENT_DISCONNECT"));
+      emitAbort("client_disconnect");
+    }
+  });
   next();
 });
 
-// Attach requestId + propagate through AsyncLocalStorage for DB tracing
+// Attach requestId + signal, propagate through AsyncLocalStorage for DB tracing
 app.use((req, res, next) => {
   const incoming =
     req.headers["x-request-id"] || req.headers["X-Request-ID"] || "";
   req.id = incoming || crypto.randomUUID();
   res.setHeader("x-request-id", req.id);
-  requestContext.run({ requestId: req.id }, next);
+  requestContext.run({ requestId: req.id, signal: req.signal }, next);
 });
 
 app.use(metricsMiddleware);

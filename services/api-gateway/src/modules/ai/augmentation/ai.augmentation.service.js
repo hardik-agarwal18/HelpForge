@@ -1,4 +1,5 @@
 import logger from "../../../config/logger.js";
+import { checkAbort } from "../../../utils/requestId.js";
 import * as augmentationRepo from "./ai.augmentation.repo.js";
 import {
   generateAIResponse,
@@ -339,6 +340,8 @@ export const generateQuickAssist = async (ticketId) => {
       logger.warn({ ticketId }, "Ticket not found for quick assist");
       return null;
     }
+
+    checkAbort();
 
     const [suggestion, summary, actions] = await Promise.all([
       generateAgentSuggestionFromTicket(ticket),

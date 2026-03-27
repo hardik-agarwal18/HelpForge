@@ -155,6 +155,19 @@ const collectInfraMetrics = () => {
   }
 };
 
+// ── Abort Metrics ───────────────────────────────────────────────────────────
+
+const httpRequestAbortedTotal = new client.Counter({
+  name: "helpforge_api_gateway_http_request_aborted_total",
+  help: "Total HTTP requests aborted by timeout or client disconnect",
+  labelNames: ["reason", "method", "route"],
+  registers: [register],
+});
+
+export const recordAbort = (reason, method, route) => {
+  httpRequestAbortedTotal.inc({ reason, method, route });
+};
+
 // ── HTTP Middleware ──────────────────────────────────────────────────────────
 
 const toRouteString = (routePath) => {

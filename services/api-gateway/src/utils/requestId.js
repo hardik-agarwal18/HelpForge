@@ -1,4 +1,5 @@
 import { requestContext } from "../config/database.config.js";
+import { RequestAbortedError } from "./errorHandler.js";
 
 /**
  * Get the current requestId from AsyncLocalStorage (if running inside an HTTP request).
@@ -6,6 +7,25 @@ import { requestContext } from "../config/database.config.js";
  */
 export const getCurrentRequestId = () =>
   requestContext.getStore()?.requestId ?? undefined;
+
+/**
+ * Get the AbortSignal for the current request from AsyncLocalStorage.
+ * Returns undefined when called outside a request context or in workers.
+ */
+export const getRequestSignal = () =>
+  requestContext.getStore()?.signal ?? undefined;
+
+/**
+ * Throw if the current request has been aborted (timeout or client disconnect).
+ * Call between expensive sequential steps to bail early.
+ * No-op outside a request context (workers, crons).
+ */
+export const checkAbort = () => {
+  const signal = getRequestSignal();
+  if (signal?.aborted) {
+    throw new RequestAbortedError(signal.reason?.message ?? "unknown");
+  }
+};
 
 /**
  * Inject the current requestId into a job payload before enqueuing.

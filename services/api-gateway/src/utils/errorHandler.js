@@ -6,7 +6,23 @@ export class ApiError extends Error {
   }
 }
 
+export class RequestAbortedError extends Error {
+  constructor(reason) {
+    super(`Request aborted: ${reason}`);
+    this.code = "ERR_REQUEST_ABORTED";
+    this.abortReason = reason;
+  }
+}
+
 export const errorHandler = (err, req, res, next) => {
+  // Request was aborted (timeout or client disconnect) — don't send a response
+  if (err instanceof RequestAbortedError || req.signal?.aborted) {
+    if (!res.headersSent) {
+      return res.status(499).end();
+    }
+    return;
+  }
+
   if (err instanceof ApiError) {
     const body = {
       success: false,
