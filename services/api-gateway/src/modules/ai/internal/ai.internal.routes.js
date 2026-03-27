@@ -20,7 +20,7 @@ const router = express.Router();
 // ── Auth middleware ──────────────────────────────────────────────────────────
 const verifyInternalToken = (req, res, next) => {
   const token = req.headers["x-internal-token"];
-  if (!token || token !== config.internal.serviceToken) {
+  if (!token || token !== config.secrets.internalServiceToken) {
     return res.status(403).json({ success: false, message: "Forbidden" });
   }
   next();

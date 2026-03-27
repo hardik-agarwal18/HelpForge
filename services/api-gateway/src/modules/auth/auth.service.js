@@ -30,7 +30,7 @@ const issueTokens = async (user) => {
 
   const refreshToken = generateRefreshToken();
   const refreshExpiresAt = new Date(
-    Date.now() + parseDuration(config.refreshTokenExpiresIn),
+    Date.now() + parseDuration(config.auth.refreshTokenExpiresIn),
   );
 
   await createRefreshToken({
@@ -55,7 +55,7 @@ export const registerUser = async (userData) => {
 
   const refreshToken = generateRefreshToken();
   const refreshExpiresAt = new Date(
-    Date.now() + parseDuration(config.refreshTokenExpiresIn),
+    Date.now() + parseDuration(config.auth.refreshTokenExpiresIn),
   );
 
   const newUser = await createUserWithRefreshToken({

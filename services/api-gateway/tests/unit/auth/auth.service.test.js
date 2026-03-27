@@ -49,7 +49,9 @@ jest.unstable_mockModule("../../../src/modules/auth/auth.utils.js", () => ({
 
 jest.unstable_mockModule("../../../src/config/index.js", () => ({
   default: {
-    refreshTokenExpiresIn: "7d",
+    auth: {
+      refreshTokenExpiresIn: "7d",
+    },
   },
 }));
 

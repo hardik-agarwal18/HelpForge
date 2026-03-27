@@ -30,10 +30,14 @@ jest.unstable_mockModule("crypto", () => ({
 
 jest.unstable_mockModule("../../../src/config/index.js", () => ({
   default: {
-    bcryptSaltRounds: 12,
-    jwtSecret: "test-secret",
-    accessTokenExpiresIn: "15m",
-    refreshTokenExpiresIn: "7d",
+    secrets: {
+      bcryptSaltRounds: 12,
+      jwtSecret: "test-secret",
+    },
+    auth: {
+      accessTokenExpiresIn: "15m",
+      refreshTokenExpiresIn: "7d",
+    },
   },
 }));
 

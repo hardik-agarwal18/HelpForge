@@ -9,7 +9,7 @@ const JWT_ISSUER = "helpforge-api";
 const JWT_AUDIENCE = "helpforge-users";
 
 export const hashPassword = (password) =>
-  bcrypt.hash(password, config.bcryptSaltRounds);
+  bcrypt.hash(password, config.secrets.bcryptSaltRounds);
 
 export const comparePassword = (plain, hashed) =>
   bcrypt.compare(plain, hashed);
@@ -19,22 +19,22 @@ export const generateAccessToken = (user, additionalClaims = {}) => {
   const iat = Math.floor(Date.now() / 1000);
   const token = jwt.sign(
     { sub: user.id, type: "access", jti, iat, ...additionalClaims },
-    config.jwtSecret,
+    config.secrets.jwtSecret,
     {
       algorithm: JWT_ALGORITHM,
-      expiresIn: config.accessTokenExpiresIn,
+      expiresIn: config.auth.accessTokenExpiresIn,
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     },
   );
-  return { accessToken: token, expiresIn: config.accessTokenExpiresIn };
+  return { accessToken: token, expiresIn: config.auth.accessTokenExpiresIn };
 };
 
 export const generateRefreshToken = () => crypto.randomBytes(48).toString("hex");
 
 export const verifyAccessToken = (token) => {
   try {
-    const decoded = jwt.verify(token, config.jwtSecret, {
+    const decoded = jwt.verify(token, config.secrets.jwtSecret, {
       algorithms: [JWT_ALGORITHM],
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,

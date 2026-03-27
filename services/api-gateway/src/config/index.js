@@ -53,11 +53,18 @@ const config = {
     },
   },
 
-  jwtSecret: required(process.env.JWT_SECRET, "JWT_SECRET"),
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || required(process.env.JWT_SECRET, "JWT_SECRET"),
-  accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
-  refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
-  bcryptSaltRounds: toInt(process.env.BCRYPT_SALT_ROUNDS, 12),
+  secrets: {
+    jwtSecret: required(process.env.JWT_SECRET, "JWT_SECRET"),
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || required(process.env.JWT_SECRET, "JWT_SECRET"),
+    bcryptSaltRounds: toInt(process.env.BCRYPT_SALT_ROUNDS, 12),
+    openAiApiKey: process.env.OPENAI_API_KEY,
+    internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN,
+  },
+
+  auth: {
+    accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+    refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
+  },
 
   services: {
     chatbot: process.env.CHATBOT_SERVICE_URL,
@@ -69,14 +76,12 @@ const config = {
   },
 
   internal: {
-    serviceToken: process.env.INTERNAL_SERVICE_TOKEN,
     hmacEnabled: process.env.INTERNAL_HMAC_ENABLED !== "false",
   },
 
   ai: {
     provider: process.env.AI_PROVIDER || "openai",
     model: process.env.AI_MODEL || "gpt-4.1-mini",
-    openAiApiKey: process.env.OPENAI_API_KEY,
     automation: {
       queueName: process.env.AI_AUTOMATION_QUEUE_NAME || "ai-automation",
       processCommentJobName:

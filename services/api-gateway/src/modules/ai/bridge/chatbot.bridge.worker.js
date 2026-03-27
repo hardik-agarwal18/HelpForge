@@ -29,7 +29,7 @@ import {
 import { CircuitOpenError, chatbotCircuit } from "./chatbot.circuit.js";
 
 const CHATBOT_URL = config.services.chatbot || "http://chatbot-service:8000";
-const INTERNAL_TOKEN = config.internal.serviceToken || "change-me-shared-secret";
+const INTERNAL_TOKEN = config.secrets.internalServiceToken || "change-me-shared-secret";
 const SERVICE_ID = "chatbot-bridge-worker";
 const HMAC_ENABLED = config.internal.hmacEnabled;
 
