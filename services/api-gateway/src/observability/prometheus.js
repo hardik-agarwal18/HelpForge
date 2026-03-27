@@ -35,6 +35,34 @@ const inFlightRequests = new client.Gauge({
   registers: [register],
 });
 
+// ── Event Loop Lag ──────────────────────────────────────────────────────────
+
+const eventLoopLag = new client.Histogram({
+  name: "helpforge_api_gateway_eventloop_lag_seconds",
+  help: "Event loop lag measured every 2 seconds",
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  registers: [register],
+});
+
+const EVENT_LOOP_INTERVAL_MS = 2_000;
+let eventLoopTimer;
+
+const startEventLoopMonitor = () => {
+  let lastCheck = process.hrtime.bigint();
+
+  eventLoopTimer = setInterval(() => {
+    const now = process.hrtime.bigint();
+    const elapsed = Number(now - lastCheck) / 1e9;
+    const lag = Math.max(0, elapsed - EVENT_LOOP_INTERVAL_MS / 1_000);
+    eventLoopLag.observe(lag);
+    lastCheck = now;
+  }, EVENT_LOOP_INTERVAL_MS);
+
+  eventLoopTimer.unref();
+};
+
+startEventLoopMonitor();
+
 // ── Database Metrics (from db.getMetrics() snapshot) ────────────────────────
 
 const dbQueryTotal = new client.Gauge({
