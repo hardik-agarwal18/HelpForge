@@ -91,7 +91,7 @@ describe("Ticket API Integration Tests", () => {
   let memberRole;
 
   const signToken = (user) =>
-    jwt.sign({ sub: user.id, type: "access", jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1000) }, config.jwtSecret, {
+    jwt.sign({ sub: user.id, type: "access", jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1000) }, config.secrets.jwtSecret, {
       algorithm: "HS256",
       expiresIn: "15m",
       issuer: "helpforge-api",
