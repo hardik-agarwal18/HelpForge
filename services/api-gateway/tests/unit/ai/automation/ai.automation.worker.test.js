@@ -18,7 +18,19 @@ jest.unstable_mockModule("bullmq", () => ({
 
 jest.unstable_mockModule("../../../../src/config/index.js", () => ({
   default: {
-    redis: { url: "redis://localhost:6379" },
+    redis: {
+      url: "redis://localhost:6379",
+      connectTimeoutMs: 10_000,
+      maxConnections: 10,
+      circuitBreaker: { failureThreshold: 5, resetTimeoutMs: 30_000 },
+    },
+    database: {
+      url: undefined,
+      readUrl: undefined,
+      poolSize: 10,
+      poolTimeout: 20,
+      circuitBreaker: { failureThreshold: 5, resetTimeoutMs: 30_000 },
+    },
     nodeEnv: "development",
   },
 }));
@@ -32,6 +44,21 @@ jest.unstable_mockModule(
     getSharedBullmqConnection: mockGetSharedBullmqConnection,
   }),
 );
+
+const { AsyncLocalStorage } = await import("node:async_hooks");
+const mockRequestContext = new AsyncLocalStorage();
+
+jest.unstable_mockModule("../../../../src/config/database.config.js", () => ({
+  default: {
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    write: {},
+    read: {},
+    healthCheck: jest.fn(),
+    getMetrics: jest.fn(),
+  },
+  requestContext: mockRequestContext,
+}));
 
 jest.unstable_mockModule(
   "../../../../src/modules/ai/automation/ai.automation.service.js",
@@ -101,7 +128,7 @@ describe("ai.automation.worker", () => {
 
     expect(mockWorkerConstructor).toHaveBeenCalledWith(
       "ai-automation",
-      workerModule.processAICommentJob,
+      expect.any(Function),
       {
         connection: { redis: true },
         concurrency: 5,
