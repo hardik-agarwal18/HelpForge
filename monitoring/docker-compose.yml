@@ -18,6 +18,21 @@ services:
       - redis
     restart: unless-stopped
 
+  worker:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: helpforge-worker
+    command: node src/worker.js
+    env_file:
+      - ../services/api-gateway/.env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@host.docker.internal:5432/${DB_NAME}?schema=public
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   chatbot-service:
     build:
       context: ../services/chatbot-service

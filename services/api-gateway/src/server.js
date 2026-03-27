@@ -4,27 +4,7 @@ import config from "./config/index.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
 import { connectRedis, disconnectRedis } from "./config/redis.config.js";
-import {
-  startAIAutomationWorker,
-  stopAIAutomationWorker,
-} from "./modules/ai/automation/queue/ai.automation.worker.js";
-import {
-  startChatbotBridgeWorker,
-  stopChatbotBridgeWorker,
-} from "./modules/ai/bridge/chatbot.bridge.worker.js";
-import {
-  startNotificationWorker,
-  stopNotificationWorker,
-} from "./modules/notifications/queue/notification.worker.js";
 import { initializeWebsocketGateway } from "./modules/notifications/realtime/socket.gateway.js";
-import {
-  startScraperWorker,
-  stopScraperWorker,
-} from "./modules/ai/scraper/scraper.worker.js";
-import {
-  scheduleScrapeCleanup,
-  stopScrapeCleanup,
-} from "./modules/ai/scraper/scraper.cleanup.cron.js";
 
 const PORT = config.port;
 
@@ -50,33 +30,14 @@ const startServer = async () => {
   await connectRedis();
 
   initializeWebsocketGateway(server);
-  await Promise.all([
-    startAIAutomationWorker(),
-    startChatbotBridgeWorker(),
-    startNotificationWorker(),
-    startScraperWorker(),
-  ]);
-  scheduleScrapeCleanup();
 
   await listen();
-  logger.info("System ready: DB + Redis + Workers + API = OK");
+  logger.info("System ready: DB + Redis + WebSocket + API = OK");
 };
 
 const SHUTDOWN_TIMEOUT_MS = config.server.shutdownTimeoutMs;
-const WORKER_STOP_TIMEOUT_MS = 5_000;
 
 let isShuttingDown = false;
-
-const withTimeout = (promise, ms, label) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`${label} timed out after ${ms}ms`)),
-        ms,
-      ),
-    ),
-  ]);
 
 const gracefulShutdown = async (signal) => {
   if (isShuttingDown) return;
@@ -89,7 +50,6 @@ const gracefulShutdown = async (signal) => {
     "Graceful shutdown initiated",
   );
 
-  // Force exit if shutdown hangs
   const forceTimer = setTimeout(() => {
     logger.error(
       { phase: "shutdown_forced", elapsedMs: Date.now() - shutdownStart },
@@ -122,79 +82,7 @@ const gracefulShutdown = async (signal) => {
       "HTTP server closed — in-flight requests drained",
     );
 
-    // Phase 2: Stop crons
-    stopScrapeCleanup();
-
-    logger.info(
-      { phase: "crons_stopped", elapsedMs: Date.now() - shutdownStart },
-      "Cron jobs stopped",
-    );
-
-    // Phase 3: Stop workers that depend on queues (consume jobs)
-    const workerStops = [
-      [
-        "scraper",
-        () =>
-          withTimeout(
-            stopScraperWorker(),
-            WORKER_STOP_TIMEOUT_MS,
-            "scraper-worker",
-          ),
-      ],
-      [
-        "chatbot-bridge",
-        () =>
-          withTimeout(
-            stopChatbotBridgeWorker(),
-            WORKER_STOP_TIMEOUT_MS,
-            "chatbot-bridge-worker",
-          ),
-      ],
-      [
-        "ai-automation",
-        () =>
-          withTimeout(
-            stopAIAutomationWorker(),
-            WORKER_STOP_TIMEOUT_MS,
-            "ai-automation-worker",
-          ),
-      ],
-      [
-        "notification",
-        () =>
-          withTimeout(
-            stopNotificationWorker(),
-            WORKER_STOP_TIMEOUT_MS,
-            "notification-worker",
-          ),
-      ],
-    ];
-
-    const workerResults = await Promise.allSettled(
-      workerStops.map(([, stop]) => stop()),
-    );
-
-    workerStops.forEach(([name], i) => {
-      const result = workerResults[i];
-      if (result.status === "rejected") {
-        logger.warn(
-          {
-            phase: "workers_stopped",
-            worker: name,
-            error: result.reason?.message,
-            stack: result.reason?.stack,
-          },
-          `Worker stop failed: ${name}`,
-        );
-      }
-    });
-
-    logger.info(
-      { phase: "workers_stopped", elapsedMs: Date.now() - shutdownStart },
-      "All workers stopped",
-    );
-
-    // Phase 4: Disconnect data stores (after workers are done using them)
+    // Phase 2: Disconnect data stores
     const storeStops = [
       ["database", () => db.disconnect()],
       ["redis", () => disconnectRedis()],
