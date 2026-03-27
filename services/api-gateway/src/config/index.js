@@ -12,6 +12,15 @@ const toNum = (val, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isTest = process.env.NODE_ENV === "test";
+
+const required = (val, name) => {
+  if (!val && !isTest) {
+    throw new Error(`Missing required env var: ${name}`);
+  }
+  return val;
+};
+
 const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || "development",
@@ -23,7 +32,7 @@ const config = {
   },
 
   database: {
-    url: process.env.DATABASE_URL,
+    url: required(process.env.DATABASE_URL, "DATABASE_URL"),
     readUrl: process.env.DATABASE_READ_URL,
     testUrl: process.env.DATABASE_URL_TEST,
     poolSize: toInt(process.env.DB_POOL_SIZE, 10),
@@ -44,8 +53,8 @@ const config = {
     },
   },
 
-  jwtSecret: process.env.JWT_SECRET,
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+  jwtSecret: required(process.env.JWT_SECRET, "JWT_SECRET"),
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || required(process.env.JWT_SECRET, "JWT_SECRET"),
   accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
   refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
   bcryptSaltRounds: toInt(process.env.BCRYPT_SALT_ROUNDS, 12),
@@ -132,4 +141,4 @@ const config = {
   },
 };
 
-export default config;
+export default Object.freeze(config);
