@@ -13,6 +13,12 @@ const PORT = config.port;
 
 const server = http.createServer(app);
 
+// Keep-alive tuning — must exceed the reverse proxy's idle timeout
+// (e.g. ALB = 60 s, nginx default = 75 s) to avoid 502s from the proxy
+// reusing a connection the server already closed.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000; // must be > keepAliveTimeout
+
 const connections = new Set();
 
 server.on("connection", (socket) => {
@@ -70,15 +76,7 @@ const gracefulShutdown = async (signal) => {
   forceTimer.unref();
 
   try {
-    // Phase 1: Close WebSocket gateway
-    await closeWebsocketGateway();
-
-    logger.info(
-      { phase: "websocket_closed", elapsedMs: Date.now() - shutdownStart },
-      "WebSocket gateway closed",
-    );
-
-    // Phase 2: Stop accepting new connections + drain in-flight requests
+    // Phase 1: Stop accepting new HTTP connections + drain in-flight requests
     await new Promise((resolve, reject) => {
       server.close((err) => {
         if (err) reject(err);
@@ -96,6 +94,14 @@ const gracefulShutdown = async (signal) => {
     logger.info(
       { phase: "http_drained", elapsedMs: Date.now() - shutdownStart },
       "HTTP server closed — in-flight requests drained",
+    );
+
+    // Phase 2: Close WebSocket gateway (after HTTP stops, so no new upgrades race)
+    await closeWebsocketGateway();
+
+    logger.info(
+      { phase: "websocket_closed", elapsedMs: Date.now() - shutdownStart },
+      "WebSocket gateway closed",
     );
 
     // Phase 3: Disconnect data stores
