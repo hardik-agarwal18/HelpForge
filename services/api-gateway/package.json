@@ -14,6 +14,8 @@
     "perf:smoke": "k6 run perf/smoke.js",
     "perf:load:tickets": "k6 run perf/load-ticket-list.js",
     "perf:load": "npm run perf:load:tickets",
+    "perf:stress": "k6 run perf/stress.js",
+    "perf:soak": "k6 run perf/soak.js",
     "db:test:migrate": "dotenv -e .env -- cross-env DATABASE_URL=$DATABASE_URL_TEST npx prisma migrate deploy",
     "db:test:reset": "dotenv -e .env -- cross-env DATABASE_URL=$DATABASE_URL_TEST npx prisma migrate reset --force",
     "db:migrate": "npx prisma migrate deploy",
