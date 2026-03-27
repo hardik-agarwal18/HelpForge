@@ -14,6 +14,13 @@ export class RequestAbortedError extends Error {
   }
 }
 
+export class ConfigError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ConfigError";
+  }
+}
+
 export const errorHandler = (err, req, res, next) => {
   // Request was aborted (timeout or client disconnect) — don't send a response
   if (err instanceof RequestAbortedError || req.signal?.aborted) {

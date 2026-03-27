@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
+import { ConfigError } from "../utils/errorHandler.js";
 
 dotenv.config();
+
 
 const toInt = (val, fallback) => {
   const parsed = parseInt(val, 10);
@@ -12,11 +14,19 @@ const toNum = (val, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/** Parse env var in seconds, store as ms. */
+const secondsToMs = (val, fallbackSeconds) =>
+  toInt(val, fallbackSeconds) * 1_000;
+
+/** Parse env var in days, store as ms. */
+const daysToMs = (val, fallbackDays) =>
+  toInt(val, fallbackDays) * 86_400_000;
+
 const isTest = process.env.NODE_ENV === "test";
 
 const required = (val, name) => {
   if (!val && !isTest) {
-    throw new Error(`Missing required env var: ${name}`);
+    throw new ConfigError(`Missing required env var: ${name}`);
   }
   return val;
 };
@@ -36,7 +46,7 @@ const config = {
     readUrl: process.env.DATABASE_READ_URL,
     testUrl: process.env.DATABASE_URL_TEST,
     poolSize: toInt(process.env.DB_POOL_SIZE, 10),
-    poolTimeout: toInt(process.env.DB_POOL_TIMEOUT, 20),
+    poolTimeoutMs: secondsToMs(process.env.DB_POOL_TIMEOUT, 20),
     circuitBreaker: {
       failureThreshold: toInt(process.env.DB_CB_FAILURE_THRESHOLD, 5),
       resetTimeoutMs: toInt(process.env.DB_CB_RESET_TIMEOUT_MS, 30_000),
@@ -90,11 +100,11 @@ const config = {
       retryLimit: toNum(process.env.AI_AUTOMATION_RETRY_LIMIT, 3),
       retryBackoffMs: toNum(process.env.AI_AUTOMATION_RETRY_BACKOFF_MS, 1000),
       dlqMaxEntries: toNum(process.env.AI_AUTOMATION_DLQ_MAX_ENTRIES, 1000),
-      idempotencyTtlSeconds: toNum(
+      idempotencyTtlMs: secondsToMs(
         process.env.AI_AUTOMATION_IDEMPOTENCY_TTL_SECONDS,
-        604800,
+        604_800,
       ),
-      processingLockTtlSeconds: toNum(
+      processingLockTtlMs: secondsToMs(
         process.env.AI_AUTOMATION_PROCESSING_LOCK_TTL_SECONDS,
         300,
       ),
@@ -116,7 +126,7 @@ const config = {
     },
     cache: {
       enabled: process.env.AI_CACHE_ENABLED !== "false",
-      ttlSeconds: toNum(process.env.AI_CACHE_TTL_SECONDS, 300),
+      ttlMs: secondsToMs(process.env.AI_CACHE_TTL_SECONDS, 300),
     },
     monitoring: {
       enabled: process.env.AI_MONITORING_ENABLED !== "false",
@@ -126,9 +136,9 @@ const config = {
 
   scraper: {
     workerConcurrency: toInt(process.env.SCRAPER_WORKER_CONCURRENCY, 3),
-    cacheTtlSeconds: toInt(process.env.SCRAPER_CACHE_TTL_SECONDS, 86_400),
+    cacheTtlMs: secondsToMs(process.env.SCRAPER_CACHE_TTL_SECONDS, 86_400),
     cleanupCron: process.env.SCRAPER_CLEANUP_CRON ?? "0 2 * * *",
-    retentionDays: toInt(process.env.SCRAPER_RETENTION_DAYS, 30),
+    retentionMs: daysToMs(process.env.SCRAPER_RETENTION_DAYS, 30),
     freshnessTtlMs: toInt(
       process.env.SCRAPER_FRESHNESS_TTL_MS,
       24 * 60 * 60 * 1_000,
@@ -146,4 +156,12 @@ const config = {
   },
 };
 
-export default Object.freeze(config);
+const deepFreeze = (obj) => {
+  Object.freeze(obj);
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === "object" && !Object.isFrozen(v)) deepFreeze(v);
+  }
+  return obj;
+};
+
+export default deepFreeze(config);

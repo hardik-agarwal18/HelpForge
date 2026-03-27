@@ -301,25 +301,25 @@ export const hasCommentBeenProcessed = async (commentId) => {
 /**
  * Acquire lock for comment processing (idempotency control)
  * @param {string} commentId - Comment ID
- * @param {number} ttlSeconds - Lock TTL in seconds
+ * @param {number} ttlMs - Lock TTL in milliseconds
  * @returns {Promise<boolean>} True if lock acquired
  */
-export const acquireCommentProcessingLock = async (commentId, ttlSeconds) => {
+export const acquireCommentProcessingLock = async (commentId, ttlMs) => {
   return setCacheValueIfAbsent(
     buildAICommentProcessingLockKey(commentId),
     "1",
-    ttlSeconds,
+    ttlMs,
   );
 };
 
 /**
  * Mark comment as processed for idempotency
  * @param {string} commentId - Comment ID
- * @param {number} ttlSeconds - Cache TTL in seconds
+ * @param {number} ttlMs - Cache TTL in milliseconds
  * @returns {Promise<void>}
  */
-export const markCommentAsProcessed = async (commentId, ttlSeconds) => {
-  await setCacheValue(buildAICommentProcessedCacheKey(commentId), "1", ttlSeconds);
+export const markCommentAsProcessed = async (commentId, ttlMs) => {
+  await setCacheValue(buildAICommentProcessedCacheKey(commentId), "1", ttlMs);
 };
 
 /**

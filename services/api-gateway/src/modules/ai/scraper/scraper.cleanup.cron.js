@@ -31,14 +31,14 @@ import logger from "../../../config/logger.js";
 import { deleteStalePages, purgeStaleDbRows } from "./scraper.service.js";
 
 const CLEANUP_CRON = config.scraper.cleanupCron;
-const RETENTION_DAYS = config.scraper.retentionDays;
+const RETENTION_MS = config.scraper.retentionMs;
 
 // ── Core cleanup logic ────────────────────────────────────────────────────────
 
 export const runScrapeCleanup = async () => {
-  logger.info({ retentionDays: RETENTION_DAYS }, "scraper.cleanup: start");
+  logger.info({ retentionMs: RETENTION_MS }, "scraper.cleanup: start");
 
-  const cutoff  = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1_000);
+  const cutoff  = new Date(Date.now() - RETENTION_MS);
   const purgeAt = new Date(Date.now() - 25 * 60 * 60 * 1_000); // 25 h ago
 
   // Get all orgs that have scraped pages

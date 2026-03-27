@@ -1,4 +1,5 @@
 import config from "./config/index.js";
+import { ConfigError } from "./utils/errorHandler.js";
 import logger from "./config/logger.js";
 import db from "./config/database.config.js";
 import { connectRedis, disconnectRedis } from "./config/redis.config.js";
@@ -40,6 +41,10 @@ const withTimeout = (promise, ms, label) =>
   ]);
 
 const startWorkers = async () => {
+  if (!config.redis.url) {
+    throw new ConfigError("REDIS_URL is required for the worker process");
+  }
+
   await db.connect();
   await connectRedis();
 
@@ -211,6 +216,10 @@ process.on("uncaughtException", (error) => {
 });
 
 startWorkers().catch((error) => {
-  logger.error({ error }, "Failed to start worker process");
+  if (error instanceof ConfigError) {
+    logger.fatal({ error: error.message }, "Configuration error — fix env vars and restart");
+  } else {
+    logger.fatal({ error }, "Failed to start worker process");
+  }
   process.exit(1);
 });

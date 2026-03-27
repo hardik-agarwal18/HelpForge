@@ -19,7 +19,7 @@ import {
 } from "./ai.automation.repo.js";
 import { getAIConfigByOrg } from "../config/ai.config.repo.js";
 
-const { idempotencyTtlSeconds, processingLockTtlSeconds } = aiConfig.automation;
+const { idempotencyTtlMs, processingLockTtlMs } = aiConfig.automation;
 
 /**
  * AI Service - Main orchestrator for AI functionality
@@ -59,7 +59,7 @@ export const handleCommentAdded = async (payload) => {
 
     const lockResult = await aiUtils.acquireCommentProcessingLock(
       commentId,
-      processingLockTtlSeconds,
+      processingLockTtlMs,
     );
     usingIdempotency = lockResult !== null;
     processingLockAcquired = lockResult === true;
@@ -143,7 +143,7 @@ export const handleCommentAdded = async (payload) => {
     await generateAndStoreAIResponse(ticket, newComment, orgConfig);
 
     if (usingIdempotency) {
-      await aiUtils.markCommentAsProcessed(commentId, idempotencyTtlSeconds);
+      await aiUtils.markCommentAsProcessed(commentId, idempotencyTtlMs);
     }
   } catch (error) {
     logger.error({ error, payload }, "Error in handleCommentAdded");

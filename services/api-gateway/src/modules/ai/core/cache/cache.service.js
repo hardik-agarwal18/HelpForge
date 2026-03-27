@@ -34,7 +34,7 @@ export const getCacheValue = async (key) => {
 export const setCacheValue = async (
   key,
   value,
-  ttlSeconds = aiConfig.cache.ttlSeconds,
+  ttlMs = aiConfig.cache.ttlMs,
 ) => {
   const client = getCacheClient();
 
@@ -43,7 +43,7 @@ export const setCacheValue = async (
   }
 
   try {
-    await client.set(key, value, "EX", ttlSeconds);
+    await client.set(key, value, "PX", ttlMs);
     return true;
   } catch (error) {
     logger.error({ error, key }, "Error writing AI cache");
@@ -54,7 +54,7 @@ export const setCacheValue = async (
 export const setCacheValueIfAbsent = async (
   key,
   value,
-  ttlSeconds = aiConfig.cache.ttlSeconds,
+  ttlMs = aiConfig.cache.ttlMs,
 ) => {
   const client = getCacheClient();
 
@@ -63,7 +63,7 @@ export const setCacheValueIfAbsent = async (
   }
 
   try {
-    const result = await client.set(key, value, "EX", ttlSeconds, "NX");
+    const result = await client.set(key, value, "PX", ttlMs, "NX");
     return result === "OK";
   } catch (error) {
     logger.error({ error, key }, "Error writing AI cache with NX");

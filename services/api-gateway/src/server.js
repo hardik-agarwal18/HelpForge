@@ -8,6 +8,7 @@ import {
   initializeWebsocketGateway,
   closeWebsocketGateway,
 } from "./modules/notifications/realtime/socket.gateway.js";
+import { ConfigError } from "./utils/errorHandler.js";
 
 const PORT = config.port;
 
@@ -83,12 +84,15 @@ const gracefulShutdown = async (signal) => {
         else resolve();
       });
 
-      setTimeout(() => {
-        for (const socket of connections) {
-          socket.destroy();
-        }
-        connections.clear();
-      }, Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6));
+      setTimeout(
+        () => {
+          for (const socket of connections) {
+            socket.destroy();
+          }
+          connections.clear();
+        },
+        Math.floor(SHUTDOWN_TIMEOUT_MS * 0.6),
+      );
     });
 
     logger.info(
@@ -174,6 +178,13 @@ process.on("uncaughtException", (error) => {
 });
 
 startServer().catch((error) => {
-  logger.error({ error }, "Failed to start API Gateway");
+  if (error instanceof ConfigError) {
+    logger.fatal(
+      { error: error.message },
+      "Configuration error — fix env vars and restart",
+    );
+  } else {
+    logger.fatal({ error }, "Failed to start API Gateway");
+  }
   process.exit(1);
 });

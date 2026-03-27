@@ -26,7 +26,7 @@ import config from "../../../config/index.js";
 import logger from "../../../config/logger.js";
 
 const CACHE_TTL_SECONDS =
-  config.scraper.cacheTtlSeconds;
+  Math.ceil(config.scraper.cacheTtlMs / 1_000);
 
 const KEY_PREFIX = "scraper:cache:";
 

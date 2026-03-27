@@ -16,7 +16,7 @@ const CB_FAILURE_THRESHOLD = config.database.circuitBreaker.failureThreshold;
 const CB_RESET_TIMEOUT_MS = config.database.circuitBreaker.resetTimeoutMs;
 
 const POOL_SIZE = config.database.poolSize;
-const POOL_TIMEOUT = config.database.poolTimeout;
+const POOL_TIMEOUT_S = Math.ceil(config.database.poolTimeoutMs / 1_000);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -173,7 +173,7 @@ const getDatabaseUrl = (role) => {
   if (!base) return base;
 
   const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}`;
+  return `${base}${sep}connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT_S}`;
 };
 
 // ── Retry with Timeout ───────────────────────────────────────────────────────
