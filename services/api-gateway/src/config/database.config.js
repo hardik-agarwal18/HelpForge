@@ -354,11 +354,20 @@ function createDatabaseManager() {
     }
   };
 
+  const HEALTH_CACHE_TTL_MS = 2_000;
+  let healthCache = null;
+  let healthCacheAt = 0;
+
   const healthCheck = async () => {
+    const now = Date.now();
+    if (healthCache && now - healthCacheAt < HEALTH_CACHE_TTL_MS) {
+      return healthCache;
+    }
+
     const check = async (client, role) => {
       try {
         await Promise.race([
-          client.$queryRaw`SELECT id FROM "User" LIMIT 1`,
+          client.$queryRaw`SELECT 1`,
           sleep(HEALTH_CHECK_TIMEOUT_MS).then(() => {
             throw new Error("Health check timed out");
           }),
@@ -380,7 +389,9 @@ function createDatabaseManager() {
       check(readClient, "read"),
     ]);
 
-    return { write, read };
+    healthCache = { write, read };
+    healthCacheAt = now;
+    return healthCache;
   };
 
   return Object.freeze({
